@@ -8,6 +8,8 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
+from routes.health import health_bp
+
 # Prefer your shared DB connector if present
 try:
     from services.db import get_conn  # type: ignore
@@ -20,8 +22,11 @@ except Exception:
 # ============================================================
 app = Flask(__name__, static_folder="static")
 CORS(app)
+app.register_blueprint(health_bp)
 
-
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=True)
+    
 # ============================================================
 # 1) DB Connection
 # ============================================================
@@ -270,31 +275,6 @@ def eval_point(lat, lon, alt_amsl_m, buffer_m=0.0, t_ms=None):
 # ============================================================
 # 5) Routes
 # ============================================================
-@app.get("/health", endpoint="health")
-def health():
-    db_ok = True
-    db_error = None
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1;")
-            cur.fetchone()
-    except Exception as e:
-        db_ok = False
-        db_error = str(e)
-
-    return (
-        jsonify(
-            {
-                "ok": True,
-                "service": "fsms",
-                "db": "connected" if db_ok else "error",
-                "db_error": db_error,
-                "ts_utc": datetime.now(timezone.utc).isoformat(),
-            }
-        ),
-        (200 if db_ok else 500),
-    )
-
 
 @app.get("/", endpoint="index")
 def index():
