@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FSMS Flight Replay 3D</title>
+
+<link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet"/>
+
+<style>
+html,body { margin:0; height:100%; }
+#map { height:100%; }
+
+.panel {
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  background:white;
+  padding:8px 12px;
+  border-radius:6px;
+  z-index:10;
+}
+
+#controls { bottom:90px; }
+#slider-container { bottom:20px; }
+#speed-container { bottom:140px; }
+
+input[type=range] { width:320px; }
+
+#hud {
+  position:absolute;
+  top:15px;
+  left:15px;
+  background:rgba(0,0,0,0.75);
+  color:white;
+  padding:12px;
+  border-radius:8px;
+  font-family:monospace;
+  z-index:30;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div id="speed-container" class="panel">
+Speed:
+<select id="speed">
+  <option value="0.25">0.25×</option>
+  <option value="0.5">0.5×</option>
+  <option value="1" selected>1×</option>
+  <option value="2">2×</option>
+  <option value="5">5×</option>
+</select>
+</div>
+
+<div id="controls" class="panel">
+<button id="play">Play</button>
+</div>
+
+<div id="slider-container" class="panel">
+<input id="slider" type="range" min="0" max="1" step="0.0001" value="0"/>
+</div>
+
+<div id="hud"></div>
+
+<script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+
+<script>
+(async ()=>{
+
+const flight_id = "9d90a57a-abfc-4a31-87ea-bd0d4a31dc82";
+const API_URL = `http://localhost:5000/api/fsms/replay/${flight_id}`;
+const MAP_KEY = "azdTKpdk2YTvL5qlTywP";
+
+const slider = document.getElementById('slider');
+const playBtn = document.getElementById('play');
+const speedSel = document.getElementById('speed');
+const hud = document.getElementById('hud');
+
+let playing = false;
+let speed = 1;
+let simElapsed = 0;
+let lastFrame = null;
+
+let data;
+
+try {
+  const response = await fetch(API_URL);
+  if (!response.ok) throw new Error("API request failed");
+  data = await response.json();
+} catch (err) {
+  alert("Failed to load replay: " + err.message);
+  return;
+}
+
+if (!data.replay || !data.replay.length) {
+  alert("No replay data returned from API");
+  return;
+}
+
+const pts = data.replay.map(p => ({
+  lng: p.lon,
+  lat: p.lat,
+  alt: p.altitude_m ?? 0,
+  t: new Date(p.timestamp).getTime()
+}));
+
+const t0 = pts[0].t;
+const duration = pts[pts.length - 1].t - t0;
+
+const map = new maplibregl.Map({
+  container:'map',
+  style:`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_KEY}`,
+  center:[pts[0].lng, pts[0].lat],
+  zoom:16,
+  pitch:65,
+  antialias:true
+});
+
+map.addControl(new maplibregl.NavigationControl());
+
+function interpolate(time){
+  let i=0;
+  while(i<pts.length-1 && pts[i+1].t<=time) i++;
+  const a=pts[i], b=pts[i+1] ?? pts[i];
+  const f=b.t===a.t ? 0 : (time-a.t)/(b.t-a.t);
+
+  return {
+    lng:a.lng+(b.lng-a.lng)*f,
+    lat:a.lat+(b.lat-a.lat)*f,
+    alt:a.alt+(b.alt-a.alt)*f
+  };
+}
+
+map.on('load', () => {
+
+  // Add red flight path
+  map.addSource("flight-path", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: pts.map(p => [p.lng, p.lat])
+      }
+    }
+  });
+
+  map.addLayer({
+    id: "flight-path-line",
+    type: "line",
+    source: "flight-path",
+    paint: {
+      "line-color": "#ff0000",
+      "line-width": 3
+    }
+  });
+
+  requestAnimationFrame(loop);
+});
+
+// Create aircraft marker
+const aircraftEl = document.createElement("div");
+aircraftEl.style.width = "14px";
+aircraftEl.style.height = "14px";
+aircraftEl.style.background = "blue";
+aircraftEl.style.borderRadius = "50%";
+
+const aircraft = new maplibregl.Marker({ element: aircraftEl })
+  .setLngLat([pts[0].lng, pts[0].lat])
+  .addTo(map);
+
+function loop(now){
+
+  if(!lastFrame) lastFrame = now;
+  const dt = now - lastFrame;
+  lastFrame = now;
+
+  if(playing){
+    simElapsed += dt * speed;
+    if(simElapsed > duration) simElapsed = duration;
+  }
+
+  const t = t0 + simElapsed;
+  const pos = interpolate(t);
+
+  aircraft.setLngLat([pos.lng, pos.lat]);
+
+  map.setCenter([pos.lng, pos.lat]);
+
+  hud.innerHTML = `
+    Time: ${new Date(t).toLocaleTimeString()}<br>
+    Lat: ${pos.lat.toFixed(5)}<br>
+    Lng: ${pos.lng.toFixed(5)}<br>
+    Alt: ${pos.alt.toFixed(1)} m
+  `;
+
+  slider.value = simElapsed / duration;
+
+  requestAnimationFrame(loop);
+}
+
+playBtn.onclick = () => {
+  playing = !playing;
+  playBtn.textContent = playing ? "Pause" : "Play";
+};
+
+slider.oninput = e => {
+  simElapsed = e.target.value * duration;
+};
+
+speedSel.onchange = () => {
+  speed = Number(speedSel.value);
+};
+
+})();
+</script>
+
+</body>
+</html>

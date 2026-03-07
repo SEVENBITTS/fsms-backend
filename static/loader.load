@@ -1,0 +1,1 @@
+loader.load('/static/models/drone.glb', ...)

@@ -1,0 +1,24 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Bristol Test Restricted Zone",
+        "class": "RESTRICTED",
+        "lower_m": 0,
+        "upper_m": 120
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-2.62, 51.44],
+          [-2.52, 51.44],
+          [-2.52, 51.50],
+          [-2.62, 51.50],
+          [-2.62, 51.44]
+        ]]
+      }
+    }
+  ]
+}
