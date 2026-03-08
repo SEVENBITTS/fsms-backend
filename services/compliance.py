@@ -1,23 +1,29 @@
 def to_meters(value, unit):
     if value is None:
         return None
+
     if unit is None:
         return float(value)
 
     u = str(unit).strip().lower()
+
     if u in ("m", "meter", "meters", "metre", "metres"):
         return float(value)
+
     if u in ("ft", "feet"):
         return float(value) * 0.3048
+
     if u in ("fl", "flightlevel"):
         return float(value) * 100.0 * 0.3048
 
-    return float(value)  # unknown -> assume meters
+    # Unknown unit -> assume meters
+    return float(value)
 
 
 def is_agl(ref):
     if ref is None:
         return False
+
     r = str(ref).strip().lower()
     return any(k in r for k in ("agl", "gnd", "ground", "sfc", "surface"))
 
@@ -39,7 +45,7 @@ def eval_zone(point_alt_amsl_m, point_alt_agl_m, zone_row):
         _zid, _zname, _ztype, _zsource, _zext,
         lower_v, lower_u, lower_ref,
         upper_v, upper_u, upper_ref,
-        _props
+        _props,
     ) = zone_row
 
     lower_m = to_meters(lower_v, lower_u)
@@ -47,7 +53,6 @@ def eval_zone(point_alt_amsl_m, point_alt_agl_m, zone_row):
 
     use_agl = is_agl(lower_ref) or is_agl(upper_ref)
 
-    # Defensive (DB constraint should prevent this now)
     if lower_m is None and upper_m is None:
         return None, "UNKNOWN_LIMITS", None, None
 
@@ -58,8 +63,10 @@ def eval_zone(point_alt_amsl_m, point_alt_agl_m, zone_row):
     basis = "AGL" if use_agl else "AMSL"
 
     breach = False
+
     if lower_m is not None and alt < lower_m:
         breach = True
+
     if upper_m is not None and alt > upper_m:
         breach = True
 

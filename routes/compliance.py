@@ -1,12 +1,11 @@
 from flask import Blueprint, jsonify, request
-from services.compliance_airspace import eval_point
-from services.compliance_airspace import eval_flight_points
+from services.compliance_airspace import eval_point, eval_flight_points
 from services.db import get_conn
 
-bp = Blueprint("compliance", __name__, url_prefix="/api/compliance/airspace")
+compliance_bp = Blueprint("compliance", __name__, url_prefix="/api/compliance/airspace")
 
 
-@bp.get("/eval-point")
+@compliance_bp.get("/eval-point")
 def compliance_eval_point():
     try:
         lat = float(request.args["lat"])
@@ -29,7 +28,7 @@ def compliance_eval_point():
     return jsonify(eval_point(lat, lon, alt_amsl_m, buffer_m=buffer_m, t_ms=t_ms))
 
 
-@bp.get("/by-flight/<uuid:flight_id>")
+@compliance_bp.get("/by-flight/<uuid:flight_id>")
 def compliance_airspace_by_flight(flight_id):
     try:
         buffer_m = float(request.args.get("buffer_m", 0))
@@ -46,52 +45,18 @@ def compliance_airspace_by_flight(flight_id):
     conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(sql_points, (str(flight_id),))
-        points = cur.fetchall()
-
-    items = []
-    for (recorded_at, lat, lon, alt_m) in points:
-        t_ms = recorded_at.timestamp() * 1000.0
-        items.append(eval_point(lat, lon, alt_m, buffer_m=buffer_m, t_ms=t_ms))
-
-    return jsonify({"items": items})
-
-from flask import Blueprint, jsonify
-
-compliance_bp = Blueprint("compliance", __name__)
-
-
-@compliance_bp.get("/api/compliance/airspace/by-flight/<uuid:flight_id>")
-def compliance_by_flight(flight_id):
-    conn = get_conn()
-
-    sql = """
-    SELECT
-        latitude,
-        longitude,
-        altitude_m,
-        EXTRACT(EPOCH FROM recorded_at)*1000 AS t_ms
-    FROM flight_positions
-    WHERE flight_id = %s
-    ORDER BY recorded_at
-    """
-
-    with conn.cursor() as cur:
-        cur.execute(sql, (str(flight_id),))
         rows = cur.fetchall()
 
     points = [
         {
-            "lat": r[0],
-            "lon": r[1],
-            "alt_amsl_m": r[2],
-            "t_ms": r[3],
+            "lat": lat,
+            "lon": lon,
+            "alt_amsl_m": alt_m,
+            "t_ms": recorded_at.timestamp() * 1000.0,
         }
-        for r in rows
+        for (recorded_at, lat, lon, alt_m) in rows
     ]
 
-    items = eval_flight_points(points)
+    items = eval_flight_points(points, buffer_m=buffer_m)
 
-    return jsonify({
-        "flight_id": str(flight_id),
-        "items": items
-    })
+    return jsonify({"items": items})

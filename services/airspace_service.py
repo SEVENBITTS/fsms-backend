@@ -1,0 +1,48 @@
+from services.db import get_conn
+
+
+def get_airspace_by_flight_geojson(flight_id: str, buffer_m: float = 5000.0):
+    conn = get_conn()
+
+    sql = """
+    WITH fp AS (
+      SELECT ST_SetSRID(ST_MakePoint(longitude, latitude), 4326) AS pt
+      FROM flight_positions
+      WHERE flight_id = %s
+    ),
+    bbox AS (
+      SELECT ST_Buffer(ST_Envelope(ST_Collect(pt))::geography, %s)::geometry AS g
+      FROM fp
+    )
+    SELECT jsonb_build_object(
+      'type','FeatureCollection',
+      'features', COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'type','Feature',
+          'geometry', ST_AsGeoJSON(az.geometry::geometry)::jsonb,
+          'properties', jsonb_build_object(
+            'id', az.id,
+            'name', az.name,
+            'zone_type', az.zone_type,
+            'source', az.source,
+            'external_id', az.external_id,
+            'lower_value', az.lower_value,
+            'lower_unit', az.lower_unit,
+            'lower_ref', az.lower_ref,
+            'upper_value', az.upper_value,
+            'upper_unit', az.upper_unit,
+            'upper_ref', az.upper_ref
+          )
+        )
+      ), '[]'::jsonb)
+    ) AS geojson
+    FROM airspace_zones az, bbox
+    WHERE az.geometry IS NOT NULL
+      AND ST_Intersects(az.geometry::geometry, bbox.g);
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql, (flight_id, buffer_m))
+        row = cur.fetchone()
+
+    return row[0] if row and row[0] else {"type": "FeatureCollection", "features": []}

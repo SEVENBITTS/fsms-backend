@@ -8,6 +8,7 @@ health_bp = Blueprint("health", __name__)
 def health():
     db_ok = True
     db_error = None
+
     try:
         conn = get_conn()
         with conn.cursor() as cur:
@@ -20,7 +21,7 @@ def health():
     return (
         jsonify(
             {
-                "ok": True,
+                "ok": db_ok,
                 "service": "fsms",
                 "db": "connected" if db_ok else "error",
                 "db_error": db_error,

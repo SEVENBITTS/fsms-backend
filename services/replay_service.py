@@ -5,12 +5,35 @@ def get_replay_payload(flight_id: str):
 
     conn = get_conn()
 
+    sql = """
+    SELECT
+        latitude,
+        longitude,
+        altitude_m,
+        recorded_at
+    FROM flight_positions
+    WHERE flight_id = %s
+    ORDER BY recorded_at
+    """
+
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT fsms_flight_replay_with_airspace_geojson(%s);",
-            (flight_id,),
-        )
+        cur.execute(sql, (flight_id,))
+        rows = cur.fetchall()
 
-        row = cur.fetchone()
+    if not rows:
+        return None
 
-    return row[0] if row else None
+    replay = []
+
+    for lat, lon, alt, ts in rows:
+        replay.append({
+            "lat": lat,
+            "lon": lon,
+            "altitude_m": alt,
+            "timestamp": ts.isoformat()
+        })
+
+    return {
+        "flight_id": flight_id,
+        "replay": replay
+    }
