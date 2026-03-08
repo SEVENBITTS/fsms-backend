@@ -9,24 +9,19 @@ Later it can connect to real terrain datasets
 """
 
 
-def get_elevation_m(lat: float, lon: float) -> float | None:
+class TerrainAdapter:
     """
-    Return terrain elevation in meters above mean sea level.
+    Stub terrain adapter.
 
-    Currently returns None because terrain is not implemented yet.
+    Returns None until real terrain lookup is implemented.
     """
 
-    return None
+    def get_elevation_m_amsl(self, lat: float, lon: float) -> float | None:
+        return None
 
 
 def compute_agl(alt_amsl_m: float, lat: float, lon: float) -> float | None:
-    """
-    Compute altitude above ground level.
-
-    AGL = AMSL − terrain elevation
-    """
-
-    terrain = get_elevation_m(lat, lon)
+    terrain = TerrainAdapter().get_elevation_m_amsl(lat, lon)
 
     if terrain is None:
         return None

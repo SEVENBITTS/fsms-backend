@@ -9,24 +9,30 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from routes.health import health_bp
-
+from routes.replay import replay_bp
+from routes.airspace import airspace_bp
+from routes.compliance import compliance_bp
 # Prefer your shared DB connector if present
 try:
     from services.db import get_conn  # type: ignore
 except Exception:
     get_conn = None  # fallback below
 
-
 # ============================================================
 # 0) Flask App
 # ============================================================
 app = Flask(__name__, static_folder="static")
 CORS(app)
+
 app.register_blueprint(health_bp)
+app.register_blueprint(replay_bp)
+app.register_blueprint(airspace_bp)
+app.register_blueprint(compliance_bp)
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
-    
+
 # ============================================================
 # 1) DB Connection
 # ============================================================
@@ -275,25 +281,6 @@ def eval_point(lat, lon, alt_amsl_m, buffer_m=0.0, t_ms=None):
 # ============================================================
 # 5) Routes
 # ============================================================
-
-@app.get("/", endpoint="index")
-def index():
-    # Serve static/replay.html if present; otherwise show a helpful message
-    static_dir = Path(app.static_folder or "static")
-    replay_path = static_dir / "replay.html"
-    if replay_path.exists():
-        return send_from_directory(app.static_folder, "replay.html")
-    return (
-        jsonify(
-            {
-                "ok": True,
-                "message": "replay.html not found in ./static. Put it at static/replay.html",
-            }
-        ),
-        200,
-    )
-
-
 @app.get("/favicon.ico", endpoint="favicon")
 def favicon():
     # Avoid noisy 404s if favicon is missing
@@ -302,19 +289,6 @@ def favicon():
     if ico.exists():
         return send_from_directory(app.static_folder, "favicon.ico")
     return ("", 204)
-
-
-@app.get("/api/fsms/replay/<uuid:flight_id>", endpoint="replay")
-def replay(flight_id):
-    with conn.cursor() as cur:
-        cur.execute("SELECT fsms_flight_replay_with_airspace_geojson(%s);", (str(flight_id),))
-        result = cur.fetchone()
-
-    if result is None:
-        return jsonify({"error": "Flight not found"}), 404
-
-    return jsonify(result[0])
-
 
 @app.get("/api/airspace/by-flight/<uuid:flight_id>", endpoint="airspace_by_flight")
 def airspace_by_flight(flight_id):

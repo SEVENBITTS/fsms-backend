@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from services.compliance_airspace import eval_point
+from services.compliance_airspace import eval_flight_points
 from services.db import get_conn
 
 bp = Blueprint("compliance", __name__, url_prefix="/api/compliance/airspace")
@@ -53,3 +54,44 @@ def compliance_airspace_by_flight(flight_id):
         items.append(eval_point(lat, lon, alt_m, buffer_m=buffer_m, t_ms=t_ms))
 
     return jsonify({"items": items})
+
+from flask import Blueprint, jsonify
+
+compliance_bp = Blueprint("compliance", __name__)
+
+
+@compliance_bp.get("/api/compliance/airspace/by-flight/<uuid:flight_id>")
+def compliance_by_flight(flight_id):
+    conn = get_conn()
+
+    sql = """
+    SELECT
+        latitude,
+        longitude,
+        altitude_m,
+        EXTRACT(EPOCH FROM recorded_at)*1000 AS t_ms
+    FROM flight_positions
+    WHERE flight_id = %s
+    ORDER BY recorded_at
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql, (str(flight_id),))
+        rows = cur.fetchall()
+
+    points = [
+        {
+            "lat": r[0],
+            "lon": r[1],
+            "alt_amsl_m": r[2],
+            "t_ms": r[3],
+        }
+        for r in rows
+    ]
+
+    items = eval_flight_points(points)
+
+    return jsonify({
+        "flight_id": str(flight_id),
+        "items": items
+    })

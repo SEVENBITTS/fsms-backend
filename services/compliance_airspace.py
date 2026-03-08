@@ -44,7 +44,7 @@ def zone_row_to_obj(zone_row, eval_status, lower_m, upper_m):
         zid, zname, ztype, zsource, zext,
         lower_v, lower_u, lower_ref,
         upper_v, upper_u, upper_ref,
-        props
+        props,
     ) = zone_row
 
     return {
@@ -71,10 +71,17 @@ def eval_point(lat, lon, alt_amsl_m, buffer_m=0.0, t_ms=None):
 
     conn = get_conn()
     with conn.cursor() as cur:
-        cur.execute(SQL_ZONE_FOR_POINT, (float(lon), float(lat), float(buffer_m), float(buffer_m)))
+        cur.execute(
+            SQL_ZONE_FOR_POINT,
+            (float(lon), float(lat), float(buffer_m), float(buffer_m)),
+        )
         zone_row = cur.fetchone()
 
-    breach, eval_status, lower_m, upper_m = eval_zone(float(alt_amsl_m), alt_agl_m, zone_row)
+    breach, eval_status, lower_m, upper_m = eval_zone(
+        float(alt_amsl_m),
+        alt_agl_m,
+        zone_row,
+    )
     zone_obj = zone_row_to_obj(zone_row, eval_status, lower_m, upper_m)
 
     return {
@@ -83,8 +90,35 @@ def eval_point(lat, lon, alt_amsl_m, buffer_m=0.0, t_ms=None):
         "lon": float(lon),
         "alt_amsl_m": float(alt_amsl_m),
         "alt_agl_m": alt_agl_m,
-        "breach": breach,  # True/False/None
+        "breach": breach,
         "breach_unknown": breach is None,
         "eval_status": eval_status,
         "zone": zone_obj,
     }
+
+def eval_flight_points(points, buffer_m=0.0):
+    """
+    Evaluate a list of flight points for airspace compliance.
+
+    Each point should contain:
+      - lat
+      - lon
+      - alt_amsl_m
+      - optional t_ms
+
+    Returns:
+      list of eval_point(...) results
+    """
+    items = []
+
+    for point in points:
+        item = eval_point(
+            lat=point["lat"],
+            lon=point["lon"],
+            alt_amsl_m=point["alt_amsl_m"],
+            buffer_m=buffer_m,
+            t_ms=point.get("t_ms"),
+        )
+        items.append(item)
+
+    return items
