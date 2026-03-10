@@ -1,0 +1,14 @@
+# models/flight.py
+from dataclasses import dataclass
+from typing import Optional
+from datetime import datetime
+
+@dataclass
+class FlightPoint:
+    flight_id: str
+    timestamp: datetime
+    lat: float
+    lon: float
+    altitude_ft: Optional[float] = None
+    speed_kts: Optional[float] = None
+    heading_deg: Optional[float] = None

@@ -1,0 +1,12 @@
+# models/airspace.py
+from dataclasses import dataclass
+from typing import Optional, List, Tuple
+
+@dataclass
+class AirspaceZone:
+    zone_id: str
+    name: str
+    classification: Optional[str] = None
+    floor_ft: Optional[float] = None
+    ceiling_ft: Optional[float] = None
+    polygon: Optional[List[Tuple[float, float]]] = None

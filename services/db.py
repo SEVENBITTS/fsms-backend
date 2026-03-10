@@ -3,14 +3,22 @@ import psycopg2
 
 _conn = None
 
+
 def get_conn():
     """
-    Singleton connection (dev-friendly).
-    Uses env vars if present, otherwise defaults.
+    Singleton DB connection.
+
+    Uses environment variables if present.
+    Automatically reconnects if connection dropped.
     """
     global _conn
+
     if _conn is not None:
-        return _conn
+        try:
+            _conn.cursor().execute("SELECT 1;")
+            return _conn
+        except Exception:
+            _conn = None
 
     _conn = psycopg2.connect(
         dbname=os.getenv("PGDATABASE", "fsms_drone_ops"),
@@ -19,5 +27,6 @@ def get_conn():
         host=os.getenv("PGHOST", "localhost"),
         port=int(os.getenv("PGPORT", "5432")),
     )
+
     _conn.autocommit = True
     return _conn

@@ -96,6 +96,7 @@ def eval_point(lat, lon, alt_amsl_m, buffer_m=0.0, t_ms=None):
         "zone": zone_obj,
     }
 
+
 def eval_flight_points(points, buffer_m=0.0):
     """
     Evaluate a list of flight points for airspace compliance.
@@ -120,5 +121,49 @@ def eval_flight_points(points, buffer_m=0.0):
             t_ms=point.get("t_ms"),
         )
         items.append(item)
+
+    return items
+
+
+def eval_flight_points_fast(points, candidate_zones):
+    """
+    Fast in-memory evaluation against already-fetched candidate zones.
+
+    candidate_zones should contain rows compatible with eval_zone(),
+    plus geometry in the final column if you later add geometric point checks.
+    """
+    items = []
+
+    for point in points:
+        lat = float(point["lat"])
+        lon = float(point["lon"])
+        alt_amsl_m = float(point["alt_amsl_m"])
+        t_ms = point.get("t_ms")
+
+        terrain_amsl = terrain.get_elevation_m_amsl(lat, lon)
+        alt_agl_m = None if terrain_amsl is None else alt_amsl_m - float(terrain_amsl)
+
+        # Temporary simple strategy:
+        # choose first candidate zone for now, later refine with geometry checks
+        zone_row = candidate_zones[0][:-1] if candidate_zones else None
+
+        breach, eval_status, lower_m, upper_m = eval_zone(
+            alt_amsl_m,
+            alt_agl_m,
+            zone_row,
+        )
+        zone_obj = zone_row_to_obj(zone_row, eval_status, lower_m, upper_m)
+
+        items.append({
+            "t": float(t_ms) if t_ms is not None else None,
+            "lat": lat,
+            "lon": lon,
+            "alt_amsl_m": alt_amsl_m,
+            "alt_agl_m": alt_agl_m,
+            "breach": breach,
+            "breach_unknown": breach is None,
+            "eval_status": eval_status,
+            "zone": zone_obj,
+        })
 
     return items
