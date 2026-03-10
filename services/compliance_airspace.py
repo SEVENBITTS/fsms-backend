@@ -62,7 +62,7 @@ def zone_row_to_obj(zone_row, eval_status, lower_m, upper_m):
     }
 
 
-def eval_point(lat, lon, alt_amsl_m, buffer_m=0.0, t_ms=None):
+def eval_point(lat: float, lon: float, alt_amsl_m: float, buffer_m: float = 0.0, t_ms: float | None = None):
     if t_ms is None:
         t_ms = datetime.now(timezone.utc).timestamp() * 1000.0
 
@@ -145,6 +145,7 @@ def eval_flight_points_fast(points, candidate_zones):
 
         # Temporary simple strategy:
         # choose first candidate zone for now, later refine with geometry checks
+        # TODO: replace first-zone shortcut with true per-point geometry membership check
         zone_row = candidate_zones[0][:-1] if candidate_zones else None
 
         breach, eval_status, lower_m, upper_m = eval_zone(
