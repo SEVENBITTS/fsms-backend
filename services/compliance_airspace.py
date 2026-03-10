@@ -6,6 +6,10 @@ from services.db import get_conn
 from services.terrain import TerrainAdapter
 from services.compliance import eval_zone
 
+# Experimental performance helper.
+# Not yet geometrically exact for per-point zone selection.
+# Intended for future batch evaluation optimization.
+
 SQL_ZONE_FOR_POINT = """
   WITH p AS (
     SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326) AS pt

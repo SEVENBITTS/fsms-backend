@@ -11,13 +11,14 @@ Later it can connect to real terrain datasets
 
 class TerrainAdapter:
     """
-    Stub terrain adapter.
+    Stub terrain adapter for development.
 
-    Returns None until real terrain lookup is implemented.
+    Returns a fixed terrain elevation so AGL calculations work.
     """
 
     def get_elevation_m_amsl(self, lat: float, lon: float) -> float | None:
-        return None
+        # temporary constant terrain elevation
+        return 20.0
 
 
 def compute_agl(alt_amsl_m: float, lat: float, lon: float) -> float | None:
