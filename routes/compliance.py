@@ -1,6 +1,15 @@
 from flask import Blueprint, jsonify, request
+
 from services.compliance_airspace import eval_point, eval_flight_points
-from services.db import get_conn
+from services.flight_service import get_flight_points
+from services.compliance_cache import (
+    get_cached_flight_compliance,
+    set_cached_flight_compliance,
+)
+
+# Future performance path:
+# from services.airspace_service import get_candidate_zones_for_flight
+# from services.compliance_airspace import eval_flight_points_fast
 
 compliance_bp = Blueprint("compliance", __name__, url_prefix="/api/compliance/airspace")
 
@@ -25,7 +34,14 @@ def compliance_eval_point():
         except ValueError:
             return jsonify({"error": "t_ms must be numeric epoch ms"}), 400
 
-    return jsonify(eval_point(lat, lon, alt_amsl_m, buffer_m=buffer_m, t_ms=t_ms))
+    item = eval_point(
+        lat=lat,
+        lon=lon,
+        alt_amsl_m=alt_amsl_m,
+        buffer_m=buffer_m,
+        t_ms=t_ms,
+    )
+    return jsonify(item)
 
 
 @compliance_bp.get("/by-flight/<uuid:flight_id>")
@@ -35,28 +51,20 @@ def compliance_airspace_by_flight(flight_id):
     except ValueError:
         return jsonify({"error": "buffer_m must be numeric"}), 400
 
-    sql_points = """
-      SELECT recorded_at, latitude, longitude, COALESCE(altitude_m, 0) AS alt_m
-      FROM flight_positions
-      WHERE flight_id = %s
-      ORDER BY recorded_at ASC;
-    """
+    flight_id_str = str(flight_id)
 
-    conn = get_conn()
-    with conn.cursor() as cur:
-        cur.execute(sql_points, (str(flight_id),))
-        rows = cur.fetchall()
+    # Cache hit
+    cached = get_cached_flight_compliance(flight_id_str)
+    if cached is not None:
+        return jsonify(cached)
 
-    points = [
-        {
-            "lat": lat,
-            "lon": lon,
-            "alt_amsl_m": alt_m,
-            "t_ms": recorded_at.timestamp() * 1000.0,
-        }
-        for (recorded_at, lat, lon, alt_m) in rows
-    ]
-
+    # Current production-safe path
+    points = get_flight_points(flight_id_str)
     items = eval_flight_points(points, buffer_m=buffer_m)
 
-    return jsonify({"items": items})
+    payload = {"items": items}
+
+    # Save to cache
+    set_cached_flight_compliance(flight_id_str, payload)
+
+    return jsonify(payload)
