@@ -46,3 +46,36 @@ def get_airspace_by_flight_geojson(flight_id: str, buffer_m: float = 5000.0):
         row = cur.fetchone()
 
     return row[0] if row and row[0] else {"type": "FeatureCollection", "features": []}
+
+
+def get_candidate_zones_for_flight(flight_id: str, buffer_m: float = 5000.0):
+    conn = get_conn()
+
+    sql = """
+    WITH fp AS (
+      SELECT ST_SetSRID(ST_MakePoint(longitude, latitude), 4326) AS pt
+      FROM flight_positions
+      WHERE flight_id = %s
+    ),
+    corridor AS (
+      SELECT ST_Buffer(ST_Envelope(ST_Collect(pt))::geography, %s)::geometry AS g
+      FROM fp
+    )
+    SELECT
+      az.id,
+      az.name,
+      az.zone_type,
+      az.source,
+      az.external_id,
+      az.lower_value, az.lower_unit, az.lower_ref,
+      az.upper_value, az.upper_unit, az.upper_ref,
+      az.properties,
+      az.geometry::geometry
+    FROM airspace_zones az, corridor
+    WHERE az.geometry IS NOT NULL
+      AND ST_Intersects(az.geometry::geometry, corridor.g);
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql, (flight_id, buffer_m))
+        return cur.fetchall()
