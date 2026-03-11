@@ -71,6 +71,32 @@ SQL_ZONE_FOR_POINT_WITH_DISTANCE = """
   ORDER BY az.updated_at DESC
   LIMIT 1;
 """
+SQL_NEAREST_ZONE_FOR_POINT = """
+  WITH p AS (
+    SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326) AS pt
+  )
+  SELECT
+    az.id,
+    az.name,
+    az.zone_type,
+    az.source,
+    az.external_id,
+    az.lower_value, az.lower_unit, az.lower_ref,
+    az.upper_value, az.upper_unit, az.upper_ref,
+    az.properties,
+    ST_Distance(
+      az.geometry::geography,
+      (SELECT pt::geography FROM p)
+    ) AS boundary_distance_m,
+    ST_Contains(
+      az.geometry::geometry,
+      (SELECT pt FROM p)
+    ) AS inside_zone
+  FROM airspace_zones az
+  WHERE az.geometry IS NOT NULL
+  ORDER BY az.geometry::geography <-> (SELECT pt::geography FROM p)
+  LIMIT 1;
+"""
 
 terrain = TerrainAdapter()
 
@@ -130,6 +156,13 @@ def eval_point(
             (float(lon), float(lat), float(buffer_m), float(buffer_m)),
         )
         row = cur.fetchone()
+
+        if not row:
+            cur.execute(
+                SQL_NEAREST_ZONE_FOR_POINT,
+                (float(lon), float(lat)),
+            )
+            row = cur.fetchone()
 
     if row:
         zone_row = row[:12]
