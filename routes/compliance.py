@@ -2,14 +2,16 @@ from flask import Blueprint, jsonify, request
 
 from services.compliance_airspace import eval_point, eval_flight_points
 from services.flight_service import get_flight_points
-from services.compliance_cache import (
-    get_cached_flight_compliance,
-    set_cached_flight_compliance,
-)
 
 # Future performance path:
 # from services.airspace_service import get_candidate_zones_for_flight
 # from services.compliance_airspace import eval_flight_points_fast
+
+# Future cache path:
+# from services.compliance_cache import (
+#     get_cached_flight_compliance,
+#     set_cached_flight_compliance,
+# )
 
 compliance_bp = Blueprint("compliance", __name__, url_prefix="/api/compliance/airspace")
 
@@ -53,18 +55,26 @@ def compliance_airspace_by_flight(flight_id):
 
     flight_id_str = str(flight_id)
 
-    # Cache hit
-    cached = get_cached_flight_compliance(flight_id_str)
-    if cached is not None:
-        return jsonify(cached)
+    # Future cache path:
+    # cached = get_cached_flight_compliance(flight_id_str)
+    # if cached is not None:
+    #     return jsonify(cached)
+
+    points = get_flight_points(flight_id_str)
 
     # Current production-safe path
-    points = get_flight_points(flight_id_str)
     items = eval_flight_points(points, buffer_m=buffer_m)
+
+    # Future fast path:
+    # candidate_zones = get_candidate_zones_for_flight(
+    #     flight_id_str,
+    #     buffer_m=max(buffer_m, 5000),
+    # )
+    # items = eval_flight_points_fast(points, candidate_zones)
 
     payload = {"items": items}
 
-    # Save to cache
-    set_cached_flight_compliance(flight_id_str, payload)
+    # Future cache path:
+    # set_cached_flight_compliance(flight_id_str, payload)
 
     return jsonify(payload)
