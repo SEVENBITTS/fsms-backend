@@ -382,20 +382,7 @@ input[type=range]{ width:320px; }
     return { label: "SAFE", cls: "risk-safe" };
   }
 
-  function fmtLimit(v){
-  if (v === null || v === undefined) return "—";
-
-  const m = Number(v);
-
-  // Normalize the common drone limit 400ft ≈ 121.92m → display 120m
-  if (Math.abs(m - 121.92) < 2) {
-    return "120.0 m";
-  }
-
-  return `${m.toFixed(1)} m`;
-}
-
- function fmtLimit(v){
+function fmtLimit(v){
   if (v === null || v === undefined) return "—";
 
   const m = Number(v);
@@ -408,6 +395,10 @@ input[type=range]{ width:320px; }
   const ft = m * 3.28084;
 
   return `${m.toFixed(1)} m (${Math.round(ft)} ft)`;
+}
+function fmtM(v){
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  return `${Number(v).toFixed(1)} m`;
 }
 
   function vsArrow(vz){
