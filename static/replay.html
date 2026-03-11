@@ -32,7 +32,7 @@ html, body { margin:0; height:100%; }
 input[type=range]{ width:320px; }
 
 /* ===============================
-   Mission Control HUD v2
+   Mission Control HUD
 ================================ */
 #hud{
   position:absolute;
@@ -174,7 +174,7 @@ input[type=range]{ width:320px; }
   box-shadow:0 0 0 2px rgba(0,0,0,0.25);
 }
 
-/* Breach prediction marker */
+/* Vertical breach prediction marker */
 .breach-dot{
   width:16px;
   height:16px;
@@ -182,6 +182,17 @@ input[type=range]{ width:320px; }
   border:3px solid #ff0000;
   background:rgba(255,0,0,0.15);
   box-shadow:0 0 0 3px rgba(255,255,255,0.35);
+  animation: breachFlash 0.8s infinite;
+}
+
+/* Horizontal entry prediction marker */
+.entry-dot{
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  border:3px solid #ffbf00;
+  background:rgba(255,191,0,0.18);
+  box-shadow:0 0 0 3px rgba(255,255,255,0.30);
   animation: breachFlash 0.8s infinite;
 }
 
@@ -214,9 +225,7 @@ input[type=range]{ width:320px; }
 .btn:active{ transform: translateY(1px); }
 .btn[disabled]{ opacity:0.5; cursor:not-allowed; }
 
-/* ===============================
-   Feature Toggle Menu
-================================ */
+/* Feature Toggle Menu */
 #feature-menu{
   position:absolute;
   top:100px;
@@ -343,6 +352,7 @@ input[type=range]{ width:320px; }
   let currentIndex = 0;
   let flightBounds = null;
   let airspaceBounds = null;
+  let airspaceGeojson = null;
   let lastSmoothedPos = null;
 
   function bindToggle(id, key){
@@ -373,14 +383,32 @@ input[type=range]{ width:320px; }
   }
 
   function fmtLimit(v){
-    if (v === null || v === undefined) return "—";
-    return `${Number(v).toFixed(1)} m`;
+  if (v === null || v === undefined) return "—";
+
+  const m = Number(v);
+
+  // Normalize the common drone limit 400ft ≈ 121.92m → display 120m
+  if (Math.abs(m - 121.92) < 2) {
+    return "120.0 m";
   }
 
-  function fmtM(v){
-    if (v === null || v === undefined || Number.isNaN(v)) return "—";
-    return `${Number(v).toFixed(1)} m`;
+  return `${m.toFixed(1)} m`;
+}
+
+ function fmtLimit(v){
+  if (v === null || v === undefined) return "—";
+
+  const m = Number(v);
+
+  // detect common 400 ft limit
+  if (Math.abs(m - 121.92) < 2) {
+    return "120.0 m (400 ft)";
   }
+
+  const ft = m * 3.28084;
+
+  return `${m.toFixed(1)} m (${Math.round(ft)} ft)`;
+}
 
   function vsArrow(vz){
     if (vz === null || vz === undefined || Number.isNaN(vz)) return "—";
@@ -443,6 +471,72 @@ input[type=range]{ width:320px; }
     const x = Math.sin(dLat / 2) ** 2 +
       Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
     return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+
+  function pointInRing(point, ring){
+    const x = point.lng;
+    const y = point.lat;
+    let inside = false;
+
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+
+      const intersect =
+        ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi);
+
+      if (intersect) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  function pointInPolygon(point, geometry){
+    if (!geometry) return false;
+
+    if (geometry.type === "Polygon") {
+      return pointInRing(point, geometry.coordinates[0]);
+    }
+
+    if (geometry.type === "MultiPolygon") {
+      return geometry.coordinates.some(poly => pointInRing(point, poly[0]));
+    }
+
+    return false;
+  }
+
+  function getZoneFeatureById(zoneId){
+    if (!airspaceGeojson?.features?.length || !zoneId) return null;
+
+    return airspaceGeojson.features.find(f =>
+      String(f?.properties?.id) === String(zoneId)
+    ) || null;
+  }
+
+  function predictBoundaryEntry(currentTimeMs, zoneFeature, horizonSeconds = 60, stepSeconds = 1){
+    if (!zoneFeature?.geometry) return null;
+
+    const startPos = interpolate(currentTimeMs);
+    const startInside = pointInPolygon(startPos, zoneFeature.geometry);
+
+    // only predict boundary entry when currently outside
+    if (startInside) return null;
+
+    for (let s = stepSeconds; s <= horizonSeconds; s += stepSeconds) {
+      const tFuture = Math.min(t0 + duration, currentTimeMs + s * 1000);
+      const posFuture = interpolate(tFuture);
+
+      if (pointInPolygon(posFuture, zoneFeature.geometry)) {
+        return {
+          ttb_s: s,
+          pos: posFuture,
+          t_ms: tFuture
+        };
+      }
+    }
+
+    return null;
   }
 
   let data;
@@ -513,6 +607,14 @@ input[type=range]{ width:320px; }
   breachEl.style.display = "none";
 
   const breachMarker = new maplibregl.Marker({ element: breachEl })
+    .setLngLat([pts[0].lng, pts[0].lat])
+    .addTo(map);
+
+  const entryEl = document.createElement("div");
+  entryEl.className = "entry-dot";
+  entryEl.style.display = "none";
+
+  const entryMarker = new maplibregl.Marker({ element: entryEl })
     .setLngLat([pts[0].lng, pts[0].lat])
     .addTo(map);
 
@@ -625,6 +727,7 @@ input[type=range]{ width:320px; }
       const r = await fetch(AIRSPACE_URL);
       if (!r.ok) throw new Error("Airspace fetch failed");
       const airspaceData = await r.json();
+      airspaceGeojson = airspaceData;
 
       map.addSource("airspace", { type: "geojson", data: airspaceData });
 
@@ -840,6 +943,9 @@ input[type=range]{ width:320px; }
 
     const ttb = predictTtb(margin, vz);
 
+    const zoneFeature = getZoneFeatureById(zone?.id);
+    const boundaryPrediction = predictBoundaryEntry(t, zoneFeature, 60, 1);
+
     let warnText = "";
     let warnClass = "";
     let warnShow = false;
@@ -853,6 +959,10 @@ input[type=range]{ width:320px; }
         warnShow = true;
         warnClass = "risk-warning";
         warnText = `PREDICTED BREACH IN ${Math.round(ttb)}s`;
+      } else if (boundaryPrediction) {
+        warnShow = true;
+        warnClass = "risk-warning";
+        warnText = `TRACK ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s`;
       } else if (margin <= 20) {
         warnShow = true;
         warnClass = "risk-warning";
@@ -864,7 +974,6 @@ input[type=range]{ width:320px; }
       }
     }
 
-    // Fixed breach predictor: use TTB directly, not raw margin/vz test only
     if (FEATURES.prediction && ttb !== null && ttb > 0 && ttb <= 120) {
       const tBreach = Math.min(t0 + duration, t + ttb * 1000);
       const posBreach = interpolate(tBreach);
@@ -872,6 +981,13 @@ input[type=range]{ width:320px; }
       breachEl.style.display = "block";
     } else {
       breachEl.style.display = "none";
+    }
+
+    if (FEATURES.prediction && boundaryPrediction) {
+      entryMarker.setLngLat([boundaryPrediction.pos.lng, boundaryPrediction.pos.lat]);
+      entryEl.style.display = "block";
+    } else {
+      entryEl.style.display = "none";
     }
 
     let groundspeed = null;
@@ -918,27 +1034,38 @@ input[type=range]{ width:320px; }
       <div class="hud-divider"></div>
 
       <div class="hud-grid">
-<div class="hud-k">ZONE</div><div class="hud-v">${zoneName}</div>
-<div class="hud-k">TYPE</div><div class="hud-v">${zoneType}</div>
-<div class="hud-k">STATUS</div><div class="hud-v">${status}</div>
-<div class="hud-k">LIMITS</div><div class="hud-v">${fmtLimit(lowerM)} → ${fmtLimit(upperM)}</div>
-<div class="hud-k">BASIS</div><div class="hud-v">${basis}</div>
-<div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
+        <div class="hud-k">ZONE</div><div class="hud-v">${zoneName}</div>
+        <div class="hud-k">TYPE</div><div class="hud-v">${zoneType}</div>
+        <div class="hud-k">STATUS</div><div class="hud-v">${status}</div>
+        <div class="hud-k">LIMITS</div><div class="hud-v">${fmtLimit(lowerM)} → ${fmtLimit(upperM)}</div>
+        <div class="hud-k">BASIS</div><div class="hud-v">${basis}</div>
+        <div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
 
-<div class="hud-k">BND</div>
-<div class="hud-v">
-  ${zone?.boundary_distance_m === null || zone?.boundary_distance_m === undefined
-    ? "—"
-    : `${Number(zone.boundary_distance_m).toFixed(1)} m`}
-</div>
+        <div class="hud-k">BND</div>
+        <div class="hud-v">
+          ${zone?.boundary_distance_m === null || zone?.boundary_distance_m === undefined
+            ? "—"
+            : `${Number(zone.boundary_distance_m).toFixed(1)} m`}
+        </div>
 
-<div class="hud-k">IN/OUT</div>
-<div class="hud-v" style="color:${zone?.inside_zone === true ? '#ffbf00' : '#e8eefc'}">
-  ${zone?.inside_zone === true ? "INSIDE" : zone?.inside_zone === false ? "OUTSIDE" : "—"}
-</div>
+        <div class="hud-k">IN/OUT</div>
+        <div class="hud-v" style="color:${zone?.inside_zone === true ? '#ffbf00' : '#e8eefc'}">
+          ${zone?.inside_zone === true ? "INSIDE" : zone?.inside_zone === false ? "OUTSIDE" : "—"}
+        </div>
 
-<div class="hud-k">TTB</div><div class="hud-v">${FEATURES.prediction && ttb !== null ? `${Math.max(0, Math.round(ttb))} s` : "—"}</div>
-<div class="hud-k">RESULT</div><div class="hud-v" style="color:${breachColor}">${breachText}</div>
+        <div class="hud-k">HTB</div>
+        <div class="hud-v">
+          ${boundaryPrediction ? `${Math.round(boundaryPrediction.ttb_s)} s` : "—"}
+        </div>
+
+        <div class="hud-k">TRACK</div>
+        <div class="hud-v" style="color:${boundaryPrediction ? '#ffbf00' : '#e8eefc'}">
+          ${boundaryPrediction ? `ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s` : "CLEAR"}
+        </div>
+
+        <div class="hud-k">TTB</div><div class="hud-v">${FEATURES.prediction && ttb !== null ? `${Math.max(0, Math.round(ttb))} s` : "—"}</div>
+        <div class="hud-k">RESULT</div><div class="hud-v" style="color:${breachColor}">${breachText}</div>
+
         <div class="riskbar">
           <div class="riskbar-fill ${riskInfo.cls} ${margin < 0 ? "breach-flash" : ""}"
                style="width:${marginPct}%"></div>
