@@ -37,10 +37,52 @@ SQL_ZONE_FOR_POINT = """
   LIMIT 1;
 """
 
+SQL_ZONE_FOR_POINT_WITH_DISTANCE = """
+  WITH p AS (
+    SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326) AS pt
+  ),
+  pbuf AS (
+    SELECT CASE WHEN %s > 0
+      THEN ST_Buffer(pt::geography, %s)::geometry
+      ELSE pt
+    END AS g
+    FROM p
+  )
+  SELECT
+    az.id,
+    az.name,
+    az.zone_type,
+    az.source,
+    az.external_id,
+    az.lower_value, az.lower_unit, az.lower_ref,
+    az.upper_value, az.upper_unit, az.upper_ref,
+    az.properties,
+    ST_Distance(
+      az.geometry::geography,
+      (SELECT pt::geography FROM p)
+    ) AS boundary_distance_m,
+    ST_Contains(
+      az.geometry::geometry,
+      (SELECT pt FROM p)
+    ) AS inside_zone
+  FROM airspace_zones az, pbuf
+  WHERE az.geometry IS NOT NULL
+    AND ST_Intersects(az.geometry::geometry, pbuf.g)
+  ORDER BY az.updated_at DESC
+  LIMIT 1;
+"""
+
 terrain = TerrainAdapter()
 
 
-def zone_row_to_obj(zone_row, eval_status, lower_m, upper_m):
+def zone_row_to_obj(
+    zone_row,
+    eval_status,
+    lower_m,
+    upper_m,
+    boundary_distance_m=None,
+    inside_zone=None,
+):
     if not zone_row:
         return None
 
@@ -63,10 +105,18 @@ def zone_row_to_obj(zone_row, eval_status, lower_m, upper_m):
         "upper_m": upper_m,
         "eval_status": eval_status,
         "properties": props or {},
+        "boundary_distance_m": boundary_distance_m,
+        "inside_zone": inside_zone,
     }
 
 
-def eval_point(lat: float, lon: float, alt_amsl_m: float, buffer_m: float = 0.0, t_ms: float | None = None):
+def eval_point(
+    lat: float,
+    lon: float,
+    alt_amsl_m: float,
+    buffer_m: float = 0.0,
+    t_ms: float | None = None,
+):
     if t_ms is None:
         t_ms = datetime.now(timezone.utc).timestamp() * 1000.0
 
@@ -76,17 +126,34 @@ def eval_point(lat: float, lon: float, alt_amsl_m: float, buffer_m: float = 0.0,
     conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
-            SQL_ZONE_FOR_POINT,
+            SQL_ZONE_FOR_POINT_WITH_DISTANCE,
             (float(lon), float(lat), float(buffer_m), float(buffer_m)),
         )
-        zone_row = cur.fetchone()
+        row = cur.fetchone()
+
+    if row:
+        zone_row = row[:12]
+        boundary_distance_m = float(row[12]) if row[12] is not None else None
+        inside_zone = bool(row[13]) if row[13] is not None else None
+    else:
+        zone_row = None
+        boundary_distance_m = None
+        inside_zone = None
 
     breach, eval_status, lower_m, upper_m = eval_zone(
         float(alt_amsl_m),
         alt_agl_m,
         zone_row,
     )
-    zone_obj = zone_row_to_obj(zone_row, eval_status, lower_m, upper_m)
+
+    zone_obj = zone_row_to_obj(
+        zone_row,
+        eval_status,
+        lower_m,
+        upper_m,
+        boundary_distance_m=boundary_distance_m,
+        inside_zone=inside_zone,
+    )
 
     return {
         "t": float(t_ms),
