@@ -918,15 +918,27 @@ input[type=range]{ width:320px; }
       <div class="hud-divider"></div>
 
       <div class="hud-grid">
-        <div class="hud-k">ZONE</div><div class="hud-v">${zoneName}</div>
-        <div class="hud-k">TYPE</div><div class="hud-v">${zoneType}</div>
-        <div class="hud-k">STATUS</div><div class="hud-v">${status}</div>
-        <div class="hud-k">LIMITS</div><div class="hud-v">${fmtLimit(lowerM)} → ${fmtLimit(upperM)}</div>
-        <div class="hud-k">BASIS</div><div class="hud-v">${basis}</div>
-        <div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
-        <div class="hud-k">TTB</div><div class="hud-v">${FEATURES.prediction && ttb !== null ? `${Math.max(0, Math.round(ttb))} s` : "—"}</div>
-        <div class="hud-k">RESULT</div><div class="hud-v" style="color:${breachColor}">${breachText}</div>
+<div class="hud-k">ZONE</div><div class="hud-v">${zoneName}</div>
+<div class="hud-k">TYPE</div><div class="hud-v">${zoneType}</div>
+<div class="hud-k">STATUS</div><div class="hud-v">${status}</div>
+<div class="hud-k">LIMITS</div><div class="hud-v">${fmtLimit(lowerM)} → ${fmtLimit(upperM)}</div>
+<div class="hud-k">BASIS</div><div class="hud-v">${basis}</div>
+<div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
 
+<div class="hud-k">BND</div>
+<div class="hud-v">
+  ${zone?.boundary_distance_m === null || zone?.boundary_distance_m === undefined
+    ? "—"
+    : `${Number(zone.boundary_distance_m).toFixed(1)} m`}
+</div>
+
+<div class="hud-k">IN/OUT</div>
+<div class="hud-v" style="color:${zone?.inside_zone === true ? '#ffbf00' : '#e8eefc'}">
+  ${zone?.inside_zone === true ? "INSIDE" : zone?.inside_zone === false ? "OUTSIDE" : "—"}
+</div>
+
+<div class="hud-k">TTB</div><div class="hud-v">${FEATURES.prediction && ttb !== null ? `${Math.max(0, Math.round(ttb))} s` : "—"}</div>
+<div class="hud-k">RESULT</div><div class="hud-v" style="color:${breachColor}">${breachText}</div>
         <div class="riskbar">
           <div class="riskbar-fill ${riskInfo.cls} ${margin < 0 ? "breach-flash" : ""}"
                style="width:${marginPct}%"></div>
