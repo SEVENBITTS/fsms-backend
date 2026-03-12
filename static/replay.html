@@ -540,8 +540,7 @@ function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, grounds
   const startInside = pointInPolygon(currentPos, zoneFeature.geometry);
   const endInside = pointInPolygon(futurePos, zoneFeature.geometry);
 
-  // We only want entry prediction when currently outside and projected inside
-  if (startInside) return null;
+   if (startInside) return null;
 
   const rings = getPolygonOuterRings(zoneFeature.geometry);
 
@@ -574,6 +573,44 @@ function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, grounds
     },
     distance_m: distToHitM,
     ttb_s: ttb_s
+  };
+}
+
+
+function predictAltAtTime(currentAlt, vzMps, dtSeconds){
+  if (currentAlt === null || currentAlt === undefined || Number.isNaN(currentAlt)) return null;
+  if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
+  return Number(currentAlt) + Number(vzMps) * Number(dtSeconds);
+}
+
+function isWithinVerticalBand(predictedAlt, lowerM, upperM){
+  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
+
+  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
+    return false;
+  }
+
+  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
+    return false;
+  }
+
+  return true;
+}
+
+function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, currentAlt, vzMps, lowerM, upperM){
+  const boundaryHit = predictBoundaryIntersection(currentPos, futurePos, zoneFeature, groundspeed);
+  if (!boundaryHit) return null;
+
+  const predictedAltAtEntry = predictAltAtTime(currentAlt, vzMps, boundaryHit.ttb_s);
+  const verticalOk = isWithinVerticalBand(predictedAltAtEntry, lowerM, upperM);
+
+  return {
+    pos: boundaryHit.pos,
+    distance_m: boundaryHit.distance_m,
+    ttb_s: boundaryHit.ttb_s,
+    predicted_alt_m: predictedAltAtEntry,
+    vertical_ok: verticalOk,
+    conflict: verticalOk === false
   };
 }
 
@@ -993,6 +1030,8 @@ function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, grounds
       }
     }
 
+    const predictionAltNow = (basis === "AGL") ? altAgl : altAmsl;
+
     const breachText = (c && c.breach_unknown) ? "UNKNOWN" : (c?.breach ? "BREACH" : "OK");
     const breachColor = (c && c.breach_unknown) ? "#bbbbbb" : (c?.breach ? "#ff0000" : "#00ff00");
 
@@ -1005,11 +1044,23 @@ function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, grounds
     const ttb = predictTtb(margin, vz);
 
     const zoneFeature = getZoneFeatureById(zone?.id);
+
     const boundaryPrediction = predictBoundaryIntersection(
       pos,
       posFuturePredict,
       zoneFeature,
       groundspeed
+    );
+
+    const conflict4D = predict4DConflict(
+      pos,
+      posFuturePredict,
+      zoneFeature,
+      groundspeed,
+      predictionAltNow,
+      vz,
+      lowerM,
+      upperM
     );
 
     let warnText = "";
@@ -1025,9 +1076,13 @@ function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, grounds
         warnShow = true;
         warnClass = "risk-warning";
         warnText = `PREDICTED BREACH IN ${Math.round(ttb)}s`;
-      } else if (boundaryPrediction) {
+      } else if (conflict4D?.conflict) {
         warnShow = true;
         warnClass = "risk-warning";
+        warnText = `4D CONFLICT IN ${Math.round(conflict4D.ttb_s)}s`;
+      } else if (boundaryPrediction) {
+        warnShow = true;
+        warnClass = "risk-caution";
         warnText = `TRACK ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s`;
       } else if (margin <= 20) {
         warnShow = true;
@@ -1049,14 +1104,29 @@ function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, grounds
       breachEl.style.display = "none";
     }
 
-    if (FEATURES.prediction && boundaryPrediction) {
-      entryMarker.setLngLat([boundaryPrediction.pos.lng, boundaryPrediction.pos.lat]);
+    if (FEATURES.prediction && (conflict4D?.conflict || boundaryPrediction)) {
+
+      const p = conflict4D?.conflict ? conflict4D.pos : boundaryPrediction?.pos;
+
+      if (!p) {
+        entryEl.style.display = "none";
+        return;
+      }
+
+      entryMarker.setLngLat([p.lng, p.lat]);
       entryEl.style.display = "block";
+
+      if (conflict4D?.conflict) {
+        entryEl.style.border = "3px solid #ff0000";
+        entryEl.style.background = "rgba(255,0,0,0.18)";
+      } else {
+        entryEl.style.border = "3px solid #ffbf00";
+        entryEl.style.background = "rgba(255,191,0,0.18)";
+      }
+
     } else {
       entryEl.style.display = "none";
     }
-
-    
 
     if (map.getLayer("airspace-3d")) {
       map.setLayoutProperty("airspace-3d", "visibility", FEATURES.cone ? "visible" : "none");
@@ -1123,8 +1193,24 @@ function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, grounds
         </div>
 
         <div class="hud-k">TRACK</div>
-        <div class="hud-v" style="color:${boundaryPrediction ? '#ffbf00' : '#e8eefc'}">
-          ${boundaryPrediction ? `ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s` : "CLEAR"}
+        <div class="hud-v" style="color:${conflict4D?.conflict ? '#ff0000' : boundaryPrediction ? '#ffbf00' : '#e8eefc'}">
+          ${conflict4D?.conflict
+            ? `4D CONFLICT IN ${Math.round(conflict4D.ttb_s)}s`
+            : boundaryPrediction
+              ? `ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s`
+              : "CLEAR"}
+        </div>
+
+        <div class="hud-k">4D ALT</div>
+        <div class="hud-v">
+          ${conflict4D?.predicted_alt_m !== null && conflict4D?.predicted_alt_m !== undefined
+            ? `${conflict4D.predicted_alt_m.toFixed(1)} m`
+            : "—"}
+        </div>
+
+        <div class="hud-k">4D CONFLICT</div>
+        <div class="hud-v" style="color:${conflict4D?.conflict ? '#ff0000' : '#e8eefc'}">
+          ${conflict4D?.conflict ? "YES" : "NO"}
         </div>
 
         <div class="hud-k">TTB</div><div class="hud-v">${FEATURES.prediction && ttb !== null ? `${Math.max(0, Math.round(ttb))} s` : "—"}</div>
