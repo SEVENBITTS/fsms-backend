@@ -497,6 +497,86 @@ function fmtM(v){
     return false;
   }
 
+  function segmentIntersection(p1, p2, q1, q2){
+  const x1 = p1.lng, y1 = p1.lat;
+  const x2 = p2.lng, y2 = p2.lat;
+  const x3 = q1[0],  y3 = q1[1];
+  const x4 = q2[0],  y4 = q2[1];
+
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+
+  if (Math.abs(denom) < 1e-12) return null;
+
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  const u = ((x1 - x3) * (y1 - y2) - (y1 - y3) * (x1 - x2)) / denom;
+
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+
+  return {
+    lng: x1 + t * (x2 - x1),
+    lat: y1 + t * (y2 - y1),
+    t_line: t
+  };
+}
+
+function getPolygonOuterRings(geometry){
+  if (!geometry) return [];
+
+  if (geometry.type === "Polygon") {
+    return [geometry.coordinates[0]];
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.map(poly => poly[0]);
+  }
+
+  return [];
+}
+
+function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, groundspeed){
+  if (!zoneFeature?.geometry) return null;
+  if (!groundspeed || groundspeed <= 0) return null;
+
+  const startInside = pointInPolygon(currentPos, zoneFeature.geometry);
+  const endInside = pointInPolygon(futurePos, zoneFeature.geometry);
+
+  // We only want entry prediction when currently outside and projected inside
+  if (startInside) return null;
+
+  const rings = getPolygonOuterRings(zoneFeature.geometry);
+
+  let bestHit = null;
+
+  for (const ring of rings) {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const q1 = ring[i];
+      const q2 = ring[i + 1];
+
+      const hit = segmentIntersection(currentPos, futurePos, q1, q2);
+      if (!hit) continue;
+
+      if (!bestHit || hit.t_line < bestHit.t_line) {
+        bestHit = hit;
+      }
+    }
+  }
+
+  if (!bestHit) return null;
+
+  const totalDistM = distanceM(currentPos, futurePos);
+  const distToHitM = totalDistM * bestHit.t_line;
+  const ttb_s = distToHitM / groundspeed;
+
+  return {
+    pos: {
+      lng: bestHit.lng,
+      lat: bestHit.lat
+    },
+    distance_m: distToHitM,
+    ttb_s: ttb_s
+  };
+}
+
   function getZoneFeatureById(zoneId){
     if (!airspaceGeojson?.features?.length || !zoneId) return null;
 
@@ -505,30 +585,7 @@ function fmtM(v){
     ) || null;
   }
 
-  function predictBoundaryEntry(currentTimeMs, zoneFeature, horizonSeconds = 60, stepSeconds = 1){
-    if (!zoneFeature?.geometry) return null;
-
-    const startPos = interpolate(currentTimeMs);
-    const startInside = pointInPolygon(startPos, zoneFeature.geometry);
-
-    // only predict boundary entry when currently outside
-    if (startInside) return null;
-
-    for (let s = stepSeconds; s <= horizonSeconds; s += stepSeconds) {
-      const tFuture = Math.min(t0 + duration, currentTimeMs + s * 1000);
-      const posFuture = interpolate(tFuture);
-
-      if (pointInPolygon(posFuture, zoneFeature.geometry)) {
-        return {
-          ttb_s: s,
-          pos: posFuture,
-          t_ms: tFuture
-        };
-      }
-    }
-
-    return null;
-  }
+ 
 
   let data;
   try {
@@ -835,8 +892,12 @@ function fmtM(v){
       lastSmoothedPos = null;
     }
 
-    const tFuture = Math.min(t0 + duration, t + (TREND_SECONDS * 1000));
-    const posFuture = interpolate(tFuture);
+    const tFutureTrend = Math.min(t0 + duration, t + (TREND_SECONDS * 1000));
+    const posFuture = interpolate(tFutureTrend);
+
+    const PREDICT_SECONDS = 60;
+    const tFuturePredict = Math.min(t0 + duration, t + (PREDICT_SECONDS * 1000));
+    const posFuturePredict = interpolate(tFuturePredict);
 
     const brg = bearingDeg(pos, posFuture);
     const brgArrow = bearingArrow(brg);
@@ -876,6 +937,15 @@ function fmtM(v){
       if (dtS > 0) vz = (b.alt - a.alt) / dtS;
     } catch (e) {
       vz = null;
+    }
+
+    let groundspeed = null;
+    if (currentIndex < pts.length - 1) {
+      const a = pts[currentIndex];
+      const b = pts[currentIndex + 1];
+      const dist = distanceM(a, b);
+      const dtS = (b.t - a.t) / 1000;
+      if (dtS > 0) groundspeed = dist / dtS;
     }
 
     aircraft.setLngLat([pos.lng, pos.lat]);
@@ -935,7 +1005,12 @@ function fmtM(v){
     const ttb = predictTtb(margin, vz);
 
     const zoneFeature = getZoneFeatureById(zone?.id);
-    const boundaryPrediction = predictBoundaryEntry(t, zoneFeature, 60, 1);
+    const boundaryPrediction = predictBoundaryIntersection(
+      pos,
+      posFuturePredict,
+      zoneFeature,
+      groundspeed
+    );
 
     let warnText = "";
     let warnClass = "";
@@ -981,14 +1056,7 @@ function fmtM(v){
       entryEl.style.display = "none";
     }
 
-    let groundspeed = null;
-    if (currentIndex < pts.length - 1) {
-      const a = pts[currentIndex];
-      const b = pts[currentIndex + 1];
-      const dist = distanceM(a, b);
-      const dtS = (b.t - a.t) / 1000;
-      if (dtS > 0) groundspeed = dist / dtS;
-    }
+    
 
     if (map.getLayer("airspace-3d")) {
       map.setLayoutProperty("airspace-3d", "visibility", FEATURES.cone ? "visible" : "none");
@@ -1047,6 +1115,11 @@ function fmtM(v){
         <div class="hud-k">HTB</div>
         <div class="hud-v">
           ${boundaryPrediction ? `${Math.round(boundaryPrediction.ttb_s)} s` : "—"}
+        </div>
+
+        <div class="hud-k">ENTRY DIST</div>
+        <div class="hud-v">
+           ${boundaryPrediction ? `${boundaryPrediction.distance_m.toFixed(1)} m` : "—"}
         </div>
 
         <div class="hud-k">TRACK</div>
