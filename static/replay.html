@@ -464,6 +464,72 @@ function fmtM(v){
     return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 
+  function movePoint(start, headingDeg, distanceM){
+    const R = 6371000;
+
+    const brng = headingDeg * Math.PI / 180;
+    const lat1 = start.lat * Math.PI / 180;
+    const lon1 = start.lng * Math.PI / 180;
+
+    const lat2 = Math.asin(
+      Math.sin(lat1) * Math.cos(distanceM / R) +
+      Math.cos(lat1) * Math.sin(distanceM / R) * Math.cos(brng)
+    );
+
+    const lon2 = lon1 + Math.atan2(
+      Math.sin(brng) * Math.sin(distanceM / R) * Math.cos(lat1),
+      Math.cos(distanceM / R) - Math.sin(lat1) * Math.sin(lat2)
+    );
+
+    return {
+      lat: lat2 * 180 / Math.PI,
+      lng: lon2 * 180 / Math.PI
+    };
+  }
+
+  function predictFuturePath(currentPos, headingDeg, groundspeed, vz, secondsAhead = 60, stepSeconds = 1){
+
+  if (!groundspeed || groundspeed <= 0) return [];
+
+  const points = [];
+
+  let pos = { lat: currentPos.lat, lng: currentPos.lng };
+  let alt = currentPos.alt ?? 0;
+
+  for (let s = stepSeconds; s <= secondsAhead; s += stepSeconds) {
+
+    const dist = groundspeed * stepSeconds;
+
+    pos = movePoint(pos, headingDeg, dist);
+
+    alt = alt + (vz || 0) * stepSeconds;
+
+    points.push({
+      lat: pos.lat,
+      lng: pos.lng,
+      alt: alt,
+      ttb_s: s
+    });
+  }
+
+  return points;
+}
+
+  function predictPathIntersection(pathPoints, zoneFeature){
+
+  if (!zoneFeature?.geometry) return null;
+
+  for (let p of pathPoints) {
+
+    if (pointInPolygon(p, zoneFeature.geometry)) {
+      return p;
+    }
+
+  }
+
+  return null;
+}
+
   function pointInRing(point, ring){
     const x = point.lng;
     const y = point.lat;
@@ -932,10 +998,6 @@ function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, curr
     const tFutureTrend = Math.min(t0 + duration, t + (TREND_SECONDS * 1000));
     const posFuture = interpolate(tFutureTrend);
 
-    const PREDICT_SECONDS = 60;
-    const tFuturePredict = Math.min(t0 + duration, t + (PREDICT_SECONDS * 1000));
-    const posFuturePredict = interpolate(tFuturePredict);
-
     const brg = bearingDeg(pos, posFuture);
     const brgArrow = bearingArrow(brg);
 
@@ -977,13 +1039,29 @@ function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, curr
     }
 
     let groundspeed = null;
-    if (currentIndex < pts.length - 1) {
-      const a = pts[currentIndex];
-      const b = pts[currentIndex + 1];
-      const dist = distanceM(a, b);
-      const dtS = (b.t - a.t) / 1000;
-      if (dtS > 0) groundspeed = dist / dtS;
-    }
+if (currentIndex < pts.length - 1) {
+  const a = pts[currentIndex];
+  const b = pts[currentIndex + 1];
+  const dist = distanceM(a, b);
+  const dtS = (b.t - a.t) / 1000;
+  if (dtS > 0) groundspeed = dist / dtS;
+}
+
+/* ---------- Prediction horizon ---------- */
+
+const MAX_PREDICT_DIST = 500;
+
+const predictSeconds =
+  groundspeed && groundspeed > 0
+    ? Math.min(60, MAX_PREDICT_DIST / groundspeed)
+    : 60;
+
+const tFuturePredict = Math.min(
+  t0 + duration,
+  t + (predictSeconds * 1000)
+);
+
+const posFuturePredict = interpolate(tFuturePredict);
 
     aircraft.setLngLat([pos.lng, pos.lat]);
 
@@ -1045,12 +1123,29 @@ function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, curr
 
     const zoneFeature = getZoneFeatureById(zone?.id);
 
-    const boundaryPrediction = predictBoundaryIntersection(
+    const futurePath = predictFuturePath(
       pos,
-      posFuturePredict,
-      zoneFeature,
-      groundspeed
+      brg,
+      groundspeed,
+      vz,
+      60,
+      1
     );
+
+    const pathHit = predictPathIntersection(
+      futurePath,
+      zoneFeature
+    );
+
+    let boundaryPrediction = null;
+
+    if (pathHit) {
+      boundaryPrediction = {
+        pos: { lng: pathHit.lng, lat: pathHit.lat },
+        distance_m: distanceM(pos, pathHit),
+        ttb_s: pathHit.ttb_s
+      };
+    }
 
     const conflict4D = predict4DConflict(
       pos,
