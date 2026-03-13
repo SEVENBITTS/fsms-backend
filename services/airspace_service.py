@@ -26,12 +26,35 @@ def get_airspace_by_flight_geojson(flight_id: str, buffer_m: float = 5000.0):
             'zone_type', az.zone_type,
             'source', az.source,
             'external_id', az.external_id,
+
             'lower_value', az.lower_value,
             'lower_unit', az.lower_unit,
             'lower_ref', az.lower_ref,
             'upper_value', az.upper_value,
             'upper_unit', az.upper_unit,
-            'upper_ref', az.upper_ref
+            'upper_ref', az.upper_ref,
+
+            'lower_m', CASE
+              WHEN az.lower_value IS NULL THEN NULL
+              WHEN lower(trim(coalesce(az.lower_unit, ''))) IN ('m', 'meter', 'meters', 'metre', 'metres')
+                THEN az.lower_value::double precision
+              WHEN lower(trim(coalesce(az.lower_unit, ''))) IN ('ft', 'feet')
+                THEN az.lower_value::double precision * 0.3048
+              WHEN lower(trim(coalesce(az.lower_unit, ''))) IN ('fl', 'flightlevel')
+                THEN az.lower_value::double precision * 100.0 * 0.3048
+              ELSE az.lower_value::double precision
+            END,
+
+            'upper_m', CASE
+              WHEN az.upper_value IS NULL THEN NULL
+              WHEN lower(trim(coalesce(az.upper_unit, ''))) IN ('m', 'meter', 'meters', 'metre', 'metres')
+                THEN az.upper_value::double precision
+              WHEN lower(trim(coalesce(az.upper_unit, ''))) IN ('ft', 'feet')
+                THEN az.upper_value::double precision * 0.3048
+              WHEN lower(trim(coalesce(az.upper_unit, ''))) IN ('fl', 'flightlevel')
+                THEN az.upper_value::double precision * 100.0 * 0.3048
+              ELSE az.upper_value::double precision
+            END
           )
         )
       ), '[]'::jsonb)

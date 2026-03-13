@@ -562,6 +562,34 @@ function fmtM(v){
 
     return false;
   }
+  function predictEarliestZoneEntry(pathPoints, airspaceGeojson){
+  if (!airspaceGeojson?.features?.length) return null;
+
+  let best = null;
+
+  for (const feature of airspaceGeojson.features) {
+
+    const hit = predictPathIntersection(pathPoints, feature);
+    if (!hit) continue;
+
+    const candidate = {
+      zoneId: feature?.properties?.id ?? null,
+      zoneName: feature?.properties?.name ?? "Unknown",
+      zoneType: feature?.properties?.zone_type ?? "-",
+      pos: { lng: hit.lng, lat: hit.lat },
+      ttb_s: hit.ttb_s,
+      alt: hit.alt
+    };
+
+    if (!best || candidate.ttb_s < best.ttb_s) {
+      best = candidate;
+    }
+
+  }
+
+  return best;
+}
+
 
   function segmentIntersection(p1, p2, q1, q2){
   const x1 = p1.lng, y1 = p1.lat;
@@ -680,6 +708,44 @@ function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, curr
   };
 }
 
+function predictEarliest4DConflict(pathPoints, airspaceGeojson){
+  if (!airspaceGeojson?.features?.length) return null;
+
+  let best = null;
+
+  for (const feature of airspaceGeojson.features) {
+
+    const hit = predictPathIntersection(pathPoints, feature);
+    if (!hit) continue;
+
+    const lowerM = feature?.properties?.lower_m ?? null;
+    const upperM = feature?.properties?.upper_m ?? null;
+
+    const verticalOk = isWithinVerticalBand(hit.alt, lowerM, upperM);
+    const isConflict = verticalOk === false;
+
+    const candidate = {
+      zoneId: feature?.properties?.id ?? null,
+      zoneName: feature?.properties?.name ?? "Unknown",
+      zoneType: feature?.properties?.zone_type ?? "-",
+      pos: { lng: hit.lng, lat: hit.lat },
+      ttb_s: hit.ttb_s,
+      predicted_alt_m: hit.alt,
+      lower_m: lowerM,
+      upper_m: upperM,
+      vertical_ok: verticalOk,
+      conflict: isConflict
+    };
+
+    if (!best || candidate.ttb_s < best.ttb_s) {
+      best = candidate;
+    }
+
+  }
+
+  return best;
+}
+
   function getZoneFeatureById(zoneId){
     if (!airspaceGeojson?.features?.length || !zoneId) return null;
 
@@ -766,6 +832,25 @@ function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, curr
   entryEl.style.display = "none";
 
   const entryMarker = new maplibregl.Marker({ element: entryEl })
+    .setLngLat([pts[0].lng, pts[0].lat])
+    .addTo(map);
+
+  const vectorLabelEl = document.createElement("div");
+  vectorLabelEl.style.background = "rgba(10,12,16,0.9)";
+  vectorLabelEl.style.color = "#e8eefc";
+  vectorLabelEl.style.padding = "4px 6px";
+  vectorLabelEl.style.borderRadius = "6px";
+  vectorLabelEl.style.fontFamily = "ui-monospace, Menlo, Consolas, monospace";
+  vectorLabelEl.style.fontSize = "11px";
+  vectorLabelEl.style.fontWeight = "700";
+  vectorLabelEl.style.border = "1px solid rgba(255,255,255,0.12)";
+  vectorLabelEl.style.boxShadow = "0 4px 10px rgba(0,0,0,0.25)";
+  vectorLabelEl.style.display = "none";
+
+  const vectorLabel = new maplibregl.Marker({
+    element: vectorLabelEl,
+    offset: [0, -22]
+  })
     .setLngLat([pts[0].lng, pts[0].lat])
     .addTo(map);
 
@@ -1047,6 +1132,16 @@ if (currentIndex < pts.length - 1) {
   if (dtS > 0) groundspeed = dist / dtS;
 }
 
+if (FEATURES.vectors) {
+  vectorLabelEl.style.display = "block";
+  vectorLabel.setLngLat([pos.lng, pos.lat]);
+  vectorLabelEl.innerHTML =
+    `HDG ${Number.isFinite(brg) ? brg.toFixed(0) : "—"}° | ` +
+    `GS ${groundspeed !== null ? groundspeed.toFixed(1) : "—"} m/s`;
+} else {
+  vectorLabelEl.style.display = "none";
+}
+
 /* ---------- Prediction horizon ---------- */
 
 const MAX_PREDICT_DIST = 500;
@@ -1121,42 +1216,43 @@ const posFuturePredict = interpolate(tFuturePredict);
 
     const ttb = predictTtb(margin, vz);
 
-    const zoneFeature = getZoneFeatureById(zone?.id);
-
     const futurePath = predictFuturePath(
-      pos,
-      brg,
-      groundspeed,
-      vz,
-      60,
-      1
-    );
+  {
+    lat: pos.lat,
+    lng: pos.lng,
+    alt: predictionAltNow
+  },
+  brg,
+  groundspeed,
+  vz,
+  60,
+  1
+);
 
-    const pathHit = predictPathIntersection(
-      futurePath,
-      zoneFeature
-    );
+const earliestEntry = predictEarliestZoneEntry(
+  futurePath,
+  airspaceGeojson
+);
+
+const earliest4D = predictEarliest4DConflict(
+  futurePath,
+  airspaceGeojson
+);
 
     let boundaryPrediction = null;
 
-    if (pathHit) {
-      boundaryPrediction = {
-        pos: { lng: pathHit.lng, lat: pathHit.lat },
-        distance_m: distanceM(pos, pathHit),
-        ttb_s: pathHit.ttb_s
-      };
-    }
+if (earliestEntry) {
+  boundaryPrediction = {
+    zoneId: earliestEntry.zoneId,
+    zoneName: earliestEntry.zoneName,
+    zoneType: earliestEntry.zoneType,
+    pos: earliestEntry.pos,
+    distance_m: distanceM(pos, earliestEntry.pos),
+    ttb_s: earliestEntry.ttb_s
+  };
+}
 
-    const conflict4D = predict4DConflict(
-      pos,
-      posFuturePredict,
-      zoneFeature,
-      groundspeed,
-      predictionAltNow,
-      vz,
-      lowerM,
-      upperM
-    );
+   const conflict4D = earliest4D; 
 
     let warnText = "";
     let warnClass = "";
@@ -1174,11 +1270,11 @@ const posFuturePredict = interpolate(tFuturePredict);
       } else if (conflict4D?.conflict) {
         warnShow = true;
         warnClass = "risk-warning";
-        warnText = `4D CONFLICT IN ${Math.round(conflict4D.ttb_s)}s`;
+        warnText = `4D CONFLICT IN ${Math.round(conflict4D.ttb_s)}s (${conflict4D.zoneName})`;
       } else if (boundaryPrediction) {
         warnShow = true;
         warnClass = "risk-caution";
-        warnText = `TRACK ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s`;
+       warnText = `TRACK ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s (${boundaryPrediction.zoneName})`;
       } else if (margin <= 20) {
         warnShow = true;
         warnClass = "risk-warning";
@@ -1290,9 +1386,9 @@ const posFuturePredict = interpolate(tFuturePredict);
         <div class="hud-k">TRACK</div>
         <div class="hud-v" style="color:${conflict4D?.conflict ? '#ff0000' : boundaryPrediction ? '#ffbf00' : '#e8eefc'}">
           ${conflict4D?.conflict
-            ? `4D CONFLICT IN ${Math.round(conflict4D.ttb_s)}s`
+            ? `${conflict4D.zoneName} IN ${Math.round(conflict4D.ttb_s)}s`
             : boundaryPrediction
-              ? `ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s`
+              ? `${boundaryPrediction.zoneName} IN ${Math.round(boundaryPrediction.ttb_s)}s`
               : "CLEAR"}
         </div>
 
