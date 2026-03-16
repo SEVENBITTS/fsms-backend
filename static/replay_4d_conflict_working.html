@@ -361,17 +361,12 @@ input[type=range]{ width:320px; }
   const COMPLIANCE_URL = `/api/compliance/airspace/by-flight/${flight_id}`;
   const TREND_SECONDS = 10;
 
-  const MAX_PREDICT_DIST = 500;
-  const MAX_PREDICT_SECONDS = 60;
-
     /* =========================
      DOM REFERENCES
   ========================= */
 
   const slider = document.getElementById("slider");
-  const playBtn =
-    document.getElementById("play-btn") ||
-    document.getElementById("play");
+  const playBtn = document.getElementById("play");
   const speedSel = document.getElementById("speed");
   const hud = document.getElementById("hud");
 
@@ -1580,8 +1575,6 @@ function interpolate(time){
   ========================= */
 
   function loop(now){
-    
-      
     if (!lastFrame) lastFrame = now;
     const dt = now - lastFrame;
     lastFrame = now;
@@ -1598,47 +1591,6 @@ function interpolate(time){
     const t = t0 + simElapsed;
     let pos = interpolate(t);
 
-      if (playBtn) {
-  playBtn.onclick = () => {
-    playing = !playing;
-    playBtn.textContent = playing ? "Pause" : "Play";
-
-    if (playing) {
-      loop();
-    }
-  };
-} else {
-  console.warn("Play button not found in DOM");
-}
-
-if (slider) {
-  slider.oninput = (e) => {
-    simElapsed = e.target.value * duration;
-    currentIndex = 0;
-    lastSmoothedPos = null;
-  };
-} else {
-  console.warn("Slider not found in DOM");
-}
-
-if (speedSel) {
-  speedSel.onchange = () => {
-    speed = Number(speedSel.value) || 1;
-  };
-} else {
-  console.warn("Speed selector not found in DOM");
-}
-
-const featureToggleBtn = document.getElementById("feature-toggle");
-if (featureToggleBtn) {
-  featureToggleBtn.onclick = () => {
-    const panel = document.getElementById("feature-panel");
-    if (panel) {
-      panel.style.display = panel.style.display === "block" ? "none" : "block";
-    }
-  };
-}
-  
     if (FEATURES.kalman) {
       pos = kalmanLike(lastSmoothedPos || pos, pos);
       lastSmoothedPos = pos;
@@ -1783,6 +1735,9 @@ if (FEATURES.prediction && FEATURES.envelope && futurePath.length >= 2) {
    - keeps replay stable at high speeds
 ========================= */
 
+const MAX_PREDICT_DIST = 500; // meters
+const MAX_PREDICT_SECONDS = 60;
+
 const predictSeconds =
   groundspeed && groundspeed > 0
     ? Math.min(MAX_PREDICT_SECONDS, MAX_PREDICT_DIST / groundspeed)
@@ -1837,373 +1792,70 @@ function getComplianceForReplayTime(replayTime, fallbackIndex = 0) {
   return best || safeFallback;
 }
 
-function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
-    return null;
-  }
-
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return false;
-  }
-
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return false;
-  }
-
-  return true;
-}
-
-function describeVerticalRelation(predictedAlt, lowerM, upperM) {
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
-    return "UNKNOWN";
-  }
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return "BELOW FLOOR";
-  }
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return "ABOVE CEILING";
-  }
-  return "INSIDE BAND";
-}
-
-function predictFuturePath(
-  currentPos,
-  headingDeg,
-  groundspeed,
-  vz,
-  secondsAhead = 60,
-  stepSeconds = 1
-) {
-  if (!groundspeed || groundspeed <= 0) return [];
-
-  const adaptiveStep =
-    groundspeed > 50 ? 0.25 :
-    groundspeed > 25 ? 0.5 :
-    stepSeconds;
-
-  const points = [];
-
-  let pos = { lat: currentPos.lat, lng: currentPos.lng };
-  let alt = currentPos.alt ?? 0;
-
-  for (let s = adaptiveStep; s <= secondsAhead; s += adaptiveStep) {
-    const dist = groundspeed * adaptiveStep;
-    pos = movePoint(pos, headingDeg, dist);
-    alt = alt + (vz || 0) * adaptiveStep;
-
-    points.push({
-      lat: pos.lat,
-      lng: pos.lng,
-      alt,
-      ttb_s: s
-    });
-  }
-
-  return points;
-}
-
-function predictPathIntersection(pathPoints, zoneFeature) {
-  if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) {
-    return null;
-  }
-
-  let best = null;
-
-  for (let i = 1; i < pathPoints.length; i++) {
-    const p0 = pathPoints[i - 1];
-    const p1 = pathPoints[i];
-
-    const inside0 = pointInPolygon(p0, zoneFeature.geometry);
-    const inside1 = pointInPolygon(p1, zoneFeature.geometry);
-
-    if (inside1 && !best) {
-      best = {
-        lng: p1.lng,
-        lat: p1.lat,
-        alt: p1.alt,
-        ttb_s: p1.ttb_s
-      };
-    }
-
-    if (!inside0 && inside1) {
-      const frac = 0.5;
-
-      return {
-        lng: p0.lng + (p1.lng - p0.lng) * frac,
-        lat: p0.lat + (p1.lat - p0.lat) * frac,
-        alt: p0.alt + (p1.alt - p0.alt) * frac,
-        ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * frac
-      };
-    }
-  }
-
-  return best;
-}
-
-function predictEarliestZoneEntry(pathPoints, airspaceGeojson) {
-  if (!airspaceGeojson?.features?.length) return null;
-
-  let best = null;
-
-  for (const feature of airspaceGeojson.features) {
-    const hit = predictPathIntersection(pathPoints, feature);
-    if (!hit) continue;
-
-    const candidate = {
-      zoneId: feature?.properties?.id ?? null,
-      zoneName: feature?.properties?.name ?? "Unknown",
-      zoneType: feature?.properties?.zone_type ?? "-",
-      pos: { lng: hit.lng, lat: hit.lat },
-      ttb_s: hit.ttb_s,
-      alt: hit.alt
-    };
-
-    if (!best || candidate.ttb_s < best.ttb_s) {
-      best = candidate;
-    }
-  }
-
-  return best;
-}
-
-function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
-  if (!airspaceGeojson?.features?.length) return null;
-
-  let bestConflict = null;
-  let bestLateralOnly = null;
-
-  for (const feature of airspaceGeojson.features) {
-    const hit = predictPathIntersection(pathPoints, feature);
-    if (!hit) continue;
-
-    const lowerM = feature?.properties?.lower_m ?? null;
-    const upperM = feature?.properties?.upper_m ?? null;
-
-    const verticalOk = isWithinVerticalBand(hit.alt, lowerM, upperM);
-    const verticalKnown = verticalOk !== null;
-    const isConflict = verticalOk === true;
-
-    const candidate = {
-      zoneId: feature?.properties?.id ?? null,
-      zoneName: feature?.properties?.name ?? "Unknown",
-      zoneType: feature?.properties?.zone_type ?? "-",
-      pos: { lng: hit.lng, lat: hit.lat },
-      ttb_s: hit.ttb_s,
-      predicted_alt_m: hit.alt,
-      lower_m: lowerM,
-      upper_m: upperM,
-      vertical_ok: verticalOk,
-      vertical_known: verticalKnown,
-      conflict: isConflict
-    };
-
-    if (isConflict) {
-      if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) {
-        bestConflict = candidate;
-      }
-    } else {
-      if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) {
-        bestLateralOnly = candidate;
-      }
-    }
-  }
-
-  return bestConflict || bestLateralOnly;
-}
-
-function predictVerticalConflictTtb(pathPoints, zoneFeature) {
-  if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) {
-    return null;
-  }
-
-  const lowerM = zoneFeature?.properties?.lower_m ?? null;
-  const upperM = zoneFeature?.properties?.upper_m ?? null;
-
-  for (const p of pathPoints) {
-    const verticalOk = isWithinVerticalBand(p.alt, lowerM, upperM);
-    if (verticalOk === true) {
-      return {
-        ttb_s: p.ttb_s,
-        alt: p.alt,
-        lower_m: lowerM,
-        upper_m: upperM
-      };
-    }
-  }
-
-  return null;
-}
-
-function smoothPrediction(newPrediction) {
-  if (!newPrediction) return lastPrediction;
-  if (!lastPrediction) {
-    lastPrediction = newPrediction;
-    return newPrediction;
-  }
-
-  const dt = Math.abs(newPrediction.ttb_s - lastPrediction.ttb_s);
-  if (dt < 0.5) {
-    return lastPrediction;
-  }
-
-  lastPrediction = newPrediction;
-  return newPrediction;
-}
-
-function buildPredictiveConflictEnvelope(pathPoints, corridorWidthM = 20) {
-  if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null;
-  if (typeof turf === "undefined") return null;
-
-  const coords = pathPoints.map(p => [p.lng, p.lat]);
-  const line = turf.lineString(coords);
-
-  try {
-    return turf.buffer(line, corridorWidthM, { units: "meters" });
-  } catch (e) {
-    console.warn("Failed to build predictive envelope:", e.message);
-    return null;
-  }
-}
-
-function findEnvelopeConflicts(envelopeFeature, airspaceGeojson) {
-  if (!envelopeFeature || !airspaceGeojson?.features?.length) return [];
-  if (typeof turf === "undefined") return [];
-
-  const conflicts = [];
-
-  for (const feature of airspaceGeojson.features) {
-    try {
-      const overlap = turf.intersect(
-        turf.featureCollection([envelopeFeature, feature])
-      );
-
-      if (overlap) {
-        conflicts.push({
-          zoneId: feature?.properties?.id ?? null,
-          zoneName: feature?.properties?.name ?? "Unknown",
-          zoneType: feature?.properties?.zone_type ?? "-",
-          feature,
-          overlap
-        });
-      }
-    } catch (e) {
-      console.warn("Envelope conflict test failed:", e.message);
-    }
-  }
-
-  return conflicts;
-}
-
-function ensurePredictiveEnvelopeLayers(map) {
-  if (!map.getSource("predictive-envelope")) {
-    map.addSource("predictive-envelope", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-fill",
-      type: "fill",
-      source: "predictive-envelope",
-      paint: {
-        "fill-color": "#ffbf00",
-        "fill-opacity": 0.16
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-outline",
-      type: "line",
-      source: "predictive-envelope",
-      paint: {
-        "line-color": "#ffbf00",
-        "line-width": 2,
-        "line-opacity": 0.7
-      }
-    });
-  }
-
-  if (!map.getSource("predictive-envelope-conflicts")) {
-    map.addSource("predictive-envelope-conflicts", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-fill",
-      type: "fill",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "fill-color": "#ff0000",
-        "fill-opacity": 0.22
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-outline",
-      type: "line",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "line-color": "#ff0000",
-        "line-width": 2,
-        "line-opacity": 0.9
-      }
-    });
-  }
-}
-
 
 
 const replayTime = pts?.[currentIndex]?.t ?? t;
 const c = getComplianceForReplayTime(replayTime, currentIndex);
 
-const zone = c?.zone || null;
-const zoneName = zone?.name || "None";
-const zoneType = zone?.zone_type || "-";
-const status = c?.eval_status || zone?.eval_status || "-";
-const upperM = zone?.upper_m ?? null;
-const lowerM = zone?.lower_m ?? null;
 
-const altAgl = c?.alt_agl_m ?? null;
-const altAmsl = c?.alt_amsl_m ?? pos.alt;
-const terrainAmsl =
-  altAgl !== null && altAmsl !== null
-    ? Number(altAmsl) - Number(altAgl)
-    : null;
-
-let margin = null;
-let basis = "—";
-if (upperM !== null && upperM !== undefined) {
-  if (status.includes("_AGL") && altAgl !== null && altAgl !== undefined) {
-    margin = Number(upperM) - Number(altAgl);
-    basis = "AGL";
-  } else {
-    margin = Number(upperM) - Number(altAmsl);
-    basis = "AMSL";
-  }
+if (c) {
+  if (c.breach_unknown) aircraftEl.style.background = "#ffbf00";
+  else if (c.breach) aircraftEl.style.background = "#ff0000";
+  else aircraftEl.style.background = "#00ff00";
+} else {
+  aircraftEl.style.background = "#0057ff";
 }
 
-const predictionAltNow = (basis === "AGL") ? altAgl : altAmsl;
-const zoneSource =
-  zone?.source ||
-  zone?.source_name ||
-  zone?.authority_name ||
-  zone?.external_id ||
-  "Unknown";
+    const zone = c?.zone || null;
+    const zoneName = zone?.name || "None";
+    const zoneType = zone?.zone_type || "-";
+    const status = c?.eval_status || zone?.eval_status || "-";
+    const upperM = zone?.upper_m ?? null;
+    const lowerM = zone?.lower_m ?? null;
 
-const verticalRelation = describeVerticalRelation(
-  predictionAltNow,
-  lowerM,
-  upperM
-);
+    const altAgl = c?.alt_agl_m ?? null;
+    const altAmsl = c?.alt_amsl_m ?? pos.alt;
+    const terrainAmsl = (altAgl !== null && altAgl !== undefined)
+      ? (Number(altAmsl) - Number(altAgl))
+      : null;
+
+    let margin = null;
+    let basis = "—";
+    if (upperM !== null && upperM !== undefined) {
+      if (status.includes("_AGL") && altAgl !== null && altAgl !== undefined) {
+        margin = Number(upperM) - Number(altAgl);
+        basis = "AGL";
+      } else {
+        margin = Number(upperM) - Number(altAmsl);
+        basis = "AMSL";
+      }
+    }
+
+    const predictionAltNow = (basis === "AGL") ? altAgl : altAmsl;
+
+    const zoneSource =
+      zone?.source ||
+      zone?.source_name ||
+      zone?.authority_name ||
+      zone?.external_id ||
+      "Unknown";
+
+    const verticalRelation = describeVerticalRelation(
+      predictionAltNow,
+      lowerM,
+      upperM
+    );
+
+    const breachText = (c && c.breach_unknown) ? "UNKNOWN" : (c?.breach ? "BREACH" : "OK");
+    const breachColor = (c && c.breach_unknown) ? "#bbbbbb" : (c?.breach ? "#ff0000" : "#00ff00");
+
+    const riskInfo = calculateRisk(margin);
+    const marginPct =
+      (margin === null || margin === undefined || Number.isNaN(margin))
+        ? 0
+        : (margin < 0 ? 100 : marginToPct(margin));
+
+    const ttb = predictTtb(margin, vz);
 
 const futurePath = predictFuturePath(
   {
@@ -2214,7 +1866,7 @@ const futurePath = predictFuturePath(
   brg,
   groundspeed,
   vz,
-  predictSeconds,
+  60,
   1
 );
 
@@ -2250,11 +1902,13 @@ const earliestEntry = predictEarliestZoneEntry(
   airspaceGeojson
 );
 
-const earliest4D = smoothPrediction(
-  predictEarliest4DConflict(futurePath, airspaceGeojson)
+const earliest4D = predictEarliest4DConflict(
+  futurePath,
+  airspaceGeojson
 );
 
 let boundaryPrediction = null;
+
 if (earliestEntry) {
   boundaryPrediction = {
     zoneId: earliestEntry.zoneId,
@@ -2264,11 +1918,12 @@ if (earliestEntry) {
     distance_m: distanceM(pos, earliestEntry.pos),
     ttb_s: earliestEntry.ttb_s
   };
-}
+}  
 
-const conflict4D = earliest4D;
+const conflict4D = earliest4D; 
 
 let verticalTtb = null;
+
 if (earliest4D?.zoneId && airspaceGeojson?.features?.length) {
   const z = airspaceGeojson.features.find(
     f => (f?.properties?.id ?? null) === earliest4D.zoneId
@@ -2281,8 +1936,6 @@ if (earliest4D?.zoneId && airspaceGeojson?.features?.length) {
 const boundaryTtb = boundaryPrediction?.ttb_s ?? null;
 const conflictTtb = conflict4D?.conflict ? conflict4D.ttb_s : null;
 const verticalConflictTtb = verticalTtb?.ttb_s ?? null;
-const envelopeConflictCount = predictiveEnvelopeConflicts.length;
-const envelopeActive = !!predictiveEnvelope;
    
     let warnText = "";
     let warnClass = "";
@@ -2375,7 +2028,10 @@ const envelopeActive = !!predictiveEnvelope;
       progress
     });
 
-     
+    const envelopeConflictCount = predictiveEnvelopeConflicts.length;
+    const envelopeActive = !!predictiveEnvelope;
+
+    
     hud.innerHTML = `
       <div class="hud-header">
         <div class="hud-title">MISSION CONTROL</div>
@@ -2413,15 +2069,15 @@ const envelopeActive = !!predictiveEnvelope;
         <div class="hud-k">LIMITS</div><div class="hud-v">${fmtLimit(lowerM)} → ${fmtLimit(upperM)}</div>
         <div class="hud-k">BASIS</div><div class="hud-v">${basis}</div>
         <div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
-        <div class="hud-k">ZONE SRC</div><div class="hud-v">${zoneSource}</div>
-        <div class="hud-k">VERT REL</div><div class="hud-v">${verticalRelation}</div>
-        <div class="hud-k">BND TTB</div><div class="hud-v">${boundaryTtb !== null ? `${boundaryTtb.toFixed(1)} s` : "—"}</div>
-        <div class="hud-k">VERT TTB</div><div class="hud-v">${verticalConflictTtb !== null ? `${verticalConflictTtb.toFixed(1)} s` : "—"}</div>
-        <div class="hud-k">4D TTB</div><div class="hud-v">${conflictTtb !== null ? `${conflictTtb.toFixed(1)} s` : "—"}</div>
-        <div class="hud-k">PRED HOR</div><div class="hud-v">${predictSeconds.toFixed(1)} s</div>
-        <div class="hud-k">PRED DIST</div><div class="hud-v">${predictedDistanceM.toFixed(1)} m</div>
-        <div class="hud-k">ENVELOPE</div><div class="hud-v">${envelopeActive ? "ON" : "OFF"}</div>
-        <div class="hud-k">ENV CONFLICTS</div><div class="hud-v">${envelopeConflictCount}</div>
+        <div><strong>Zone Source:</strong> ${zoneSource}</div>
+        <div><strong>Vertical Relation:</strong> ${verticalRelation}</div>
+        <div><strong>Boundary TTB:</strong> ${boundaryTtb !== null ? `${boundaryTtb.toFixed(1)} s` : "—"}</div>
+        <div><strong>Vertical TTB:</strong> ${verticalConflictTtb !== null ? `${verticalConflictTtb.toFixed(1)} s` : "—"}</div>
+        <div><strong>Conflict TTB:</strong> ${conflictTtb !== null ? `${conflictTtb.toFixed(1)} s` : "—"}</div>
+        <div><strong>Pred Horizon:</strong> ${predictSeconds.toFixed(1)} s</div>
+        <div><strong>Pred Dist:</strong> ${predictedDistanceM.toFixed(1)} m</div>
+        <div><strong>Pred Envelope:</strong> ${envelopeActive ? "ON" : "OFF"}</div>
+        <div><strong>Envelope Conflicts:</strong> ${envelopeConflictCount}</div>
         <div class="hud-k">BND</div>
         <div class="hud-v">
           ${zone?.boundary_distance_m === null || zone?.boundary_distance_m === undefined
@@ -2496,35 +2152,25 @@ const envelopeActive = !!predictiveEnvelope;
      - feature menu open/close
   ========================= */
 
-if (slider) {
+  playBtn.onclick = () => {
+    playing = !playing;
+    playBtn.textContent = playing ? "Pause" : "Play";
+  };
+
   slider.oninput = (e) => {
     simElapsed = e.target.value * duration;
     currentIndex = 0;
     lastSmoothedPos = null;
   };
-} else {
-  console.warn("Slider not found in DOM");
-}
 
-const speedSelEl = document.getElementById("speed");
-
-if (speedSelEl) {
-  speedSelEl.onchange = () => {
-    speed = Number(speedSelEl.value) || 1;
+  speedSel.onchange = () => {
+    speed = Number(speedSel.value);
   };
-} else {
-  console.warn("Speed selector not found in DOM");
-}
 
-const featureToggleBtn = document.getElementById("feature-toggle");
-if (featureToggleBtn) {
-  featureToggleBtn.onclick = () => {
-    const panel = document.getElementById("feature-panel");
-    if (panel) {
-      panel.style.display = panel.style.display === "block" ? "none" : "block";
-    }
-  };
-}
+  document.getElementById("feature-toggle").onclick = () => {
+  const panel = document.getElementById("feature-panel");
+  panel.style.display = panel.style.display === "block" ? "none" : "block";
+};
 </script>
 </body>
 </html>
