@@ -1,1203 +1,1315 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>FSMS Flight Replay</title>
 
-<!-- =========================
+<head>
+  <meta charset="UTF-8" />
+  <title>FSMS Flight Replay</title>
+
+  <!-- =========================
      EXTERNAL CSS / ICONS
 ========================= -->
 
-<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-<link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet"/>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
 
-<!-- =========================
+  <!-- =========================
      PAGE STYLES
 ========================= -->
 
-<style>
-html, body { margin:0; height:100%; }
-#map { height:100%; }
+  <style>
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+    }
 
-.panel{
-  position:absolute;
-  left:50%;
-  transform:translateX(-50%);
-  background:white;
-  padding:8px 12px;
-  border-radius:6px;
-  z-index:10;
-  box-shadow:0 4px 10px rgba(0,0,0,0.15);
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size:12px;
-}
+    #map {
+      height: 100%;
+    }
 
-#controls{ bottom:90px; }
-#slider-container{ bottom:20px; }
-#speed-container{ bottom:140px; }
-#zoom-container{ bottom:190px; }
+    .panel {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      z-index: 10;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
 
-input[type=range]{ width:320px; }
+    #controls {
+      bottom: 90px;
+    }
 
-/* ===============================
+    #slider-container {
+      bottom: 20px;
+    }
+
+    #speed-container {
+      bottom: 140px;
+    }
+
+    #zoom-container {
+      bottom: 190px;
+    }
+
+    input[type=range] {
+      width: 320px;
+    }
+
+    /* ===============================
    Mission Control HUD
 ================================ */
-#hud{
-  position:absolute;
-  top:15px;
-  left:15px;
-  background:rgba(10,12,16,0.92);
-  color:#e8eefc;
-  padding:14px;
-  border-radius:12px;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size:12px;
-  min-width:330px;
-  z-index:30;
-  border:1px solid rgba(255,255,255,0.08);
-  box-shadow:0 18px 45px rgba(0,0,0,0.45);
-}
+    #hud {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(10, 12, 16, 0.92);
+      color: #e8eefc;
+      padding: 14px;
+      border-radius: 12px;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12px;
+      min-width: 330px;
+      z-index: 30;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+    }
 
-.hud-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:10px;
-}
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
 
-.hud-title{
-  font-size:11px;
-  letter-spacing:0.12em;
-  opacity:0.8;
-}
+    .hud-title {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      opacity: 0.8;
+    }
 
-.hud-chip{
-  padding:4px 10px;
-  border-radius:999px;
-  font-weight:800;
-  border:1px solid rgba(255,255,255,0.12);
-}
+    .hud-chip {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 800;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
 
-.hud-grid{
-  display:grid;
-  grid-template-columns:90px 1fr;
-  gap:6px 10px;
-}
+    .hud-grid {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 6px 10px;
+    }
 
-.hud-k{ opacity:0.65; }
-.hud-v{ font-weight:700; }
+    .hud-k {
+      opacity: 0.65;
+    }
 
-.hud-divider{
-  height:1px;
-  background:rgba(255,255,255,0.08);
-  margin:10px 0;
-}
+    .hud-v {
+      font-weight: 700;
+    }
 
-/* Risk colours */
-.risk-safe    { color:#00ff00; }
-.risk-caution { color:#ffff00; }
-.risk-warning { color:#ffbf00; }
-.risk-breach  { color:#ff0000; }
-.risk-unknown { color:#bbbbbb; }
+    .hud-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.08);
+      margin: 10px 0;
+    }
 
-/* Risk bar */
-.riskbar{
-  grid-column:1 / -1;
-  position:relative;
-  height:12px;
-  border-radius:999px;
-  background:rgba(255,255,255,0.08);
-  overflow:hidden;
-  margin-top:6px;
-}
+    /* Risk colours */
+    .risk-safe {
+      color: #00ff00;
+    }
 
-.riskbar-fill{
-  height:100%;
-  width:0%;
-  transition:width 0.15s linear;
-}
+    .risk-caution {
+      color: #ffff00;
+    }
 
-.riskbar-fill.risk-safe    { background:#00ff00; }
-.riskbar-fill.risk-caution { background:#ffff00; }
-.riskbar-fill.risk-warning { background:#ffbf00; }
-.riskbar-fill.risk-breach  { background:#ff0000; }
-.riskbar-fill.risk-unknown { background:#bbbbbb; }
+    .risk-warning {
+      color: #ffbf00;
+    }
 
-.riskbar-label{
-  position:absolute;
-  top:14px;
-  font-size:10px;
-  opacity:0.7;
-}
-.label20{ left:20%; transform:translateX(-50%); }
-.label50{ left:50%; transform:translateX(-50%); }
+    .risk-breach {
+      color: #ff0000;
+    }
 
-.riskbar-tick{
-  position:absolute;
-  top:-2px;
-  width:2px;
-  height:16px;
-  background:#ffffff66;
-}
-.tick20{ left:20%; }
-.tick50{ left:50%; }
+    .risk-unknown {
+      color: #bbbbbb;
+    }
 
-.warnstrip{
-  margin-top:10px;
-  padding:8px 10px;
-  border-radius:10px;
-  border:1px solid rgba(255,255,255,0.10);
-  background:rgba(255,255,255,0.05);
-  font-weight:800;
-  letter-spacing:0.06em;
-  text-transform:uppercase;
-  display:none;
-}
-.warnstrip.show{ display:block; }
+    /* Risk bar */
+    .riskbar {
+      grid-column: 1 / -1;
+      position: relative;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      margin-top: 6px;
+    }
 
-@keyframes breachFlash{
-  0%{ opacity:1; }
-  50%{ opacity:0.2; }
-  100%{ opacity:1; }
-}
-.breach-flash{ animation: breachFlash 0.6s infinite; }
+    .riskbar-fill {
+      height: 100%;
+      width: 0%;
+      transition: width 0.15s linear;
+    }
 
-/* Aircraft marker */
-.aircraft-dot{
-  width:14px;
-  height:14px;
-  border-radius:50%;
-  background:#00ff00;
-  border:2px solid #ffffff;
-  box-shadow:0 0 0 2px rgba(0,0,0,0.25);
-}
+    .riskbar-fill.risk-safe {
+      background: #00ff00;
+    }
 
-/* Trend ghost marker */
-.ghost-dot{
-  width:12px;
-  height:12px;
-  border-radius:50%;
-  border:2px dashed rgba(255,255,255,0.95);
-  background:rgba(255,255,255,0.10);
-  box-shadow:0 0 0 2px rgba(0,0,0,0.25);
-}
+    .riskbar-fill.risk-caution {
+      background: #ffff00;
+    }
 
-/* Vertical breach prediction marker */
-.breach-dot{
-  width:16px;
-  height:16px;
-  border-radius:50%;
-  border:3px solid #ff0000;
-  background:rgba(255,0,0,0.15);
-  box-shadow:0 0 0 3px rgba(255,255,255,0.35);
-  animation: breachFlash 0.8s infinite;
-}
+    .riskbar-fill.risk-warning {
+      background: #ffbf00;
+    }
 
-/* Horizontal entry prediction marker */
-.entry-dot{
-  width:16px;
-  height:16px;
-  border-radius:50%;
-  border:3px solid #ffbf00;
-  background:rgba(255,191,0,0.18);
-  box-shadow:0 0 0 3px rgba(255,255,255,0.30);
-  animation: breachFlash 0.8s infinite;
-}
+    .riskbar-fill.risk-breach {
+      background: #ff0000;
+    }
 
-/* Trend chip */
-.trend-chip{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:2px 8px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(255,255,255,0.06);
-  font-weight:800;
-  letter-spacing:0.06em;
-}
-.trend-arrow{
-  font-size:14px;
-  line-height:1;
-}
+    .riskbar-fill.risk-unknown {
+      background: #bbbbbb;
+    }
 
-/* Buttons */
-.btn{
-  padding:6px 10px;
-  border:1px solid #ccc;
-  border-radius:6px;
-  background:#fff;
-  cursor:pointer;
-  margin-left:6px;
-}
-.btn:active{ transform: translateY(1px); }
-.btn[disabled]{ opacity:0.5; cursor:not-allowed; }
+    .riskbar-label {
+      position: absolute;
+      top: 14px;
+      font-size: 10px;
+      opacity: 0.7;
+    }
 
-/* Feature Toggle Menu */
-#feature-menu{
-  position:absolute;
-  top:100px;
-  right:15px;
-  z-index:50;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-}
+    .label20 {
+      left: 20%;
+      transform: translateX(-50%);
+    }
 
-#feature-toggle{
-  background:white;
-  border:none;
-  padding:8px 12px;
-  border-radius:8px;
-  box-shadow:0 4px 10px rgba(0,0,0,0.25);
-  cursor:pointer;
-  font-weight:700;
-}
+    .label50 {
+      left: 50%;
+      transform: translateX(-50%);
+    }
 
-#feature-panel{
-  display:none;
-  margin-top:8px;
-  background:white;
-  padding:10px 12px;
-  border-radius:8px;
-  box-shadow:0 8px 20px rgba(0,0,0,0.25);
-  min-width:220px;
-}
+    .riskbar-tick {
+      position: absolute;
+      top: -2px;
+      width: 2px;
+      height: 16px;
+      background: #ffffff66;
+    }
 
-#feature-panel label{
-  display:block;
-  margin:4px 0;
-  font-size:12px;
-}
+    .tick20 {
+      left: 20%;
+    }
 
-#feature-panel hr{
-  border:none;
-  border-top:1px solid #ddd;
-  margin:8px 0;
-}
-</style>
+    .tick50 {
+      left: 50%;
+    }
+
+    .warnstrip {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.05);
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      display: none;
+    }
+
+    .warnstrip.show {
+      display: block;
+    }
+
+    @keyframes breachFlash {
+      0% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+
+      100% {
+        opacity: 1;
+      }
+    }
+
+    .breach-flash {
+      animation: breachFlash 0.6s infinite;
+    }
+
+    /* Aircraft marker */
+    .aircraft-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00ff00;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Trend ghost marker */
+    .ghost-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px dashed rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.10);
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Vertical breach prediction marker */
+    .breach-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 3px solid #ff0000;
+      background: rgba(255, 0, 0, 0.15);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+      animation: breachFlash 0.8s infinite;
+    }
+
+    /* Horizontal entry prediction marker */
+    .entry-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 3px solid #ffbf00;
+      background: rgba(255, 191, 0, 0.18);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.30);
+      animation: breachFlash 0.8s infinite;
+    }
+
+    /* Trend chip */
+    .trend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      font-weight: 800;
+      letter-spacing: 0.06em;
+    }
+
+    .trend-arrow {
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      margin-left: 6px;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Feature Toggle Menu */
+    #feature-menu {
+      position: absolute;
+      top: 100px;
+      right: 15px;
+      z-index: 50;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+
+    #feature-toggle {
+      background: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    #feature-panel {
+      display: none;
+      margin-top: 8px;
+      background: white;
+      padding: 10px 12px;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+      min-width: 220px;
+    }
+
+    #feature-panel label {
+      display: block;
+      margin: 4px 0;
+      font-size: 12px;
+    }
+
+    #feature-panel hr {
+      border: none;
+      border-top: 1px solid #ddd;
+      margin: 8px 0;
+    }
+  </style>
 </head>
 
 <body>
- 
- <!-- =========================
+
+  <!-- =========================
      MAP CONTAINER
-========================= --> 
-<div id="map"></div>
+========================= -->
+  <div id="map"></div>
 
-<div id="speed-container" class="panel">
-  Speed:
-  <select id="speed">
-    <option value="0.25">0.25×</option>
-    <option value="0.5">0.5×</option>
-    <option value="1" selected>1×</option>
-    <option value="2">2×</option>
-    <option value="5">5×</option>
-  </select>
-</div>
+  <div id="speed-container" class="panel">
+    Speed:
+    <select id="speed">
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+      <option value="5">5×</option>
+    </select>
+  </div>
 
-<div id="zoom-container" class="panel">
-  Zoom:
-  <button id="zoomFlight" class="btn">Flight</button>
-  <button id="zoomAirspace" class="btn" disabled>Airspace</button>
-  <button id="zoomBoth" class="btn" disabled>Both</button>
-</div>
+  <div id="zoom-container" class="panel">
+    Zoom:
+    <button id="zoomFlight" class="btn">Flight</button>
+    <button id="zoomAirspace" class="btn" disabled>Airspace</button>
+    <button id="zoomBoth" class="btn" disabled>Both</button>
+  </div>
 
-<div id="controls" class="panel">
-  <button id="play">Play</button>
-</div>
+  <div id="controls" class="panel">
+    <button id="play">Play</button>
+  </div>
 
-<div id="slider-container" class="panel">
-  <input id="slider" type="range" min="0" max="1" step="0.0001" value="0"/>
-</div>
+  <div id="slider-container" class="panel">
+    <input id="slider" type="range" min="0" max="1" step="0.0001" value="0" />
+  </div>
 
-<!-- =========================
+  <!-- =========================
      FEATURE TOGGLES / FILTERS
 ========================= -->
 
-<div id="feature-menu">
-  <button id="feature-toggle">⚙ Features</button>
+  <div id="feature-menu">
+    <button id="feature-toggle">⚙ Features</button>
 
-  <div id="feature-panel">
-    <label><input type="checkbox" id="toggleTrend" checked> Trend Vector</label>
-    <label><input type="checkbox" id="togglePrediction" checked> Breach Predictor</label>
-    <label><input type="checkbox" id="toggleCone"> 3D Zones</label>
-    <label><input type="checkbox" id="toggleKalman"> Smooth Track</label>
-    <label><input type="checkbox" id="toggleVectors"> Heading / Speed Overlay</label>
+    <div id="feature-panel">
+      <label><input type="checkbox" id="toggleTrend" checked> Trend Vector</label>
+      <label><input type="checkbox" id="togglePrediction" checked> Breach Predictor</label>
+      <label><input type="checkbox" id="toggleCone"> 3D Zones</label>
+      <label><input type="checkbox" id="toggleKalman"> Smooth Track</label>
+      <label><input type="checkbox" id="toggleVectors"> Heading / Speed Overlay</label>
 
-    <hr>
-    <div><b>Airspace Filters</b></div>
-    <label><input type="checkbox" class="zone-filter" value="controlled" checked> Controlled</label>
-    <label><input type="checkbox" class="zone-filter" value="restricted" checked> Restricted</label>
-    <label><input type="checkbox" class="zone-filter" value="prohibited" checked> Prohibited</label>
-    <label><input type="checkbox" class="zone-filter" value="danger" checked> Danger</label>
+      <hr>
+      <div><b>Airspace Filters</b></div>
+      <label><input type="checkbox" class="zone-filter" value="controlled" checked> Controlled</label>
+      <label><input type="checkbox" class="zone-filter" value="restricted" checked> Restricted</label>
+      <label><input type="checkbox" class="zone-filter" value="prohibited" checked> Prohibited</label>
+      <label><input type="checkbox" class="zone-filter" value="danger" checked> Danger</label>
+    </div>
   </div>
-</div>
-<!-- =========================
+  <!-- =========================
      HUD CONTAINER
 ========================= -->
-<div id="hud"></div>
+  <div id="hud"></div>
 
 
-<!-- =========================
+  <!-- =========================
      MAPLIBRE LIBRARY
 ========================= -->
 
-<script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
-<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-<!-- =========================
+  <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <!-- =========================
      MAIN REPLAY APP
 ========================= -->
-<script>
-  console.log("REPLAY SCRIPT LOADED");
-(async () => {
+  <script>
+    console.log("STEP 1: SCRIPT LOADED");
+    (async () => {
 
-    /* =========================
-     CONFIG / ENDPOINTS
-  ========================= */
+      /* =========================
+       CONFIG / ENDPOINTS
+    ========================= */
 
-  const flight_id = "3422422e-f6b4-4059-8de4-93145daecddc";
-  const API_URL = `http://localhost:5000/api/fsms/replay/${flight_id}`;
-  const MAP_KEY = "lxT2mb9w5c89C9E9kziZ";
-  const AIRSPACE_URL = `/api/airspace/by-flight/${flight_id}?buffer_m=5000`;
-  const COMPLIANCE_URL = `/api/compliance/airspace/by-flight/${flight_id}`;
-  const TREND_SECONDS = 10;
+      const flight_id = "3422422e-f6b4-4059-8de4-93145daecddc";
+      const API_URL = `http://localhost:5000/api/fsms/replay/${flight_id}`;
+      const MAP_KEY = "lxT2mb9w5c89C9E9kziZ";
+      const AIRSPACE_URL = `/api/airspace/by-flight/${flight_id}?buffer_m=5000`;
+      const COMPLIANCE_URL = `/api/compliance/airspace/by-flight/${flight_id}`;
+      const TREND_SECONDS = 10;
 
-  const MAX_PREDICT_DIST = 500;
-  const MAX_PREDICT_SECONDS = 60;
+      const MAX_PREDICT_DIST = 500;
+      const MAX_PREDICT_SECONDS = 60;
 
-    /* =========================
-     DOM REFERENCES
-  ========================= */
+      /* =========================
+       DOM REFERENCES
+    ========================= */
 
-  const slider = document.getElementById("slider");
-  const playBtn =
-    document.getElementById("play-btn") ||
-    document.getElementById("play");
-  const speedSel = document.getElementById("speed");
-  const hud = document.getElementById("hud");
+      const slider = document.getElementById("slider");
+      const playBtn =
+        document.getElementById("play-btn") ||
+        document.getElementById("play");
+      const speedSel = document.getElementById("speed");
+      const hud = document.getElementById("hud");
 
-  /* =========================
-     ZOOM BUTTON REFERENCES
-  ========================= */
+      /* =========================
+         ZOOM BUTTON REFERENCES
+      ========================= */
 
-  const zoomFlightBtn = document.getElementById("zoomFlight");
-  const zoomAirspaceBtn = document.getElementById("zoomAirspace");
-  const zoomBothBtn = document.getElementById("zoomBoth");
+      const zoomFlightBtn = document.getElementById("zoomFlight");
+      const zoomAirspaceBtn = document.getElementById("zoomAirspace");
+      const zoomBothBtn = document.getElementById("zoomBoth");
 
-  /* =========================
-     FEATURE FLAGS
-  ========================= */
+      /* =========================
+         FEATURE FLAGS
+      ========================= */
 
- const FEATURES = {
-  trend: true,
-  prediction: true,
-  envelope: true,   // ← ADD THIS
-  cone: false,
-  kalman: false,
-  vectors: false
-};
-
-  /* =========================
-     REPLAY STATE
-  ========================= */
-
-  let playing = false;
-  let speed = 1;
-  let simElapsed = 0;
-  let lastFrame = null;
-  let currentIndex = 0;
-  let flightBounds = null;
-  let airspaceBounds = null;
-  let airspaceGeojson = null;
-  let lastSmoothedPos = null;
-
-  /* =========================
-     UI / TOGGLE HELPERS
-  ========================= */
-
-  function bindToggle(id, key){
-    const el = document.getElementById(id);
-    if (!el) return;
-    FEATURES[key] = !!el.checked;
-    el.addEventListener("change", (e) => {
-      FEATURES[key] = e.target.checked;
-    });
-  }
-
-  function setupFeatureToggles(){
-    bindToggle("toggleTrend", "trend");
-    bindToggle("togglePrediction", "prediction");
-    bindToggle("toggleCone", "cone");
-    bindToggle("toggleKalman", "kalman");
-    bindToggle("toggleVectors", "vectors");
-  }
- /* =========================
-     DISPLAY / FORMAT HELPERS
-  ========================= */
-
-  function calculateRisk(marginM){
-    if (marginM === null || marginM === undefined || Number.isNaN(marginM)) {
-      return { label: "UNKNOWN", cls: "risk-unknown" };
-    }
-    if (marginM < 0) return { label: "BREACH", cls: "risk-breach" };
-    if (marginM < 20) return { label: "WARNING", cls: "risk-warning" };
-    if (marginM < 50) return { label: "CAUTION", cls: "risk-caution" };
-    return { label: "SAFE", cls: "risk-safe" };
-  }
-
-function fmtLimit(v){
-  if (v === null || v === undefined) return "—";
-
-  const m = Number(v);
-
-  // detect common 400 ft limit
-  if (Math.abs(m - 121.92) < 2) {
-    return "120.0 m (400 ft)";
-  }
-
-  const ft = m * 3.28084;
-
-  return `${m.toFixed(1)} m (${Math.round(ft)} ft)`;
-}
-function fmtM(v){
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
-  return `${Number(v).toFixed(1)} m`;
-}
-
-  function vsArrow(vz){
-    if (vz === null || vz === undefined || Number.isNaN(vz)) return "—";
-    if (vz > 0.15) return "↑";
-    if (vz < -0.15) return "↓";
-    return "→";
-  }
-
-    /* =========================
-     GENERIC MATH HELPERS
-  ========================= */
-
-  function clamp(n, a, b){
-    return Math.max(a, Math.min(b, n));
-  }
-
-  function marginToPct(m){
-    if (m === null || m === undefined || Number.isNaN(m)) return 0;
-    return clamp(Number(m), 0, 100);
-  }
-
-  function predictTtb(marginM, vzMps){
-    if (marginM === null || marginM === undefined || Number.isNaN(marginM)) return null;
-    if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
-    if (vzMps <= 0) return null;
-    if (marginM <= 0) return 0;
-    return marginM / vzMps;
-  }
-
-function predictVerticalConflictTtb(pathPoints, zoneFeature) {
-  if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) {
-    return null;
-  }
-
-  const lowerM = zoneFeature?.properties?.lower_m ?? null;
-  const upperM = zoneFeature?.properties?.upper_m ?? null;
-
-  for (const p of pathPoints) {
-    const verticalOk = isWithinVerticalBand(p.alt, lowerM, upperM);
-    if (verticalOk === true) {
-      return {
-        ttb_s: p.ttb_s,
-        alt: p.alt,
-        lower_m: lowerM,
-        upper_m: upperM
+      const FEATURES = {
+        trend: true,
+        prediction: true,
+        envelope: false,
+        cone: false,
+        kalman: false,
+        vectors: false
       };
-    }
-  }
 
-  return null;
-}
+      /* =========================
+         REPLAY STATE
+      ========================= */
 
-function describeVerticalRelation(predictedAlt, lowerM, upperM) {
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
-    return "UNKNOWN";
-  }
+      let playing = false;
+      let speed = 1;
+      let simElapsed = 0;
+      let lastFrame = null;
+      let currentIndex = 0;
+      let flightBounds = null;
+      let airspaceBounds = null;
+      let airspaceGeojson = null;
+      let lastSmoothedPos = null;
+      let lastPrediction = null;
 
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return "BELOW FLOOR";
-  }
+      /* =========================
+         UI / TOGGLE HELPERS
+      ========================= */
 
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return "ABOVE CEILING";
-  }
-
-  return "INSIDE BAND";
-}
-
-    /* =========================
-     GEOMETRY / MOVEMENT HELPERS
-  ========================= */
-
-  function bearingDeg(a, b){
-    const toRad = d => d * Math.PI / 180;
-    const toDeg = r => r * 180 / Math.PI;
-    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
-    const dLon = toRad(b.lng - a.lng);
-    const y = Math.sin(dLon) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) -
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-    let brng = toDeg(Math.atan2(y, x));
-    brng = (brng + 360) % 360;
-    return brng;
-  }
-
-  function bearingArrow(deg){
-    const dirs = ["↑","↗","→","↘","↓","↙","←","↖"];
-    const idx = Math.round(deg / 45) % 8;
-    return dirs[idx];
-  }
-
-  function kalmanLike(prev, current){
-    const k = 0.2;
-    return {
-      lat: prev.lat + k * (current.lat - prev.lat),
-      lng: prev.lng + k * (current.lng - prev.lng),
-      alt: prev.alt + k * (current.alt - prev.alt)
-    };
-  }
-
-  function distanceM(a, b){
-    const R = 6371000;
-    const lat1 = a.lat * Math.PI / 180;
-    const lat2 = b.lat * Math.PI / 180;
-    const dLat = (b.lat - a.lat) * Math.PI / 180;
-    const dLon = (b.lng - a.lng) * Math.PI / 180;
-    const x = Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-  }
-
-  function movePoint(start, headingDeg, distanceM){
-    const R = 6371000;
-
-    const brng = headingDeg * Math.PI / 180;
-    const lat1 = start.lat * Math.PI / 180;
-    const lon1 = start.lng * Math.PI / 180;
-
-    const lat2 = Math.asin(
-      Math.sin(lat1) * Math.cos(distanceM / R) +
-      Math.cos(lat1) * Math.sin(distanceM / R) * Math.cos(brng)
-    );
-
-    const lon2 = lon1 + Math.atan2(
-      Math.sin(brng) * Math.sin(distanceM / R) * Math.cos(lat1),
-      Math.cos(distanceM / R) - Math.sin(lat1) * Math.sin(lat2)
-    );
-
-    return {
-      lat: lat2 * 180 / Math.PI,
-      lng: lon2 * 180 / Math.PI
-    };
-  }
-
-function normalizeHeading(deg){
-  return ((deg % 360) + 360) % 360;
-}
-
-function makeArrowHead(endPos, headingDeg, arrowLengthM = 18, arrowAngleDeg = 28){
-  const left = movePoint(
-    endPos,
-    normalizeHeading(headingDeg + 180 - arrowAngleDeg),
-    arrowLengthM
-  );
-
-  const right = movePoint(
-    endPos,
-    normalizeHeading(headingDeg + 180 + arrowAngleDeg),
-    arrowLengthM
-  );
-
-  return {
-    type: "Feature",
-    geometry: {
-      type: "Polygon",
-      coordinates: [[
-        [endPos.lng, endPos.lat],
-        [left.lng, left.lat],
-        [right.lng, right.lat],
-        [endPos.lng, endPos.lat]
-      ]]
-    }
-  };
-}
-
-function buildPredictiveConflictEnvelope(pathPoints, corridorWidthM = 20) {
-  if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null;
-  if (typeof turf === "undefined") {
-    console.warn("Turf.js is required for predictive conflict envelope");
-    return null;
-  }
-
-  const coords = pathPoints.map(p => [p.lng, p.lat]);
-  const line = turf.lineString(coords);
-
-  try {
-    return turf.buffer(line, corridorWidthM, { units: "meters" });
-  } catch (e) {
-    console.warn("Failed to build predictive envelope:", e.message);
-    return null;
-  }
-}
-
-function findEnvelopeConflicts(envelopeFeature, airspaceGeojson) {
-  if (!envelopeFeature || !airspaceGeojson?.features?.length) return [];
-  if (typeof turf === "undefined") {
-    console.warn("Turf.js is required for envelope conflict detection");
-    return [];
-  }
-
-  const conflicts = [];
-
-  for (const feature of airspaceGeojson.features) {
-    try {
-      const overlap = turf.intersect(
-        turf.featureCollection([envelopeFeature, feature])
-      );
-
-      if (overlap) {
-        conflicts.push({
-          zoneId: feature?.properties?.id ?? null,
-          zoneName: feature?.properties?.name ?? "Unknown",
-          zoneType: feature?.properties?.zone_type ?? "-",
-          feature,
-          overlap
+      function bindToggle(id, key) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        FEATURES[key] = !!el.checked;
+        el.addEventListener("change", (e) => {
+          FEATURES[key] = e.target.checked;
         });
       }
-    } catch (e) {
-      console.warn("Envelope conflict test failed:", e.message);
-    }
-  }
 
-  return conflicts;
-}
+      function setupFeatureToggles() {
+        bindToggle("toggleTrend", "trend");
+        bindToggle("togglePrediction", "prediction");
+        bindToggle("toggleCone", "cone");
+        bindToggle("toggleKalman", "kalman");
+        bindToggle("toggleVectors", "vectors");
+      }
+      /* =========================
+          DISPLAY / FORMAT HELPERS
+       ========================= */
 
-
-  /* =========================
-     FUTURE PATH / PREDICTION HELPERS
-  ========================= */
-
- function predictFuturePath(
-  currentPos,
-  headingDeg,
-  groundspeed,
-  vz,
-  secondsAhead = 60,
-  stepSeconds = 1
-) {
-  if (!groundspeed || groundspeed <= 0) return [];
-
-  const adaptiveStep =
-    groundspeed > 50 ? 0.25 :
-    groundspeed > 25 ? 0.5 :
-    stepSeconds;
-
-  const points = [];
-
-  let pos = { lat: currentPos.lat, lng: currentPos.lng };
-  let alt = currentPos.alt ?? 0;
-
-  for (let s = adaptiveStep; s <= secondsAhead; s += adaptiveStep) {
-    const dist = groundspeed * adaptiveStep;
-    pos = movePoint(pos, headingDeg, dist);
-    alt = alt + (vz || 0) * adaptiveStep;
-
-    points.push({
-      lat: pos.lat,
-      lng: pos.lng,
-      alt,
-      ttb_s: s
-    });
-  }
-
-  return points;
-}
-
-
-
-// Predict earliest path/airspace intersection using exact segment/polygon
-// intersection where available, with interpolated altitude and time-to-boundary.
-
-function predictPathIntersection(pathPoints, zoneFeature) {
-  if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) {
-    return null;
-  }
-
-  let best = null;
-
-  for (let i = 1; i < pathPoints.length; i++) {
-    const p0 = pathPoints[i - 1];
-    const p1 = pathPoints[i];
-
-    const inside0 = pointInPolygon(p0, zoneFeature.geometry);
-    const inside1 = pointInPolygon(p1, zoneFeature.geometry);
-
-    // If already inside at p1, keep p1 as fallback
-    if (inside1 && !best) {
-      best = {
-        lng: p1.lng,
-        lat: p1.lat,
-        alt: p1.alt,
-        ttb_s: p1.ttb_s
-      };
-    }
-
-    // Exact boundary crossing from outside to inside
-    if (!inside0 && inside1) {
-      const seg = turf.lineString([
-        [p0.lng, p0.lat],
-        [p1.lng, p1.lat]
-      ]);
-
-      let poly;
-      if (zoneFeature.geometry.type === "Polygon") {
-        poly = turf.polygon(zoneFeature.geometry.coordinates);
-      } else if (zoneFeature.geometry.type === "MultiPolygon") {
-        poly = turf.multiPolygon(zoneFeature.geometry.coordinates);
-      } else {
-        continue;
+      function calculateRisk(marginM) {
+        if (marginM === null || marginM === undefined || Number.isNaN(marginM)) {
+          return { label: "UNKNOWN", cls: "risk-unknown" };
+        }
+        if (marginM < 0) return { label: "BREACH", cls: "risk-breach" };
+        if (marginM < 20) return { label: "WARNING", cls: "risk-warning" };
+        if (marginM < 50) return { label: "CAUTION", cls: "risk-caution" };
+        return { label: "SAFE", cls: "risk-safe" };
       }
 
-      const hits = turf.lineIntersect(seg, poly);
+      function fmtLimit(v) {
+        if (v === null || v === undefined) return "—";
 
-      if (hits?.features?.length) {
-        const hit = hits.features[0];
-        const [hitLng, hitLat] = hit.geometry.coordinates;
+        const m = Number(v);
 
-        const segDx = p1.lng - p0.lng;
-        const segDy = p1.lat - p0.lat;
-
-        let frac = 0.5;
-        if (Math.abs(segDx) >= Math.abs(segDy) && segDx !== 0) {
-          frac = (hitLng - p0.lng) / segDx;
-        } else if (segDy !== 0) {
-          frac = (hitLat - p0.lat) / segDy;
+        // detect common 400 ft limit
+        if (Math.abs(m - 121.92) < 2) {
+          return "120.0 m (400 ft)";
         }
 
-        frac = Math.max(0, Math.min(1, frac));
+        const ft = m * 3.28084;
 
+        return `${m.toFixed(1)} m (${Math.round(ft)} ft)`;
+      }
+      function fmtM(v) {
+        if (v === null || v === undefined || Number.isNaN(v)) return "—";
+        return `${Number(v).toFixed(1)} m`;
+      }
+
+      function vsArrow(vz) {
+        if (vz === null || vz === undefined || Number.isNaN(vz)) return "—";
+        if (vz > 0.15) return "↑";
+        if (vz < -0.15) return "↓";
+        return "→";
+      }
+
+      /* =========================
+       GENERIC MATH HELPERS
+    ========================= */
+
+      function clamp(n, a, b) {
+        return Math.max(a, Math.min(b, n));
+      }
+
+      function marginToPct(m) {
+        if (m === null || m === undefined || Number.isNaN(m)) return 0;
+        return clamp(Number(m), 0, 100);
+      }
+
+      function predictTtb(marginM, vzMps) {
+        if (marginM === null || marginM === undefined || Number.isNaN(marginM)) return null;
+        if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
+        if (vzMps <= 0) return null;
+        if (marginM <= 0) return 0;
+        return marginM / vzMps;
+      }
+
+      function predictVerticalConflictTtb(pathPoints, zoneFeature) {
+        if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) {
+          return null;
+        }
+
+        const lowerM = zoneFeature?.properties?.lower_m ?? null;
+        const upperM = zoneFeature?.properties?.upper_m ?? null;
+
+        for (const p of pathPoints) {
+          const verticalOk = isWithinVerticalBand(p.alt, lowerM, upperM);
+          if (verticalOk === true) {
+            return {
+              ttb_s: p.ttb_s,
+              alt: p.alt,
+              lower_m: lowerM,
+              upper_m: upperM
+            };
+          }
+        }
+
+        return null;
+      }
+
+      function describeVerticalRelation(predictedAlt, lowerM, upperM) {
+        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
+          return "UNKNOWN";
+        }
+
+        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
+          return "BELOW FLOOR";
+        }
+
+        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
+          return "ABOVE CEILING";
+        }
+
+        return "INSIDE BAND";
+      }
+
+      /* =========================
+       GEOMETRY / MOVEMENT HELPERS
+    ========================= */
+
+      function bearingDeg(a, b) {
+        const toRad = d => d * Math.PI / 180;
+        const toDeg = r => r * 180 / Math.PI;
+        const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+        const dLon = toRad(b.lng - a.lng);
+        const y = Math.sin(dLon) * Math.cos(lat2);
+        const x = Math.cos(lat1) * Math.sin(lat2) -
+          Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+        let brng = toDeg(Math.atan2(y, x));
+        brng = (brng + 360) % 360;
+        return brng;
+      }
+
+      function bearingArrow(deg) {
+        const dirs = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+        const idx = Math.round(deg / 45) % 8;
+        return dirs[idx];
+      }
+
+      function kalmanLike(prev, current) {
+        const k = 0.2;
         return {
-          lng: hitLng,
-          lat: hitLat,
-          alt: p0.alt + (p1.alt - p0.alt) * frac,
-          ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * frac
+          lat: prev.lat + k * (current.lat - prev.lat),
+          lng: prev.lng + k * (current.lng - prev.lng),
+          alt: prev.alt + k * (current.alt - prev.alt)
         };
       }
 
-      // Fallback if exact intersection is unavailable
-      return {
-        lng: p0.lng + (p1.lng - p0.lng) * 0.5,
-        lat: p0.lat + (p1.lat - p0.lat) * 0.5,
-        alt: p0.alt + (p1.alt - p0.alt) * 0.5,
-        ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * 0.5
-      };
-    }
-  }
-
-  return best;
-}
-
-  /* =========================
-     POLYGON / ZONE HELPERS
-  ========================= */
-
-  function pointInRing(point, ring){
-    const x = point.lng;
-    const y = point.lat;
-    let inside = false;
-
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][0], yi = ring[i][1];
-      const xj = ring[j][0], yj = ring[j][1];
-
-      const intersect =
-        ((yi > y) !== (yj > y)) &&
-        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi);
-
-      if (intersect) inside = !inside;
-    }
-
-    return inside;
-  }
-
-  function pointInPolygon(point, geometry){
-    if (!geometry) return false;
-
-    if (geometry.type === "Polygon") {
-      return pointInRing(point, geometry.coordinates[0]);
-    }
-
-    if (geometry.type === "MultiPolygon") {
-      return geometry.coordinates.some(poly => pointInRing(point, poly[0]));
-    }
-
-    return false;
-  }
-  function predictEarliestZoneEntry(pathPoints, airspaceGeojson){
-  if (!airspaceGeojson?.features?.length) return null;
-
-  let best = null;
-
-  for (const feature of airspaceGeojson.features) {
-
-    const hit = predictPathIntersection(pathPoints, feature);
-    if (!hit) continue;
-
-    const candidate = {
-      zoneId: feature?.properties?.id ?? null,
-      zoneName: feature?.properties?.name ?? "Unknown",
-      zoneType: feature?.properties?.zone_type ?? "-",
-      pos: { lng: hit.lng, lat: hit.lat },
-      ttb_s: hit.ttb_s,
-      alt: hit.alt
-    };
-
-    if (!best || candidate.ttb_s < best.ttb_s) {
-      best = candidate;
-    }
-
-  }
-
-  return best;
-}
-
-
-  function segmentIntersection(p1, p2, q1, q2){
-  const x1 = p1.lng, y1 = p1.lat;
-  const x2 = p2.lng, y2 = p2.lat;
-  const x3 = q1[0],  y3 = q1[1];
-  const x4 = q2[0],  y4 = q2[1];
-
-  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-
-  if (Math.abs(denom) < 1e-12) return null;
-
-  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-  const u = ((x1 - x3) * (y1 - y2) - (y1 - y3) * (x1 - x2)) / denom;
-
-  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
-
-  return {
-    lng: x1 + t * (x2 - x1),
-    lat: y1 + t * (y2 - y1),
-    t_line: t
-  };
-}
-
-function getPolygonOuterRings(geometry){
-  if (!geometry) return [];
-
-  if (geometry.type === "Polygon") {
-    return [geometry.coordinates[0]];
-  }
-
-  if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates.map(poly => poly[0]);
-  }
-
-  return [];
-}
-
-function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, groundspeed){
-  if (!zoneFeature?.geometry) return null;
-  if (!groundspeed || groundspeed <= 0) return null;
-
-  const startInside = pointInPolygon(currentPos, zoneFeature.geometry);
-
-  const rings = getPolygonOuterRings(zoneFeature.geometry);
-
-  let bestHit = null;
-
-  for (const ring of rings) {
-    for (let i = 0; i < ring.length - 1; i++) {
-      const q1 = ring[i];
-      const q2 = ring[i + 1];
-
-      const hit = segmentIntersection(currentPos, futurePos, q1, q2);
-      if (!hit) continue;
-
-      if (!bestHit || hit.t_line < bestHit.t_line) {
-        bestHit = hit;
+      function distanceM(a, b) {
+        const R = 6371000;
+        const lat1 = a.lat * Math.PI / 180;
+        const lat2 = b.lat * Math.PI / 180;
+        const dLat = (b.lat - a.lat) * Math.PI / 180;
+        const dLon = (b.lng - a.lng) * Math.PI / 180;
+        const x = Math.sin(dLat / 2) ** 2 +
+          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+        return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
       }
-    }
-  }
 
-  if (!bestHit) return null;
+      function movePoint(start, headingDeg, distanceM) {
+        const R = 6371000;
 
-  const totalDistM = distanceM(currentPos, futurePos);
-  const distToHitM = totalDistM * bestHit.t_line;
-  const ttb_s = distToHitM / groundspeed;
+        const brng = headingDeg * Math.PI / 180;
+        const lat1 = start.lat * Math.PI / 180;
+        const lon1 = start.lng * Math.PI / 180;
 
-  return {
-    pos: {
-      lng: bestHit.lng,
-      lat: bestHit.lat
-    },
-    distance_m: distToHitM,
-    ttb_s: ttb_s
-  };
-}
+        const lat2 = Math.asin(
+          Math.sin(lat1) * Math.cos(distanceM / R) +
+          Math.cos(lat1) * Math.sin(distanceM / R) * Math.cos(brng)
+        );
 
-  /* =========================
-     ALTITUDE / 4D CONFLICT HELPERS
-  ========================= */
+        const lon2 = lon1 + Math.atan2(
+          Math.sin(brng) * Math.sin(distanceM / R) * Math.cos(lat1),
+          Math.cos(distanceM / R) - Math.sin(lat1) * Math.sin(lat2)
+        );
 
-function predictAltAtTime(currentAlt, vzMps, dtSeconds){
-  if (currentAlt === null || currentAlt === undefined || Number.isNaN(currentAlt)) return null;
-  if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
-  return Number(currentAlt) + Number(vzMps) * Number(dtSeconds);
-}
-
-function isWithinVerticalBand(predictedAlt, lowerM, upperM){
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
-
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return false;
-  }
-
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return false;
-  }
-
-  return true;
-}
-
-function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, currentAlt, vzMps, lowerM, upperM){
-  const boundaryHit = predictBoundaryIntersection(currentPos, futurePos, zoneFeature, groundspeed);
-  if (!boundaryHit) return null;
-
-  const predictedAltAtEntry = predictAltAtTime(currentAlt, vzMps, boundaryHit.ttb_s);
-  const verticalOk = isWithinVerticalBand(predictedAltAtEntry, lowerM, upperM);
-
-  return {
-    pos: boundaryHit.pos,
-    distance_m: boundaryHit.distance_m,
-    ttb_s: boundaryHit.ttb_s,
-    predicted_alt_m: predictedAltAtEntry,
-    vertical_ok: verticalOk,
-    conflict: verticalOk === false
-  };
-}
-
-function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
-  if (!airspaceGeojson?.features?.length) return null;
-
-  let bestConflict = null;
-  let bestLateralOnly = null;
-
-  for (const feature of airspaceGeojson.features) {
-    const hit = predictPathIntersection(pathPoints, feature);
-    if (!hit) continue;
-
-    const lowerM = feature?.properties?.lower_m ?? null;
-    const upperM = feature?.properties?.upper_m ?? null;
-
-    const verticalOk = isWithinVerticalBand(hit.alt, lowerM, upperM);
-    const verticalKnown = verticalOk !== null;
-    const isConflict = verticalOk === true;
-
-    const candidate = {
-      zoneId: feature?.properties?.id ?? null,
-      zoneName: feature?.properties?.name ?? "Unknown",
-      zoneType: feature?.properties?.zone_type ?? "-",
-      pos: { lng: hit.lng, lat: hit.lat },
-      ttb_s: hit.ttb_s,
-      predicted_alt_m: hit.alt,
-      lower_m: lowerM,
-      upper_m: upperM,
-      vertical_ok: verticalOk,
-      vertical_known: verticalKnown,
-      conflict: isConflict
-    };
-
-    if (isConflict) {
-      if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) {
-        bestConflict = candidate;
+        return {
+          lat: lat2 * 180 / Math.PI,
+          lng: lon2 * 180 / Math.PI
+        };
       }
-    } else {
-      if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) {
-        bestLateralOnly = candidate;
+
+      function normalizeHeading(deg) {
+        return ((deg % 360) + 360) % 360;
       }
-    }
-  }
 
-  return bestConflict || bestLateralOnly;
-}
+      function makeArrowHead(endPos, headingDeg, arrowLengthM = 18, arrowAngleDeg = 28) {
+        const left = movePoint(
+          endPos,
+          normalizeHeading(headingDeg + 180 - arrowAngleDeg),
+          arrowLengthM
+        );
 
-  /* =========================
-     LOOKUP HELPERS
-  ========================= */
+        const right = movePoint(
+          endPos,
+          normalizeHeading(headingDeg + 180 + arrowAngleDeg),
+          arrowLengthM
+        );
 
-  
-
- 
-  /* =========================
-     FETCH REPLAY DATA
-  ========================= */
-
-  let data;
-  try {
-    const r = await fetch(API_URL);
-    if (!r.ok) throw new Error("Replay fetch failed");
-    data = await r.json();
-  } catch (e) {
-    alert("Replay failed: " + e.message);
-    return;
-  }
-
-  if (!data.replay?.length) {
-    alert("No replay data");
-    return;
-  }
-
-  
-    /* =========================
-     BUILD REPLAY POINT ARRAY
-  ========================= */
-
-  const pts = data.replay.map(p => ({
-    lng: p.lon,
-    lat: p.lat,
-    alt: p.altitude_m ?? 0,
-    t: new Date(p.timestamp).getTime()
-  }));
-
-  const t0 = pts[0].t;
-  const duration = pts[pts.length - 1].t - t0;
-
-    /* =========================
-     FLIGHT BOUNDS
-  ========================= */
-
-  flightBounds = new maplibregl.LngLatBounds();
-  pts.forEach(p => flightBounds.extend([p.lng, p.lat]));
-
-
-  /* =========================
-     FETCH COMPLIANCE DATA
-  ========================= */
-
-  let pointStatus = [];
-  try {
-    const cr = await fetch(COMPLIANCE_URL);
-    if (cr.ok) {
-      const cjson = await cr.json();
-      pointStatus = cjson.items || [];
-    }
-  } catch (e) {
-    console.warn("Compliance fetch error:", e.message);
-  }
-
-  function normalizeTs(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function getComplianceForReplayTime(ts, fallbackIndex = 0) {
-  const target = normalizeTs(ts);
-  if (!target || !pointStatus?.length) {
-    return pointStatus?.[Math.min(fallbackIndex, (pointStatus?.length || 1) - 1)] || null;
-  }
-
-  for (const item of pointStatus) {
-    const itemTs = normalizeTs(item.ts || item.timestamp || item.time);
-    if (itemTs === target) return item;
-  }
-
-  return pointStatus[Math.min(fallbackIndex, pointStatus.length - 1)] || null;
-}
-    /* =========================
-     CREATE MAP
-  ========================= */
-
-  const map = new maplibregl.Map({
-    container: "map",
-    style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_KEY}`,
-    center: [pts[0].lng, pts[0].lat],
-    zoom: 14,
-    pitch: 50
-  });
-
-  map.on("load", () => {
-  ensurePredictiveEnvelopeLayers(map);
-});
-
-  map.addControl(new maplibregl.NavigationControl());
-
-  function ensurePredictiveEnvelopeLayers(map) {
-  if (!map.getSource("predictive-envelope")) {
-    map.addSource("predictive-envelope", {
-      type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features: []
+        return {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              [endPos.lng, endPos.lat],
+              [left.lng, left.lat],
+              [right.lng, right.lat],
+              [endPos.lng, endPos.lat]
+            ]]
+          }
+        };
       }
-    });
-  }
-/* =========================
-   CREATE MARKERS / OVERLAYS
-   - aircraft
-   - trend ghost
-   - breach marker
-   - entry marker
-   - vector label
-========================= */
-  
-  const aircraftEl = document.createElement("div");
-  aircraftEl.className = "aircraft-dot";
 
-  const aircraft = new maplibregl.Marker({ element: aircraftEl })
-    .setLngLat([pts[0].lng, pts[0].lat])
-    .addTo(map);
+      function buildPredictiveConflictEnvelope(pathPoints, corridorWidthM = 20) {
+        if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null;
+        if (typeof turf === "undefined") {
+          console.warn("Turf.js is required for predictive conflict envelope");
+          return null;
+        }
 
-  const ghostEl = document.createElement("div");
-  ghostEl.className = "ghost-dot";
+        const coords = pathPoints.map(p => [p.lng, p.lat]);
+        const line = turf.lineString(coords);
 
-  const ghost = new maplibregl.Marker({ element: ghostEl })
-    .setLngLat([pts[0].lng, pts[0].lat])
-    .addTo(map);
+        try {
+          return turf.buffer(line, corridorWidthM, { units: "meters" });
+        } catch (e) {
+          console.warn("Failed to build predictive envelope:", e.message);
+          return null;
+        }
+      }
 
-  const breachEl = document.createElement("div");
-  breachEl.className = "breach-dot";
-  breachEl.style.display = "none";
+      function findEnvelopeConflicts(envelopeFeature, airspaceGeojson) {
+        if (!envelopeFeature || !airspaceGeojson?.features?.length) return [];
+        if (typeof turf === "undefined") {
+          console.warn("Turf.js is required for envelope conflict detection");
+          return [];
+        }
 
-  const breachMarker = new maplibregl.Marker({ element: breachEl })
-    .setLngLat([pts[0].lng, pts[0].lat])
-    .addTo(map);
+        const conflicts = [];
 
-  const entryEl = document.createElement("div");
-  entryEl.className = "entry-dot";
-  entryEl.style.display = "none";
+        for (const feature of airspaceGeojson.features) {
+          try {
+            const overlap = turf.intersect(
+              turf.featureCollection([envelopeFeature, feature])
+            );
 
-  const entryMarker = new maplibregl.Marker({ element: entryEl })
-    .setLngLat([pts[0].lng, pts[0].lat])
-    .addTo(map);
+            if (overlap) {
+              conflicts.push({
+                zoneId: feature?.properties?.id ?? null,
+                zoneName: feature?.properties?.name ?? "Unknown",
+                zoneType: feature?.properties?.zone_type ?? "-",
+                feature,
+                overlap
+              });
+            }
+          } catch (e) {
+            console.warn("Envelope conflict test failed:", e.message);
+          }
+        }
 
-  const vectorLabelEl = document.createElement("div");
-  vectorLabelEl.style.background = "rgba(10,12,16,0.9)";
-  vectorLabelEl.style.color = "#e8eefc";
-  vectorLabelEl.style.padding = "4px 6px";
-  vectorLabelEl.style.borderRadius = "6px";
-  vectorLabelEl.style.fontFamily = "ui-monospace, Menlo, Consolas, monospace";
-  vectorLabelEl.style.fontSize = "11px";
-  vectorLabelEl.style.fontWeight = "700";
-  vectorLabelEl.style.border = "1px solid rgba(255,255,255,0.12)";
-  vectorLabelEl.style.boxShadow = "0 4px 10px rgba(0,0,0,0.25)";
-  vectorLabelEl.style.display = "none";
-  vectorLabelEl.style.whiteSpace = "nowrap";
+        return conflicts;
+      }
 
-  const vectorLabel = new maplibregl.Marker({
-    element: vectorLabelEl,
-    offset: [20, -25]
-  })
-    .setLngLat([pts[0].lng, pts[0].lat])
-    .addTo(map);
+
+      /* =========================
+         FUTURE PATH / PREDICTION HELPERS
+      ========================= */
+
+      function predictFuturePath(
+        currentPos,
+        headingDeg,
+        groundspeed,
+        vz,
+        secondsAhead = 60,
+        stepSeconds = 1
+      ) {
+        if (!groundspeed || groundspeed <= 0) return [];
+
+        const adaptiveStep =
+          groundspeed > 50 ? 0.25 :
+            groundspeed > 25 ? 0.5 :
+              stepSeconds;
+
+        const points = [];
+
+        let pos = { lat: currentPos.lat, lng: currentPos.lng };
+        let alt = currentPos.alt ?? 0;
+
+        for (let s = adaptiveStep; s <= secondsAhead; s += adaptiveStep) {
+          const dist = groundspeed * adaptiveStep;
+          pos = movePoint(pos, headingDeg, dist);
+          alt = alt + (vz || 0) * adaptiveStep;
+
+          points.push({
+            lat: pos.lat,
+            lng: pos.lng,
+            alt,
+            ttb_s: s
+          });
+        }
+
+        return points;
+      }
+
+
+
+      // Predict earliest path/airspace intersection using exact segment/polygon
+      // intersection where available, with interpolated altitude and time-to-boundary.
+
+      function predictPathIntersection(pathPoints, zoneFeature) {
+        if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) {
+          return null;
+        }
+
+        let best = null;
+
+        for (let i = 1; i < pathPoints.length; i++) {
+          const p0 = pathPoints[i - 1];
+          const p1 = pathPoints[i];
+
+          const inside0 = pointInPolygon(p0, zoneFeature.geometry);
+          const inside1 = pointInPolygon(p1, zoneFeature.geometry);
+
+          // If already inside at p1, keep p1 as fallback
+          if (inside1 && !best) {
+            best = {
+              lng: p1.lng,
+              lat: p1.lat,
+              alt: p1.alt,
+              ttb_s: p1.ttb_s
+            };
+          }
+
+          // Exact boundary crossing from outside to inside
+          if (!inside0 && inside1) {
+            const seg = turf.lineString([
+              [p0.lng, p0.lat],
+              [p1.lng, p1.lat]
+            ]);
+
+            let poly;
+            if (zoneFeature.geometry.type === "Polygon") {
+              poly = turf.polygon(zoneFeature.geometry.coordinates);
+            } else if (zoneFeature.geometry.type === "MultiPolygon") {
+              poly = turf.multiPolygon(zoneFeature.geometry.coordinates);
+            } else {
+              continue;
+            }
+
+            const hits = turf.lineIntersect(seg, poly);
+
+            if (hits?.features?.length) {
+              const hit = hits.features[0];
+              const [hitLng, hitLat] = hit.geometry.coordinates;
+
+              const segDx = p1.lng - p0.lng;
+              const segDy = p1.lat - p0.lat;
+
+              let frac = 0.5;
+              if (Math.abs(segDx) >= Math.abs(segDy) && segDx !== 0) {
+                frac = (hitLng - p0.lng) / segDx;
+              } else if (segDy !== 0) {
+                frac = (hitLat - p0.lat) / segDy;
+              }
+
+              frac = Math.max(0, Math.min(1, frac));
+
+              return {
+                lng: hitLng,
+                lat: hitLat,
+                alt: p0.alt + (p1.alt - p0.alt) * frac,
+                ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * frac
+              };
+            }
+
+            // Fallback if exact intersection is unavailable
+            return {
+              lng: p0.lng + (p1.lng - p0.lng) * 0.5,
+              lat: p0.lat + (p1.lat - p0.lat) * 0.5,
+              alt: p0.alt + (p1.alt - p0.alt) * 0.5,
+              ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * 0.5
+            };
+          }
+        }
+
+        return best;
+      }
+
+      /* =========================
+         POLYGON / ZONE HELPERS
+      ========================= */
+
+      function pointInRing(point, ring) {
+        const x = point.lng;
+        const y = point.lat;
+        let inside = false;
+
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const xi = ring[i][0], yi = ring[i][1];
+          const xj = ring[j][0], yj = ring[j][1];
+
+          const intersect =
+            ((yi > y) !== (yj > y)) &&
+            (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi);
+
+          if (intersect) inside = !inside;
+        }
+
+        return inside;
+      }
+
+      function pointInPolygon(point, geometry) {
+        if (!geometry) return false;
+
+        if (geometry.type === "Polygon") {
+          return pointInRing(point, geometry.coordinates[0]);
+        }
+
+        if (geometry.type === "MultiPolygon") {
+          return geometry.coordinates.some(poly => pointInRing(point, poly[0]));
+        }
+
+        return false;
+      }
+      function predictEarliestZoneEntry(pathPoints, airspaceGeojson) {
+        if (!airspaceGeojson?.features?.length) return null;
+
+        let best = null;
+
+        for (const feature of airspaceGeojson.features) {
+
+          const hit = predictPathIntersection(pathPoints, feature);
+          if (!hit) continue;
+
+          const candidate = {
+            zoneId: feature?.properties?.id ?? null,
+            zoneName: feature?.properties?.name ?? "Unknown",
+            zoneType: feature?.properties?.zone_type ?? "-",
+            pos: { lng: hit.lng, lat: hit.lat },
+            ttb_s: hit.ttb_s,
+            alt: hit.alt
+          };
+
+          if (!best || candidate.ttb_s < best.ttb_s) {
+            best = candidate;
+          }
+
+        }
+
+        return best;
+      }
+
+
+      function segmentIntersection(p1, p2, q1, q2) {
+        const x1 = p1.lng, y1 = p1.lat;
+        const x2 = p2.lng, y2 = p2.lat;
+        const x3 = q1[0], y3 = q1[1];
+        const x4 = q2[0], y4 = q2[1];
+
+        const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+
+        if (Math.abs(denom) < 1e-12) return null;
+
+        const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+        const u = ((x1 - x3) * (y1 - y2) - (y1 - y3) * (x1 - x2)) / denom;
+
+        if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+
+        return {
+          lng: x1 + t * (x2 - x1),
+          lat: y1 + t * (y2 - y1),
+          t_line: t
+        };
+      }
+
+      function getPolygonOuterRings(geometry) {
+        if (!geometry) return [];
+
+        if (geometry.type === "Polygon") {
+          return [geometry.coordinates[0]];
+        }
+
+        if (geometry.type === "MultiPolygon") {
+          return geometry.coordinates.map(poly => poly[0]);
+        }
+
+        return [];
+      }
+
+      function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, groundspeed) {
+        if (!zoneFeature?.geometry) return null;
+        if (!groundspeed || groundspeed <= 0) return null;
+
+        const startInside = pointInPolygon(currentPos, zoneFeature.geometry);
+
+        const rings = getPolygonOuterRings(zoneFeature.geometry);
+
+        let bestHit = null;
+
+        for (const ring of rings) {
+          for (let i = 0; i < ring.length - 1; i++) {
+            const q1 = ring[i];
+            const q2 = ring[i + 1];
+
+            const hit = segmentIntersection(currentPos, futurePos, q1, q2);
+            if (!hit) continue;
+
+            if (!bestHit || hit.t_line < bestHit.t_line) {
+              bestHit = hit;
+            }
+          }
+        }
+
+        if (!bestHit) return null;
+
+        const totalDistM = distanceM(currentPos, futurePos);
+        const distToHitM = totalDistM * bestHit.t_line;
+        const ttb_s = distToHitM / groundspeed;
+
+        return {
+          pos: {
+            lng: bestHit.lng,
+            lat: bestHit.lat
+          },
+          distance_m: distToHitM,
+          ttb_s: ttb_s
+        };
+      }
+
+      /* =========================
+         ALTITUDE / 4D CONFLICT HELPERS
+      ========================= */
+
+      function predictAltAtTime(currentAlt, vzMps, dtSeconds) {
+        if (currentAlt === null || currentAlt === undefined || Number.isNaN(currentAlt)) return null;
+        if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
+        return Number(currentAlt) + Number(vzMps) * Number(dtSeconds);
+      }
+
+      function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
+        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
+
+        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
+          return false;
+        }
+
+        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
+          return false;
+        }
+
+        return true;
+      }
+
+      function predict4DConflict(currentPos, futurePos, zoneFeature, groundspeed, currentAlt, vzMps, lowerM, upperM) {
+        const boundaryHit = predictBoundaryIntersection(currentPos, futurePos, zoneFeature, groundspeed);
+        if (!boundaryHit) return null;
+
+        const predictedAltAtEntry = predictAltAtTime(currentAlt, vzMps, boundaryHit.ttb_s);
+        const verticalOk = isWithinVerticalBand(predictedAltAtEntry, lowerM, upperM);
+
+        return {
+          pos: boundaryHit.pos,
+          distance_m: boundaryHit.distance_m,
+          ttb_s: boundaryHit.ttb_s,
+          predicted_alt_m: predictedAltAtEntry,
+          vertical_ok: verticalOk,
+          conflict: verticalOk === false
+        };
+      }
+
+      function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
+        if (!airspaceGeojson?.features?.length) return null;
+
+        let bestConflict = null;
+        let bestLateralOnly = null;
+
+        for (const feature of airspaceGeojson.features) {
+          const hit = predictPathIntersection(pathPoints, feature);
+          if (!hit) continue;
+
+          const lowerM = feature?.properties?.lower_m ?? null;
+          const upperM = feature?.properties?.upper_m ?? null;
+
+          const verticalOk = isWithinVerticalBand(hit.alt, lowerM, upperM);
+          const verticalKnown = verticalOk !== null;
+          const isConflict = verticalOk === true;
+
+          const candidate = {
+            zoneId: feature?.properties?.id ?? null,
+            zoneName: feature?.properties?.name ?? "Unknown",
+            zoneType: feature?.properties?.zone_type ?? "-",
+            pos: { lng: hit.lng, lat: hit.lat },
+            ttb_s: hit.ttb_s,
+            predicted_alt_m: hit.alt,
+            lower_m: lowerM,
+            upper_m: upperM,
+            vertical_ok: verticalOk,
+            vertical_known: verticalKnown,
+            conflict: isConflict
+          };
+
+          if (isConflict) {
+            if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) {
+              bestConflict = candidate;
+            }
+          } else {
+            if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) {
+              bestLateralOnly = candidate;
+            }
+          }
+        }
+
+        return bestConflict || bestLateralOnly;
+      }
+
+      /* =========================
+         LOOKUP HELPERS
+      ========================= */
+
+
+
+
+      /* =========================
+         FETCH REPLAY DATA
+      ========================= */
+      console.log("STEP A0: ENTERED REPLAY INIT BLOCK");
+
+      console.log("STEP A: BEFORE REPLAY FETCH");
+
+      let data;
+      try {
+        const r = await fetch(API_URL);
+        if (!r.ok) throw new Error("Replay fetch failed");
+        console.log("STEP B: AFTER REPLAY FETCH RESPONSE");
+        data = await r.json();
+      } catch (e) {
+        alert("Replay failed: " + e.message);
+        return;
+      }
+
+      if (!data.replay?.length) {
+        alert("No replay data");
+        return;
+      }
+      console.log("STEP C: AFTER REPLAY JSON PARSE", data);
+
+      /* =========================
+       BUILD REPLAY POINT ARRAY
+    ========================= */
+
+      const pts = data.replay.map(p => ({
+        lng: p.lon,
+        lat: p.lat,
+        alt: p.altitude_m ?? 0,
+        t: new Date(p.timestamp).getTime()
+      }));
+
+      console.log("STEP D: PTS READY", pts.length, pts[0]);
+
+      const t0 = pts[0].t;
+      const duration = pts[pts.length - 1].t - t0;
+
+      /* =========================
+       FLIGHT BOUNDS
+    ========================= */
+
+      flightBounds = new maplibregl.LngLatBounds();
+      pts.forEach(p => flightBounds.extend([p.lng, p.lat]));
+
+
+      /* =========================
+         FETCH COMPLIANCE DATA
+      ========================= */
+
+      let pointStatus = [];
+      try {
+        const cr = await fetch(COMPLIANCE_URL);
+        if (cr.ok) {
+          const cjson = await cr.json();
+          pointStatus = cjson.items || [];
+        }
+      } catch (e) {
+        console.warn("Compliance fetch error:", e.message);
+      }
+
+      function normalizeTs(value) {
+        if (!value) return null;
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? null : d.toISOString();
+      }
+
+      function getComplianceForReplayTime(ts, fallbackIndex = 0) {
+        const target = normalizeTs(ts);
+        if (!target || !pointStatus?.length) {
+          return pointStatus?.[Math.min(fallbackIndex, (pointStatus?.length || 1) - 1)] || null;
+        }
+
+        for (const item of pointStatus) {
+          const itemTs = normalizeTs(item.ts || item.timestamp || item.time);
+          if (itemTs === target) return item;
+        }
+
+        return pointStatus[Math.min(fallbackIndex, pointStatus.length - 1)] || null;
+      }
+
+      console.log("STEP E: BEFORE MAP BLOCK");
+      /* =========================
+       CREATE MAP
+    ========================= */
+
+      console.log("STEP 1.1: BEFORE MAP CREATE");
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_KEY}`,
+        center: [pts[0].lng, pts[0].lat],
+        zoom: 14,
+        pitch: 50
+      });
+
+      console.log("STEP 1.2: AFTER MAP CREATE");
+
+      map.on("load", async () => {
+        console.log("STEP 2: MAP LOADED");
+
+        if (typeof setupFeatureToggles === "function") {
+          setupFeatureToggles();
+        }
+
+        if (typeof ensureTrendLayer === "function") {
+          ensureTrendLayer(map);
+        }
+
+        if (typeof ensureVectorLayers === "function") {
+          ensureVectorLayers(map);
+        }
+
+        if (typeof ensurePredictiveEnvelopeLayers === "function") {
+          ensurePredictiveEnvelopeLayers(map);
+        }
+      });
+
+      console.log("STEP 1.3: AFTER MAP LOAD HANDLER ATTACHED");
+
+      map.addControl(new maplibregl.NavigationControl());
+
+      
+      /* =========================
+         CREATE MARKERS / OVERLAYS
+         - aircraft
+         - trend ghost
+         - breach marker
+         - entry marker
+         - vector label
+      ========================= */
+
+      const aircraftEl = document.createElement("div");
+      aircraftEl.className = "aircraft-dot";
+
+      const aircraft = new maplibregl.Marker({ element: aircraftEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
+
+      const ghostEl = document.createElement("div");
+      ghostEl.className = "ghost-dot";
+
+      const ghost = new maplibregl.Marker({ element: ghostEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
+
+      const breachEl = document.createElement("div");
+      breachEl.className = "breach-dot";
+      breachEl.style.display = "none";
+
+      const breachMarker = new maplibregl.Marker({ element: breachEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
+
+      const entryEl = document.createElement("div");
+      entryEl.className = "entry-dot";
+      entryEl.style.display = "none";
+
+      const entryMarker = new maplibregl.Marker({ element: entryEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
+
+      const vectorLabelEl = document.createElement("div");
+      vectorLabelEl.style.background = "rgba(10,12,16,0.9)";
+      vectorLabelEl.style.color = "#e8eefc";
+      vectorLabelEl.style.padding = "4px 6px";
+      vectorLabelEl.style.borderRadius = "6px";
+      vectorLabelEl.style.fontFamily = "ui-monospace, Menlo, Consolas, monospace";
+      vectorLabelEl.style.fontSize = "11px";
+      vectorLabelEl.style.fontWeight = "700";
+      vectorLabelEl.style.border = "1px solid rgba(255,255,255,0.12)";
+      vectorLabelEl.style.boxShadow = "0 4px 10px rgba(0,0,0,0.25)";
+      vectorLabelEl.style.display = "none";
+      vectorLabelEl.style.whiteSpace = "nowrap";
+
+      const vectorLabel = new maplibregl.Marker({
+        element: vectorLabelEl,
+        offset: [20, -25]
+      })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
 
       /* =========================
      MAP SOURCES / LAYERS HELPERS
@@ -1206,268 +1318,278 @@ function getComplianceForReplayTime(ts, fallbackIndex = 0) {
      - projected arrow
   ========================= */
 
-  function ensureTrendLayer(){
-    if (map.getSource("trend")) return;
+      function ensureTrendLayer() {
+        if (map.getSource("trend")) return;
 
-    map.addSource("trend", {
-      type: "geojson",
-      data: {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [[pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]]
+        map.addSource("trend", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [[pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]]
+            }
+          }
+        });
+
+        map.addLayer({
+          id: "trend-line",
+          type: "line",
+          source: "trend",
+          paint: {
+            "line-color": "#ffffff",
+            "line-opacity": 0.70,
+            "line-width": 2,
+            "line-dasharray": [2, 2]
+          }
+        });
+      }
+
+      function ensureVectorLayers() {
+        if (!map.getSource("heading-vector")) {
+          map.addSource("heading-vector", {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: [[pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]]
+              }
+            }
+          });
+
+          map.addLayer({
+            id: "heading-vector-line",
+            type: "line",
+            source: "heading-vector",
+            layout: {
+              "line-cap": "round",
+              "line-join": "round",
+              "visibility": "none"
+            },
+            paint: {
+              "line-color": "#00e5ff",
+              "line-width": 3,
+              "line-opacity": 0.95
+            }
+          });
+        }
+
+        if (!map.getSource("flight-vector-arrow")) {
+          map.addSource("flight-vector-arrow", {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: []
+            }
+          });
+
+          map.addLayer({
+            id: "flight-vector-arrow-fill",
+            type: "fill",
+            source: "flight-vector-arrow",
+            layout: {
+              "visibility": "none"
+            },
+            paint: {
+              "fill-color": "#00e5ff",
+              "fill-opacity": 0.95
+            }
+          });
         }
       }
-    });
 
-    map.addLayer({
-      id: "trend-line",
-      type: "line",
-      source: "trend",
-      paint: {
-        "line-color": "#ffffff",
-        "line-opacity": 0.70,
-        "line-width": 2,
-        "line-dasharray": [2, 2]
-      }
-    });
-  }
-
-function ensureVectorLayers(){
-  if (!map.getSource("heading-vector")) {
-    map.addSource("heading-vector", {
-      type: "geojson",
-      data: {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [[pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]]
+function ensurePredictiveEnvelopeLayers(map) {
+        if (!map.getSource("predictive-envelope")) {
+          map.addSource("predictive-envelope", {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: []
+            }
+          });
         }
+      
+
+      if (!map.getLayer("predictive-envelope-fill")) {
+        map.addLayer({
+          id: "predictive-envelope-fill",
+          type: "fill",
+          source: "predictive-envelope",
+          paint: {
+            "fill-color": "#ffbf00",
+            "fill-opacity": 0.16
+          }
+        });
       }
-    });
 
-    map.addLayer({
-      id: "heading-vector-line",
-      type: "line",
-      source: "heading-vector",
-      layout: {
-        "line-cap": "round",
-        "line-join": "round",
-        "visibility": "none"
-      },
-      paint: {
-        "line-color": "#00e5ff",
-        "line-width": 3,
-        "line-opacity": 0.95
+      if (!map.getLayer("predictive-envelope-outline")) {
+        map.addLayer({
+          id: "predictive-envelope-outline",
+          type: "line",
+          source: "predictive-envelope",
+          paint: {
+            "line-color": "#ffbf00",
+            "line-width": 2,
+            "line-opacity": 0.7
+          }
+        });
       }
-    });
-  }
 
-  if (!map.getSource("flight-vector-arrow")) {
-    map.addSource("flight-vector-arrow", {
-      type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features: []
+      if (!map.getSource("predictive-envelope-conflicts")) {
+        map.addSource("predictive-envelope-conflicts", {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: []
+          }
+        });
       }
-    });
 
-    map.addLayer({
-      id: "flight-vector-arrow-fill",
-      type: "fill",
-      source: "flight-vector-arrow",
-      layout: {
-        "visibility": "none"
-      },
-      paint: {
-        "fill-color": "#00e5ff",
-        "fill-opacity": 0.95
+      if (!map.getLayer("predictive-envelope-conflicts-fill")) {
+        map.addLayer({
+          id: "predictive-envelope-conflicts-fill",
+          type: "fill",
+          source: "predictive-envelope-conflicts",
+          paint: {
+            "fill-color": "#ff0000",
+            "fill-opacity": 0.22
+          }
+        });
       }
-    });
-  }
-}
 
-
-
-  if (!map.getLayer("predictive-envelope-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-fill",
-      type: "fill",
-      source: "predictive-envelope",
-      paint: {
-        "fill-color": "#ffbf00",
-        "fill-opacity": 0.16
+      if (!map.getLayer("predictive-envelope-conflicts-outline")) {
+        map.addLayer({
+          id: "predictive-envelope-conflicts-outline",
+          type: "line",
+          source: "predictive-envelope-conflicts",
+          paint: {
+            "line-color": "#ff0000",
+            "line-width": 2,
+            "line-opacity": 0.9
+          }
+        });
       }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-outline",
-      type: "line",
-      source: "predictive-envelope",
-      paint: {
-        "line-color": "#ffbf00",
-        "line-width": 2,
-        "line-opacity": 0.7
-      }
-    });
-  }
-
-  if (!map.getSource("predictive-envelope-conflicts")) {
-    map.addSource("predictive-envelope-conflicts", {
-      type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features: []
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-fill",
-      type: "fill",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "fill-color": "#ff0000",
-        "fill-opacity": 0.22
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-outline",
-      type: "line",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "line-color": "#ff0000",
-        "line-width": 2,
-        "line-opacity": 0.9
-      }
-    });
-  }
-}
+    }
 
   /* =========================
      MAP FILTER / INTERPOLATION / BOUNDS HELPERS
   ========================= */
 
-  function updateZoneFilter(){
-    if (!map.getLayer("airspace-fill")) return;
+  function updateZoneFilter() {
+      if (!map.getLayer("airspace-fill")) return;
 
-    const checked = Array.from(
-      document.querySelectorAll(".zone-filter:checked")
-    ).map(cb => cb.value);
+      const checked = Array.from(
+        document.querySelectorAll(".zone-filter:checked")
+      ).map(cb => cb.value);
 
-    if (!checked.length) {
-      map.setFilter("airspace-fill", ["==", 1, 0]);
-      map.setFilter("airspace-outline", ["==", 1, 0]);
+      if (!checked.length) {
+        map.setFilter("airspace-fill", ["==", 1, 0]);
+        map.setFilter("airspace-outline", ["==", 1, 0]);
+        if (map.getLayer("airspace-3d")) {
+          map.setFilter("airspace-3d", ["==", 1, 0]);
+        }
+        return;
+      }
+
+      const filter = [
+        "in",
+        ["downcase", ["to-string", ["coalesce", ["get", "zone_type"], ""]]],
+        ["literal", checked]
+      ];
+
+      map.setFilter("airspace-fill", filter);
+      map.setFilter("airspace-outline", filter);
       if (map.getLayer("airspace-3d")) {
-        map.setFilter("airspace-3d", ["==", 1, 0]);
-      }
-      return;
-    }
-
-    const filter = [
-      "in",
-      ["downcase", ["to-string", ["coalesce", ["get", "zone_type"], ""]]],
-      ["literal", checked]
-    ];
-
-    map.setFilter("airspace-fill", filter);
-    map.setFilter("airspace-outline", filter);
-    if (map.getLayer("airspace-3d")) {
-      map.setFilter("airspace-3d", filter);
-    }
-  }
-
-function interpolate(time){
-  if (!window.__interpSeen) {
-  console.log("INTERPOLATE RUNNING", {
-    time,
-    currentIndex,
-    sample: pts?.[currentIndex]
-  });
-  window.__interpSeen = true;
-}
-  while (currentIndex < pts.length - 2 && pts[currentIndex + 1].t <= time) currentIndex++;
-  const a = pts[currentIndex];
-  const b = pts[currentIndex + 1] ?? a;
-  const f = b.t === a.t ? 0 : (time - a.t) / (b.t - a.t);
-
-  return {
-    lng: a.lng + (b.lng - a.lng) * f,
-    lat: a.lat + (b.lat - a.lat) * f,
-    alt: a.alt + (b.alt - a.alt) * f,
-    t: time,
-    source_t: a.t
-  };
-}
-
-  function computeGeojsonBounds(fc){
-    const b = new maplibregl.LngLatBounds();
-    for (const f of (fc.features || [])) {
-      const g = f.geometry;
-      if (!g) continue;
-      if (g.type === "Polygon") {
-        for (const ring of g.coordinates) for (const coord of ring) b.extend(coord);
-      } else if (g.type === "MultiPolygon") {
-        for (const poly of g.coordinates) for (const ring of poly) for (const coord of ring) b.extend(coord);
+        map.setFilter("airspace-3d", filter);
       }
     }
-    return b;
-  }
 
-  function zoomTo(bounds){
-    if (!bounds) return;
-    map.fitBounds(bounds, { padding: 80, duration: 800 });
-  }
+    function interpolate(time) {
+      if (!window.__interpSeen) {
+        console.log("INTERPOLATE RUNNING", {
+          time,
+          currentIndex,
+          sample: pts?.[currentIndex]
+        });
+        window.__interpSeen = true;
+      }
+      while (currentIndex < pts.length - 2 && pts[currentIndex + 1].t <= time) currentIndex++;
+      const a = pts[currentIndex];
+      const b = pts[currentIndex + 1] ?? a;
+      const f = b.t === a.t ? 0 : (time - a.t) / (b.t - a.t);
 
-  function unionBounds(a, b){
-    if (!a && !b) return null;
-    if (a && !b) return a;
-    if (!a && b) return b;
-    const u = new maplibregl.LngLatBounds(a.getSouthWest(), a.getNorthEast());
-    u.extend(b.getSouthWest());
-    u.extend(b.getNorthEast());
-    return u;
-  }
+      return {
+        lng: a.lng + (b.lng - a.lng) * f,
+        lat: a.lat + (b.lat - a.lat) * f,
+        alt: a.alt + (b.alt - a.alt) * f,
+        t: time,
+        source_t: a.t
+      };
+    }
+
+    function computeGeojsonBounds(fc) {
+      const b = new maplibregl.LngLatBounds();
+      for (const f of (fc.features || [])) {
+        const g = f.geometry;
+        if (!g) continue;
+        if (g.type === "Polygon") {
+          for (const ring of g.coordinates) for (const coord of ring) b.extend(coord);
+        } else if (g.type === "MultiPolygon") {
+          for (const poly of g.coordinates) for (const ring of poly) for (const coord of ring) b.extend(coord);
+        }
+      }
+      return b;
+    }
+
+    function zoomTo(bounds) {
+      if (!bounds) return;
+      map.fitBounds(bounds, { padding: 80, duration: 800 });
+    }
+
+    function unionBounds(a, b) {
+      if (!a && !b) return null;
+      if (a && !b) return a;
+      if (!a && b) return b;
+      const u = new maplibregl.LngLatBounds(a.getSouthWest(), a.getNorthEast());
+      u.extend(b.getSouthWest());
+      u.extend(b.getNorthEast());
+      return u;
+    }
 
     /* =========================
      ZOOM BUTTON EVENTS
   ========================= */
-  zoomFlightBtn.onclick = () => zoomTo(flightBounds);
-  zoomAirspaceBtn.onclick = () => zoomTo(airspaceBounds);
-  zoomBothBtn.onclick = () => zoomTo(unionBounds(flightBounds, airspaceBounds));
+    zoomFlightBtn.onclick = () => zoomTo(flightBounds);
+    zoomAirspaceBtn.onclick = () => zoomTo(airspaceBounds);
+    zoomBothBtn.onclick = () => zoomTo(unionBounds(flightBounds, airspaceBounds));
 
-  /* =========================
-     MAP LOAD INITIALIZATION
-     - setup toggles
-     - create layers
-     - fetch airspace
-     - add airspace layers
-     - add flight path
-     - zoom to route
-     - start loop
-  ========================= */
+    /* =========================
+       MAP LOAD INITIALIZATION
+       - setup toggles
+       - create layers
+       - fetch airspace
+       - add airspace layers
+       - add flight path
+       - zoom to route
+       - start loop
+    ========================= */
 
-  map.on("load", async () => {
-  if (typeof setupFeatureToggles === "function") {
-    setupFeatureToggles();
-  }
+    map.on("load", async () => {
+      if (typeof setupFeatureToggles === "function") {
+        setupFeatureToggles();
+      }
 
-  if (typeof ensureTrendLayer === "function") {
-    ensureTrendLayer(map);
-  }
+      if (typeof ensureTrendLayer === "function") {
+        ensureTrendLayer(map);
+      }
 
-  if (typeof ensureVectorLayers === "function") {
-    ensureVectorLayers(map);
-  }
+      if (typeof ensureVectorLayers === "function") {
+        ensureVectorLayers(map);
+      }
 
-  ensurePredictiveEnvelopeLayers(map);
-});
+      ensurePredictiveEnvelopeLayers(map);
+    });
 
     try {
       const r = await fetch(AIRSPACE_URL);
@@ -1475,7 +1597,12 @@ function interpolate(time){
       const airspaceData = await r.json();
       airspaceGeojson = airspaceData;
 
-      map.addSource("airspace", { type: "geojson", data: airspaceData });
+      window.airspaceGeojson = airspaceGeojson;
+
+      map.addSource("airspace", {
+  type: "geojson",
+  data: airspaceData
+});
 
       map.addLayer({
         id: "airspace-fill",
@@ -1483,7 +1610,7 @@ function interpolate(time){
         source: "airspace",
         paint: {
           "fill-color": [
-            "match", ["get","zone_type"],
+            "match", ["get", "zone_type"],
             "controlled", "#3366ff",
             "restricted", "#ff0000",
             "prohibited", "#cc00ff",
@@ -1561,10 +1688,11 @@ function interpolate(time){
         "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 12, 4, 14, 6, 16, 10, 18, 14]
       }
     });
+    
 
     zoomTo(flightBounds);
     requestAnimationFrame(loop);
-  });
+  
 
     /* =========================
      MAIN REPLAY LOOP
@@ -1579,211 +1707,455 @@ function interpolate(time){
      - update slider
   ========================= */
 
-  function loop(now){
-    
-      
-    if (!lastFrame) lastFrame = now;
-    const dt = now - lastFrame;
-    lastFrame = now;
+ 
 
-    if (playing) {
-      simElapsed += dt * speed;
-      if (simElapsed > duration) {
-        simElapsed = duration;
-        playing = false;
-        playBtn.textContent = "Play";
-      }
-    }
-
-    const t = t0 + simElapsed;
-    let pos = interpolate(t);
-
-      if (playBtn) {
-  playBtn.onclick = () => {
-    playing = !playing;
-    playBtn.textContent = playing ? "Pause" : "Play";
-
-    if (playing) {
-      loop();
-    }
-  };
-} else {
-  console.warn("Play button not found in DOM");
-}
-
-if (slider) {
-  slider.oninput = (e) => {
-    simElapsed = e.target.value * duration;
-    currentIndex = 0;
-    lastSmoothedPos = null;
-  };
-} else {
-  console.warn("Slider not found in DOM");
-}
-
-if (speedSel) {
-  speedSel.onchange = () => {
-    speed = Number(speedSel.value) || 1;
-  };
-} else {
-  console.warn("Speed selector not found in DOM");
-}
-
-const featureToggleBtn = document.getElementById("feature-toggle");
-if (featureToggleBtn) {
-  featureToggleBtn.onclick = () => {
-    const panel = document.getElementById("feature-panel");
-    if (panel) {
-      panel.style.display = panel.style.display === "block" ? "none" : "block";
-    }
-  };
-}
-  
-    if (FEATURES.kalman) {
-      pos = kalmanLike(lastSmoothedPos || pos, pos);
-      lastSmoothedPos = pos;
-    } else {
-      lastSmoothedPos = null;
-    }
-
-    const tFutureTrend = Math.min(t0 + duration, t + (TREND_SECONDS * 1000));
-    const posFuture = interpolate(tFutureTrend);
-
-    const brg = bearingDeg(pos, posFuture);
-    const brgArrow = bearingArrow(brg);
-
-    ghostEl.style.display = (playing && FEATURES.trend) ? "block" : "none";
-    if (map.getLayer("trend-line")) {
-      map.setLayoutProperty(
-        "trend-line",
-        "visibility",
-        (playing && FEATURES.trend) ? "visible" : "none"
-      );
-    }
-
-    if (FEATURES.trend) {
-      ghost.setLngLat([posFuture.lng, posFuture.lat]);
-      const trendSrc = map.getSource("trend");
-      if (trendSrc) {
-        trendSrc.setData({
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [pos.lng, pos.lat],
-              [posFuture.lng, posFuture.lat]
-            ]
-          }
-        });
-      }
-    }
-
-    let vz = null;
-    try {
-      const i = Math.min(currentIndex, pts.length - 2);
-      const a = pts[i];
-      const b = pts[i + 1];
-      const dtS = (b.t - a.t) / 1000;
-      if (dtS > 0) vz = (b.alt - a.alt) / dtS;
-    } catch (e) {
-      vz = null;
-    }
-
-    let groundspeed = null;
-if (currentIndex < pts.length - 1) {
-  const a = pts[currentIndex];
-  const b = pts[currentIndex + 1];
-  const dist = distanceM(a, b);
+  let vz = null;
+  try {
+  const i = Math.min(currentIndex, pts.length - 2);
+  const a = pts[i];
+  const b = pts[i + 1];
   const dtS = (b.t - a.t) / 1000;
-  if (dtS > 0) groundspeed = dist / dtS;
-}
+  if (dtS > 0) vz = (b.alt - a.alt) / dtS;
+  } catch (e) {
+  vz = null;
+  }
 
-const vectorVisible = FEATURES.vectors && Number.isFinite(brg);
+  let groundspeed = null;
+  if (currentIndex < pts.length - 1) { const a=pts[currentIndex]; const b=pts[currentIndex + 1]; const dist=distanceM(a,
+    b); const dtS=(b.t - a.t) / 1000; if (dtS> 0) groundspeed = dist / dtS;
+    }
+
+    const vectorVisible = FEATURES.vectors && Number.isFinite(brg);
 
 
-if (map.getLayer("heading-vector-line")) {
-  map.setLayoutProperty(
+    if (map.getLayer("heading-vector-line")) {
+    map.setLayoutProperty(
     "heading-vector-line",
     "visibility",
     vectorVisible ? "visible" : "none"
-  );
-}
+    );
+    }
 
-if (map.getLayer("flight-vector-arrow-fill")) {
-  map.setLayoutProperty(
+    if (map.getLayer("flight-vector-arrow-fill")) {
+    map.setLayoutProperty(
     "flight-vector-arrow-fill",
     "visibility",
     vectorVisible ? "visible" : "none"
-  );
-}
+    );
+    }
 
-if (vectorVisible) {
-  const headingEnd = movePoint(
+    if (vectorVisible) {
+    const headingEnd = movePoint(
     { lat: pos.lat, lng: pos.lng },
     brg,
     50
-  );
+    );
 
-  const projectedEnd = movePoint(
+    const projectedEnd = movePoint(
     { lat: pos.lat, lng: pos.lng },
     brg,
     groundspeed && groundspeed > 0
-      ? Math.max(70, Math.min(180, groundspeed * 4))
-      : 90
-  );
+    ? Math.max(70, Math.min(180, groundspeed * 4))
+    : 90
+    );
 
-  const headingVectorSrc = map.getSource("heading-vector");
-  if (headingVectorSrc) {
+    const headingVectorSrc = map.getSource("heading-vector");
+    if (headingVectorSrc) {
     headingVectorSrc.setData({
+    type: "Feature",
+    geometry: {
+    type: "LineString",
+    coordinates: [
+    [pos.lng, pos.lat],
+    [headingEnd.lng, headingEnd.lat]
+    ]
+    }
+    });
+    }
+
+    const arrowSrc = map.getSource("flight-vector-arrow");
+    if (arrowSrc) {
+    arrowSrc.setData({
+    type: "FeatureCollection",
+    features: [
+    makeArrowHead(projectedEnd, brg, 18, 28)
+    ]
+    });
+    }
+    }
+
+    if (FEATURES.vectors) {
+    vectorLabelEl.style.display = "block";
+    vectorLabel.setLngLat([pos.lng, pos.lat]);
+    vectorLabelEl.innerHTML =
+    `HDG ${Number.isFinite(brg) ? brg.toFixed(0) : "—"}° | ` +
+    `GS ${groundspeed !== null ? groundspeed.toFixed(1) : "—"} m/s | ` +
+    `VS ${vz !== null ? vz.toFixed(1) : "—"} m/s`;
+    } else {
+    vectorLabelEl.style.display = "none";
+    }
+
+    if (FEATURES.prediction && FEATURES.envelope && futurePath.length >= 2) {
+    predictiveEnvelope = buildPredictiveConflictEnvelope(futurePath, 20);
+
+    predictiveEnvelopeConflicts = findEnvelopeConflicts(
+    predictiveEnvelope,
+    airspaceGeojson
+    );
+    }
+
+    /* =========================
+    PREDICTION HORIZON
+    - limit forward prediction distance
+    - keeps replay stable at high speeds
+    ========================= */
+
+    
+    aircraft.setLngLat([pos.lng, pos.lat]);
+
+    if (playing) {
+    map.easeTo({ center: [pos.lng, pos.lat], duration: 250, easing: x => x });
+    }
+
+    const progress = (simElapsed / duration) * 100;
+
+    function getComplianceForReplayTime(replayTime, fallbackIndex = 0) {
+    if (!pointStatus || !pointStatus.length) return null;
+
+    const safeFallback =
+    pointStatus[Math.min(fallbackIndex, pointStatus.length - 1)] || null;
+
+    if (replayTime === null || replayTime === undefined || Number.isNaN(Number(replayTime))) {
+    return safeFallback;
+    }
+
+    const target = Number(replayTime);
+
+    let best = null;
+    let bestDiff = Infinity;
+
+    for (const item of pointStatus) {
+    const itemTime = Number(item?.t);
+    if (Number.isNaN(itemTime)) continue;
+
+    const diff = Math.abs(itemTime - target);
+    if (diff < bestDiff) { best=item; bestDiff=diff; } } return best || safeFallback; } function
+      isWithinVerticalBand(predictedAlt, lowerM, upperM) { if (predictedAlt===null || predictedAlt===undefined ||
+      Number.isNaN(predictedAlt)) { return null; } if (lowerM !==null && lowerM !==undefined && predictedAlt <
+      Number(lowerM)) { return false; } if (upperM !==null && upperM !==undefined && predictedAlt> Number(upperM)) {
+      return false;
+      }
+
+      return true;
+      }
+
+      function describeVerticalRelation(predictedAlt, lowerM, upperM) {
+      if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
+      return "UNKNOWN";
+      }
+      if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) { return "BELOW FLOOR" ; } if
+        (upperM !==null && upperM !==undefined && predictedAlt> Number(upperM)) {
+        return "ABOVE CEILING";
+        }
+        return "INSIDE BAND";
+        }
+
+        function predictFuturePath(
+        currentPos,
+        headingDeg,
+        groundspeed,
+        vz,
+        secondsAhead = 60,
+        stepSeconds = 1
+        ) {
+        if (!groundspeed || groundspeed <= 0) return []; const adaptiveStep=groundspeed> 50 ? 0.25 :
+          groundspeed > 25 ? 0.5 :
+          stepSeconds;
+
+          const points = [];
+
+          let pos = { lat: currentPos.lat, lng: currentPos.lng };
+          let alt = currentPos.alt ?? 0;
+
+          for (let s = adaptiveStep; s <= secondsAhead; s +=adaptiveStep) { const dist=groundspeed * adaptiveStep;
+            pos=movePoint(pos, headingDeg, dist); alt=alt + (vz || 0) * adaptiveStep; points.push({ lat: pos.lat, lng:
+            pos.lng, alt, ttb_s: s }); } return points; } function predictPathIntersection(pathPoints, zoneFeature) { if
+            (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) { return null; } let
+            best=null; for (let i=1; i < pathPoints.length; i++) { const p0=pathPoints[i - 1]; const p1=pathPoints[i];
+            const inside0=pointInPolygon(p0, zoneFeature.geometry); const inside1=pointInPolygon(p1,
+            zoneFeature.geometry); if (inside1 && !best) { best={ lng: p1.lng, lat: p1.lat, alt: p1.alt, ttb_s: p1.ttb_s
+            }; } if (!inside0 && inside1) { const frac=0.5; return { lng: p0.lng + (p1.lng - p0.lng) * frac, lat: p0.lat
+            + (p1.lat - p0.lat) * frac, alt: p0.alt + (p1.alt - p0.alt) * frac, ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s)
+            * frac }; } } return best; } function predictEarliestZoneEntry(pathPoints, airspaceGeojson) { if
+            (!airspaceGeojson?.features?.length) return null; let best=null; for (const feature of
+            airspaceGeojson.features) { const hit=predictPathIntersection(pathPoints, feature); if (!hit) continue;
+            const candidate={ zoneId: feature?.properties?.id ?? null, zoneName: feature?.properties?.name ?? "Unknown"
+            , zoneType: feature?.properties?.zone_type ?? "-" , pos: { lng: hit.lng, lat: hit.lat }, ttb_s: hit.ttb_s,
+            alt: hit.alt }; if (!best || candidate.ttb_s < best.ttb_s) { best=candidate; } } return best; } function
+            predictEarliest4DConflict(pathPoints, airspaceGeojson) { if (!airspaceGeojson?.features?.length) return
+            null; let bestConflict=null; let bestLateralOnly=null; for (const feature of airspaceGeojson.features) {
+            const hit=predictPathIntersection(pathPoints, feature); if (!hit) continue; const
+            lowerM=feature?.properties?.lower_m ?? null; const upperM=feature?.properties?.upper_m ?? null; const
+            verticalOk=isWithinVerticalBand(hit.alt, lowerM, upperM); const verticalKnown=verticalOk !==null; const
+            isConflict=verticalOk===true; const candidate={ zoneId: feature?.properties?.id ?? null, zoneName:
+            feature?.properties?.name ?? "Unknown" , zoneType: feature?.properties?.zone_type ?? "-" , pos: { lng:
+            hit.lng, lat: hit.lat }, ttb_s: hit.ttb_s, predicted_alt_m: hit.alt, lower_m: lowerM, upper_m: upperM,
+            vertical_ok: verticalOk, vertical_known: verticalKnown, conflict: isConflict }; if (isConflict) { if
+            (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) { bestConflict=candidate; } } else { if
+            (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) { bestLateralOnly=candidate; } } } return
+            bestConflict || bestLateralOnly; } function predictVerticalConflictTtb(pathPoints, zoneFeature) { if
+            (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) { return null; } const
+            lowerM=zoneFeature?.properties?.lower_m ?? null; const upperM=zoneFeature?.properties?.upper_m ?? null; for
+            (const p of pathPoints) { const verticalOk=isWithinVerticalBand(p.alt, lowerM, upperM); if
+            (verticalOk===true) { return { ttb_s: p.ttb_s, alt: p.alt, lower_m: lowerM, upper_m: upperM }; } } return
+            null; } function smoothPrediction(newPrediction) { if (!newPrediction) return lastPrediction; if
+            (!lastPrediction) { lastPrediction=newPrediction; return newPrediction; } const
+            dt=Math.abs(newPrediction.ttb_s - lastPrediction.ttb_s); if (dt < 0.5) { return lastPrediction; }
+            lastPrediction=newPrediction; return newPrediction; } function buildPredictiveConflictEnvelope(pathPoints,
+            corridorWidthM=20) { if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null; if (typeof
+            turf==="undefined" ) return null; const coords=pathPoints.map(p=> [p.lng, p.lat]);
+            const line = turf.lineString(coords);
+
+            try {
+            return turf.buffer(line, corridorWidthM, { units: "meters" });
+            } catch (e) {
+            console.warn("Failed to build predictive envelope:", e.message);
+            return null;
+            }
+            }
+
+            function findEnvelopeConflicts(envelopeFeature, airspaceGeojson) {
+            if (!envelopeFeature || !airspaceGeojson?.features?.length) return [];
+            if (typeof turf === "undefined") return [];
+
+            const conflicts = [];
+
+            for (const feature of airspaceGeojson.features) {
+            try {
+            const overlap = turf.intersect(
+            turf.featureCollection([envelopeFeature, feature])
+            );
+
+            if (overlap) {
+            conflicts.push({
+            zoneId: feature?.properties?.id ?? null,
+            zoneName: feature?.properties?.name ?? "Unknown",
+            zoneType: feature?.properties?.zone_type ?? "-",
+            feature,
+            overlap
+            });
+            }
+            } catch (e) {
+            console.warn("Envelope conflict test failed:", e.message);
+            }
+            }
+
+            return conflicts;
+            }
+
+            function ensurePredictiveEnvelopeLayers(map) {
+            if (!map.getSource("predictive-envelope")) {
+            map.addSource("predictive-envelope", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+            });
+            }
+
+            if (!map.getLayer("predictive-envelope-fill")) {
+            map.addLayer({
+            id: "predictive-envelope-fill",
+            type: "fill",
+            source: "predictive-envelope",
+            paint: {
+            "fill-color": "#ffbf00",
+            "fill-opacity": 0.16
+            }
+            });
+            }
+
+            if (!map.getLayer("predictive-envelope-outline")) {
+            map.addLayer({
+            id: "predictive-envelope-outline",
+            type: "line",
+            source: "predictive-envelope",
+            paint: {
+            "line-color": "#ffbf00",
+            "line-width": 2,
+            "line-opacity": 0.7
+            }
+            });
+            }
+
+            if (!map.getSource("predictive-envelope-conflicts")) {
+            map.addSource("predictive-envelope-conflicts", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+            });
+            }
+
+            if (!map.getLayer("predictive-envelope-conflicts-fill")) {
+            map.addLayer({
+            id: "predictive-envelope-conflicts-fill",
+            type: "fill",
+            source: "predictive-envelope-conflicts",
+            paint: {
+            "fill-color": "#ff0000",
+            "fill-opacity": 0.22
+            }
+            });
+            }
+
+            if (!map.getLayer("predictive-envelope-conflicts-outline")) {
+            map.addLayer({
+            id: "predictive-envelope-conflicts-outline",
+            type: "line",
+            source: "predictive-envelope-conflicts",
+            paint: {
+            "line-color": "#ff0000",
+            "line-width": 2,
+            "line-opacity": 0.9
+            }
+            });
+            }
+            }
+
+function loop(now) {
+  if (!window.__loopSeen) {
+    console.log("STEP 3: LOOP RUNNING");
+    window.__loopSeen = true;
+  }
+
+  if (!lastFrame) lastFrame = now;
+  const dt = now - lastFrame;
+  lastFrame = now;
+
+  if (playing) {
+    simElapsed += dt * speed;
+    if (simElapsed > duration) {
+      simElapsed = duration;
+      playing = false;
+      if (playBtn) playBtn.textContent = "Play";
+    }
+  }
+
+const t = t0 + simElapsed;
+const pos = interpolate(t);
+
+if (FEATURES.kalman) {
+  pos = kalmanLike(lastSmoothedPos || pos, pos);
+  lastSmoothedPos = pos;
+} else {
+  lastSmoothedPos = null;
+}
+
+const tFutureTrend = Math.min(t0 + duration, t + TREND_SECONDS * 1000);
+const posFuture = interpolate(tFutureTrend);
+
+ghostEl.style.display = (playing && FEATURES.trend) ? "block" : "none";
+
+if (map.getLayer("trend-line")) {
+  map.setLayoutProperty(
+    "trend-line",
+    "visibility",
+    (playing && FEATURES.trend) ? "visible" : "none"
+  );
+}
+
+if (FEATURES.trend) {
+  ghost.setLngLat([posFuture.lng, posFuture.lat]);
+  const trendSrc = map.getSource("trend");
+  if (trendSrc) {
+    trendSrc.setData({
       type: "Feature",
       geometry: {
         type: "LineString",
         coordinates: [
           [pos.lng, pos.lat],
-          [headingEnd.lng, headingEnd.lat]
+          [posFuture.lng, posFuture.lat]
         ]
       }
     });
   }
+}
 
-  const arrowSrc = map.getSource("flight-vector-arrow");
-  if (arrowSrc) {
-    arrowSrc.setData({
-      type: "FeatureCollection",
-      features: [
-        makeArrowHead(projectedEnd, brg, 18, 28)
-      ]
+// derive motion FIRST
+const prev = pts[Math.max(0, currentIndex - 1)] || pts[0];
+const curr = pts[currentIndex] || pts[0];
+const next = pts[Math.min(pts.length - 1, currentIndex + 1)] || curr;
+
+const dtTrack = Math.max(0.001, (next.t - curr.t) / 1000);
+
+const groundspeed = distanceM(
+  { lng: curr.lng, lat: curr.lat },
+  { lng: next.lng, lat: next.lat }
+) / dtTrack;
+
+const brg = bearingDeg(
+  { lng: curr.lng, lat: curr.lat },
+  { lng: next.lng, lat: next.lat }
+);
+
+const vz = ((next.alt ?? 0) - (curr.alt ?? 0)) / dtTrack;
+const brgArrow = bearingArrow(brg);
+
+
+  aircraft.setLngLat([pos.lng, pos.lat]);
+
+  if (playing) {
+    map.easeTo({
+      center: [pos.lng, pos.lat],
+      duration: 250,
+      easing: x => x
     });
   }
-}
 
-if (FEATURES.vectors) {
-  vectorLabelEl.style.display = "block";
-  vectorLabel.setLngLat([pos.lng, pos.lat]);
-  vectorLabelEl.innerHTML =
-  `HDG ${Number.isFinite(brg) ? brg.toFixed(0) : "—"}° | ` +
-  `GS ${groundspeed !== null ? groundspeed.toFixed(1) : "—"} m/s | ` +
-  `VS ${vz !== null ? vz.toFixed(1) : "—"} m/s`;
-} else {
-  vectorLabelEl.style.display = "none";
-}
+const progress = duration > 0 ? (simElapsed / duration) * 100 : 0;
 
-if (FEATURES.prediction && FEATURES.envelope && futurePath.length >= 2) {
-  predictiveEnvelope = buildPredictiveConflictEnvelope(futurePath, 20);
+  const replayTime = pts?.[currentIndex]?.t ?? t;
+  const c = getComplianceForReplayTime(replayTime, currentIndex);
 
-  predictiveEnvelopeConflicts = findEnvelopeConflicts(
-    predictiveEnvelope,
-    airspaceGeojson
+  const zone = c?.zone || null;
+  const zoneName = zone?.name || "None";
+  const zoneType = zone?.zone_type || "-";
+  const status = c?.eval_status || zone?.eval_status || "-";
+  const upperM = zone?.upper_m ?? null;
+  const lowerM = zone?.lower_m ?? null;
+
+  const altAgl = c?.alt_agl_m ?? null;
+  const altAmsl = c?.alt_amsl_m ?? pos.alt;
+  const terrainAmsl =
+    altAgl !== null && altAmsl !== null
+      ? Number(altAmsl) - Number(altAgl)
+      : null;
+
+  let margin = null;
+  let basis = "—";
+  if (upperM !== null && upperM !== undefined) {
+    if (status.includes("_AGL") && altAgl !== null && altAgl !== undefined) {
+      margin = Number(upperM) - Number(altAgl);
+      basis = "AGL";
+    } else {
+      margin = Number(upperM) - Number(altAmsl);
+      basis = "AMSL";
+    }
+  }
+
+  const predictionAltNow = basis === "AGL" ? altAgl : altAmsl;
+  const zoneSource =
+    zone?.source ||
+    zone?.source_name ||
+    zone?.authority_name ||
+    zone?.external_id ||
+    "Unknown";
+
+  const verticalRelation = describeVerticalRelation(
+    predictionAltNow,
+    lowerM,
+    upperM
   );
-}
 
-/* =========================
-   PREDICTION HORIZON
-   - limit forward prediction distance
-   - keeps replay stable at high speeds
-========================= */
-
-const predictSeconds =
+  console.log("MOTION OK", { t, groundspeed, brg, vz });
+  const predictSeconds =
   groundspeed && groundspeed > 0
     ? Math.min(MAX_PREDICT_SECONDS, MAX_PREDICT_DIST / groundspeed)
     : MAX_PREDICT_SECONDS;
@@ -1793,556 +2165,161 @@ const predictedDistanceM =
     ? Math.min(MAX_PREDICT_DIST, groundspeed * predictSeconds)
     : 0;
 
-const tFuturePredict = Math.min(
-  t0 + duration,
-  t + predictSeconds * 1000
-);
+aircraft.setLngLat([pos.lng, pos.lat]);
 
-const posFuturePredict = interpolate(tFuturePredict);
-
-    aircraft.setLngLat([pos.lng, pos.lat]);
-
-    if (playing) {
-      map.easeTo({ center: [pos.lng, pos.lat], duration: 250, easing: x => x });
-    }
-
-    const progress = (simElapsed / duration) * 100;
-
-function getComplianceForReplayTime(replayTime, fallbackIndex = 0) {
-  if (!pointStatus || !pointStatus.length) return null;
-
-  const safeFallback =
-    pointStatus[Math.min(fallbackIndex, pointStatus.length - 1)] || null;
-
-  if (replayTime === null || replayTime === undefined || Number.isNaN(Number(replayTime))) {
-    return safeFallback;
-  }
-
-  const target = Number(replayTime);
-
-  let best = null;
-  let bestDiff = Infinity;
-
-  for (const item of pointStatus) {
-    const itemTime = Number(item?.t);
-    if (Number.isNaN(itemTime)) continue;
-
-    const diff = Math.abs(itemTime - target);
-    if (diff < bestDiff) {
-      best = item;
-      bestDiff = diff;
-    }
-  }
-
-  return best || safeFallback;
-}
-
-function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
-    return null;
-  }
-
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return false;
-  }
-
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return false;
-  }
-
-  return true;
-}
-
-function describeVerticalRelation(predictedAlt, lowerM, upperM) {
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
-    return "UNKNOWN";
-  }
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return "BELOW FLOOR";
-  }
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return "ABOVE CEILING";
-  }
-  return "INSIDE BAND";
-}
-
-function predictFuturePath(
-  currentPos,
-  headingDeg,
-  groundspeed,
-  vz,
-  secondsAhead = 60,
-  stepSeconds = 1
-) {
-  if (!groundspeed || groundspeed <= 0) return [];
-
-  const adaptiveStep =
-    groundspeed > 50 ? 0.25 :
-    groundspeed > 25 ? 0.5 :
-    stepSeconds;
-
-  const points = [];
-
-  let pos = { lat: currentPos.lat, lng: currentPos.lng };
-  let alt = currentPos.alt ?? 0;
-
-  for (let s = adaptiveStep; s <= secondsAhead; s += adaptiveStep) {
-    const dist = groundspeed * adaptiveStep;
-    pos = movePoint(pos, headingDeg, dist);
-    alt = alt + (vz || 0) * adaptiveStep;
-
-    points.push({
+  const futurePath = predictFuturePath(
+    {
       lat: pos.lat,
       lng: pos.lng,
-      alt,
-      ttb_s: s
-    });
-  }
-
-  return points;
-}
-
-function predictPathIntersection(pathPoints, zoneFeature) {
-  if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) {
-    return null;
-  }
-
-  let best = null;
-
-  for (let i = 1; i < pathPoints.length; i++) {
-    const p0 = pathPoints[i - 1];
-    const p1 = pathPoints[i];
-
-    const inside0 = pointInPolygon(p0, zoneFeature.geometry);
-    const inside1 = pointInPolygon(p1, zoneFeature.geometry);
-
-    if (inside1 && !best) {
-      best = {
-        lng: p1.lng,
-        lat: p1.lat,
-        alt: p1.alt,
-        ttb_s: p1.ttb_s
-      };
-    }
-
-    if (!inside0 && inside1) {
-      const frac = 0.5;
-
-      return {
-        lng: p0.lng + (p1.lng - p0.lng) * frac,
-        lat: p0.lat + (p1.lat - p0.lat) * frac,
-        alt: p0.alt + (p1.alt - p0.alt) * frac,
-        ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * frac
-      };
-    }
-  }
-
-  return best;
-}
-
-function predictEarliestZoneEntry(pathPoints, airspaceGeojson) {
-  if (!airspaceGeojson?.features?.length) return null;
-
-  let best = null;
-
-  for (const feature of airspaceGeojson.features) {
-    const hit = predictPathIntersection(pathPoints, feature);
-    if (!hit) continue;
-
-    const candidate = {
-      zoneId: feature?.properties?.id ?? null,
-      zoneName: feature?.properties?.name ?? "Unknown",
-      zoneType: feature?.properties?.zone_type ?? "-",
-      pos: { lng: hit.lng, lat: hit.lat },
-      ttb_s: hit.ttb_s,
-      alt: hit.alt
-    };
-
-    if (!best || candidate.ttb_s < best.ttb_s) {
-      best = candidate;
-    }
-  }
-
-  return best;
-}
-
-function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
-  if (!airspaceGeojson?.features?.length) return null;
-
-  let bestConflict = null;
-  let bestLateralOnly = null;
-
-  for (const feature of airspaceGeojson.features) {
-    const hit = predictPathIntersection(pathPoints, feature);
-    if (!hit) continue;
-
-    const lowerM = feature?.properties?.lower_m ?? null;
-    const upperM = feature?.properties?.upper_m ?? null;
-
-    const verticalOk = isWithinVerticalBand(hit.alt, lowerM, upperM);
-    const verticalKnown = verticalOk !== null;
-    const isConflict = verticalOk === true;
-
-    const candidate = {
-      zoneId: feature?.properties?.id ?? null,
-      zoneName: feature?.properties?.name ?? "Unknown",
-      zoneType: feature?.properties?.zone_type ?? "-",
-      pos: { lng: hit.lng, lat: hit.lat },
-      ttb_s: hit.ttb_s,
-      predicted_alt_m: hit.alt,
-      lower_m: lowerM,
-      upper_m: upperM,
-      vertical_ok: verticalOk,
-      vertical_known: verticalKnown,
-      conflict: isConflict
-    };
-
-    if (isConflict) {
-      if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) {
-        bestConflict = candidate;
-      }
-    } else {
-      if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) {
-        bestLateralOnly = candidate;
-      }
-    }
-  }
-
-  return bestConflict || bestLateralOnly;
-}
-
-function predictVerticalConflictTtb(pathPoints, zoneFeature) {
-  if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) {
-    return null;
-  }
-
-  const lowerM = zoneFeature?.properties?.lower_m ?? null;
-  const upperM = zoneFeature?.properties?.upper_m ?? null;
-
-  for (const p of pathPoints) {
-    const verticalOk = isWithinVerticalBand(p.alt, lowerM, upperM);
-    if (verticalOk === true) {
-      return {
-        ttb_s: p.ttb_s,
-        alt: p.alt,
-        lower_m: lowerM,
-        upper_m: upperM
-      };
-    }
-  }
-
-  return null;
-}
-
-function smoothPrediction(newPrediction) {
-  if (!newPrediction) return lastPrediction;
-  if (!lastPrediction) {
-    lastPrediction = newPrediction;
-    return newPrediction;
-  }
-
-  const dt = Math.abs(newPrediction.ttb_s - lastPrediction.ttb_s);
-  if (dt < 0.5) {
-    return lastPrediction;
-  }
-
-  lastPrediction = newPrediction;
-  return newPrediction;
-}
-
-function buildPredictiveConflictEnvelope(pathPoints, corridorWidthM = 20) {
-  if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null;
-  if (typeof turf === "undefined") return null;
-
-  const coords = pathPoints.map(p => [p.lng, p.lat]);
-  const line = turf.lineString(coords);
-
-  try {
-    return turf.buffer(line, corridorWidthM, { units: "meters" });
-  } catch (e) {
-    console.warn("Failed to build predictive envelope:", e.message);
-    return null;
-  }
-}
-
-function findEnvelopeConflicts(envelopeFeature, airspaceGeojson) {
-  if (!envelopeFeature || !airspaceGeojson?.features?.length) return [];
-  if (typeof turf === "undefined") return [];
-
-  const conflicts = [];
-
-  for (const feature of airspaceGeojson.features) {
-    try {
-      const overlap = turf.intersect(
-        turf.featureCollection([envelopeFeature, feature])
-      );
-
-      if (overlap) {
-        conflicts.push({
-          zoneId: feature?.properties?.id ?? null,
-          zoneName: feature?.properties?.name ?? "Unknown",
-          zoneType: feature?.properties?.zone_type ?? "-",
-          feature,
-          overlap
-        });
-      }
-    } catch (e) {
-      console.warn("Envelope conflict test failed:", e.message);
-    }
-  }
-
-  return conflicts;
-}
-
-function ensurePredictiveEnvelopeLayers(map) {
-  if (!map.getSource("predictive-envelope")) {
-    map.addSource("predictive-envelope", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-fill",
-      type: "fill",
-      source: "predictive-envelope",
-      paint: {
-        "fill-color": "#ffbf00",
-        "fill-opacity": 0.16
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-outline",
-      type: "line",
-      source: "predictive-envelope",
-      paint: {
-        "line-color": "#ffbf00",
-        "line-width": 2,
-        "line-opacity": 0.7
-      }
-    });
-  }
-
-  if (!map.getSource("predictive-envelope-conflicts")) {
-    map.addSource("predictive-envelope-conflicts", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-fill",
-      type: "fill",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "fill-color": "#ff0000",
-        "fill-opacity": 0.22
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-outline",
-      type: "line",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "line-color": "#ff0000",
-        "line-width": 2,
-        "line-opacity": 0.9
-      }
-    });
-  }
-}
-
-
-
-const replayTime = pts?.[currentIndex]?.t ?? t;
-const c = getComplianceForReplayTime(replayTime, currentIndex);
-
-const zone = c?.zone || null;
-const zoneName = zone?.name || "None";
-const zoneType = zone?.zone_type || "-";
-const status = c?.eval_status || zone?.eval_status || "-";
-const upperM = zone?.upper_m ?? null;
-const lowerM = zone?.lower_m ?? null;
-
-const altAgl = c?.alt_agl_m ?? null;
-const altAmsl = c?.alt_amsl_m ?? pos.alt;
-const terrainAmsl =
-  altAgl !== null && altAmsl !== null
-    ? Number(altAmsl) - Number(altAgl)
-    : null;
-
-let margin = null;
-let basis = "—";
-if (upperM !== null && upperM !== undefined) {
-  if (status.includes("_AGL") && altAgl !== null && altAgl !== undefined) {
-    margin = Number(upperM) - Number(altAgl);
-    basis = "AGL";
-  } else {
-    margin = Number(upperM) - Number(altAmsl);
-    basis = "AMSL";
-  }
-}
-
-const predictionAltNow = (basis === "AGL") ? altAgl : altAmsl;
-const zoneSource =
-  zone?.source ||
-  zone?.source_name ||
-  zone?.authority_name ||
-  zone?.external_id ||
-  "Unknown";
-
-const verticalRelation = describeVerticalRelation(
-  predictionAltNow,
-  lowerM,
-  upperM
-);
-
-const futurePath = predictFuturePath(
-  {
-    lat: pos.lat,
-    lng: pos.lng,
-    alt: predictionAltNow
-  },
-  brg,
-  groundspeed,
-  vz,
-  predictSeconds,
-  1
-);
-
-let predictiveEnvelope = null;
-let predictiveEnvelopeConflicts = [];
-
-if (FEATURES.prediction && FEATURES.envelope && futurePath.length >= 2) {
-  predictiveEnvelope = buildPredictiveConflictEnvelope(futurePath, 20);
-  predictiveEnvelopeConflicts = findEnvelopeConflicts(
-    predictiveEnvelope,
-    airspaceGeojson
+      alt: predictionAltNow
+    },
+    brg,
+    groundspeed,
+    vz,
+    predictSeconds,
+    1
   );
-}
 
-if (typeof map !== "undefined" && map && map.getSource("predictive-envelope")) {
-  map.getSource("predictive-envelope").setData(
-    predictiveEnvelope || {
+  let predictiveEnvelope = null;
+  let predictiveEnvelopeConflicts = [];
+
+  if (FEATURES.prediction && FEATURES.envelope && futurePath.length >= 2) {
+    predictiveEnvelope = buildPredictiveConflictEnvelope(futurePath, 20);
+    predictiveEnvelopeConflicts = findEnvelopeConflicts(
+      predictiveEnvelope,
+      airspaceGeojson
+    );
+  }
+
+  if (map.getSource("predictive-envelope")) {
+    map.getSource("predictive-envelope").setData(
+      predictiveEnvelope || {
+        type: "FeatureCollection",
+        features: []
+      }
+    );
+  }
+
+  if (map.getSource("predictive-envelope-conflicts")) {
+    map.getSource("predictive-envelope-conflicts").setData({
       type: "FeatureCollection",
-      features: []
-    }
-  );
-}
-
-if (typeof map !== "undefined" && map && map.getSource("predictive-envelope-conflicts")) {
-  map.getSource("predictive-envelope-conflicts").setData({
-    type: "FeatureCollection",
-    features: predictiveEnvelopeConflicts.map(c => c.overlap)
-  });
-}
-
-const earliestEntry = predictEarliestZoneEntry(
-  futurePath,
-  airspaceGeojson
-);
-
-const earliest4D = smoothPrediction(
-  predictEarliest4DConflict(futurePath, airspaceGeojson)
-);
-
-let boundaryPrediction = null;
-if (earliestEntry) {
-  boundaryPrediction = {
-    zoneId: earliestEntry.zoneId,
-    zoneName: earliestEntry.zoneName,
-    zoneType: earliestEntry.zoneType,
-    pos: earliestEntry.pos,
-    distance_m: distanceM(pos, earliestEntry.pos),
-    ttb_s: earliestEntry.ttb_s
-  };
-}
-
-const conflict4D = earliest4D;
-
-let verticalTtb = null;
-if (earliest4D?.zoneId && airspaceGeojson?.features?.length) {
-  const z = airspaceGeojson.features.find(
-    f => (f?.properties?.id ?? null) === earliest4D.zoneId
-  );
-  if (z) {
-    verticalTtb = predictVerticalConflictTtb(futurePath, z);
+      features: predictiveEnvelopeConflicts.map(c => c.overlap)
+    });
   }
-}
 
-const boundaryTtb = boundaryPrediction?.ttb_s ?? null;
-const conflictTtb = conflict4D?.conflict ? conflict4D.ttb_s : null;
-const verticalConflictTtb = verticalTtb?.ttb_s ?? null;
-const envelopeConflictCount = predictiveEnvelopeConflicts.length;
-const envelopeActive = !!predictiveEnvelope;
-   
-    let warnText = "";
-    let warnClass = "";
-    let warnShow = false;
+  const earliestEntry = predictEarliestZoneEntry(futurePath, airspaceGeojson);
+  const earliest4D = smoothPrediction(
+    predictEarliest4DConflict(futurePath, airspaceGeojson)
+  );
 
-    if (FEATURES.prediction && margin !== null && !Number.isNaN(margin)) {
-      if (margin < 0) {
-        warnShow = true;
-        warnClass = "risk-breach";
-        warnText = "BREACH — IMMEDIATE ACTION";
-      } else if (ttb !== null && ttb <= 30) {
-        warnShow = true;
-        warnClass = "risk-warning";
-        warnText = `PREDICTED BREACH IN ${Math.round(ttb)}s`;
-      } else if (conflict4D?.conflict) {
-        warnShow = true;
-        warnClass = "risk-warning";
-        warnText = `4D CONFLICT IN ${Math.round(conflict4D.ttb_s)}s (${conflict4D.zoneName})`;
-      } else if (conflict4D && conflict4D.vertical_known === false) {
-        warnShow = true;
-        warnClass = "risk-caution";
-        warnText = `BOUNDARY ENTRY IN ${Math.round(conflict4D.ttb_s)}s — VERTICAL UNKNOWN (${conflict4D.zoneName})`;
-      } else if (boundaryPrediction) {
-        warnShow = true;
-        warnClass = "risk-caution";
-        warnText = `TRACK ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s (${boundaryPrediction.zoneName})`;
-      } else if (conflict4D && conflict4D.vertical_known === false) {
-        warnShow = true;
-        warnClass = "risk-caution";
-        warnText = `BOUNDARY ENTRY IN ${Math.round(conflict4D.ttb_s)}s — VERTICAL UNKNOWN (${conflict4D.zoneName})`;
-      } else if (boundaryPrediction) { 
-      } else if (margin <= 20) {
-        warnShow = true;
-        warnClass = "risk-warning";
-        warnText = "WARNING — LOW MARGIN";
-      } else if (margin <= 50) {
-        warnShow = true;
-        warnClass = "risk-caution";
-        warnText = "CAUTION — MARGIN REDUCING";
-      }
+  let boundaryPrediction = null;
+  if (earliestEntry) {
+    boundaryPrediction = {
+      zoneId: earliestEntry.zoneId,
+      zoneName: earliestEntry.zoneName,
+      zoneType: earliestEntry.zoneType,
+      pos: earliestEntry.pos,
+      distance_m: distanceM(pos, earliestEntry.pos),
+      ttb_s: earliestEntry.ttb_s
+    };
+  }
+
+  const conflict4D = earliest4D;
+
+  let verticalTtb = null;
+  if (earliest4D?.zoneId && airspaceGeojson?.features?.length) {
+    const z = airspaceGeojson.features.find(
+      f => (f?.properties?.id ?? null) === earliest4D.zoneId
+    );
+    if (z) {
+      verticalTtb = predictVerticalConflictTtb(futurePath, z);
     }
+  }
 
-    if (FEATURES.prediction && ttb !== null && ttb > 0 && ttb <= 120) {
-      const tBreach = Math.min(t0 + duration, t + ttb * 1000);
-      const posBreach = interpolate(tBreach);
-      breachMarker.setLngLat([posBreach.lng, posBreach.lat]);
-      breachEl.style.display = "block";
+  const boundaryTtb = boundaryPrediction?.ttb_s ?? null;
+  const conflictTtb = conflict4D?.conflict ? conflict4D.ttb_s : null;
+  const verticalConflictTtb = verticalTtb?.ttb_s ?? null;
+  const envelopeConflictCount = predictiveEnvelopeConflicts.length;
+  const envelopeActive = !!predictiveEnvelope;
+
+  aircraftEl.style.background =
+    c?.breach_unknown ? "#ffbf00" :
+    c?.breach ? "#ff0000" :
+    c ? "#00ff00" :
+    "#0057ff";
+
+  const breachText =
+    c?.breach_unknown ? "UNKNOWN" :
+    c?.breach ? "BREACH" :
+    "OK";
+
+  const breachColor =
+    c?.breach_unknown ? "#bbbbbb" :
+    c?.breach ? "#ff0000" :
+    "#00ff00";
+
+  const riskInfo = calculateRisk(margin);
+
+  const marginPct =
+    margin === null || margin === undefined || Number.isNaN(margin)
+      ? 0
+      : margin < 0
+        ? 100
+        : marginToPct(margin);
+
+  const ttb = predictTtb(margin, vz);
+
+  let warnText = "";
+  let warnClass = "";
+  let warnShow = false;
+
+  if (FEATURES.prediction && margin !== null && !Number.isNaN(margin)) {
+    if (margin < 0) {
+      warnShow = true;
+      warnClass = "risk-breach";
+      warnText = "BREACH — IMMEDIATE ACTION";
+    } else if (ttb !== null && ttb <= 30) {
+      warnShow = true;
+      warnClass = "risk-warning";
+      warnText = `PREDICTED BREACH IN ${Math.round(ttb)}s`;
+    } else if (conflict4D?.conflict) {
+      warnShow = true;
+      warnClass = "risk-warning";
+      warnText = `4D CONFLICT IN ${Math.round(conflict4D.ttb_s)}s (${conflict4D.zoneName})`;
+    } else if (conflict4D && conflict4D.vertical_known === false) {
+      warnShow = true;
+      warnClass = "risk-caution";
+      warnText = `BOUNDARY ENTRY IN ${Math.round(conflict4D.ttb_s)}s — VERTICAL UNKNOWN (${conflict4D.zoneName})`;
+    } else if (boundaryPrediction) {
+      warnShow = true;
+      warnClass = "risk-caution";
+      warnText = `TRACK ENTRY IN ${Math.round(boundaryPrediction.ttb_s)}s (${boundaryPrediction.zoneName})`;
+    } else if (margin <= 20) {
+      warnShow = true;
+      warnClass = "risk-warning";
+      warnText = "WARNING — LOW MARGIN";
+    } else if (margin <= 50) {
+      warnShow = true;
+      warnClass = "risk-caution";
+      warnText = "CAUTION — MARGIN REDUCING";
+    }
+  }
+
+  if (FEATURES.prediction && ttb !== null && ttb > 0 && ttb <= 120) {
+    const tBreach = Math.min(t0 + duration, t + ttb * 1000);
+    const posBreach = interpolate(tBreach);
+    breachMarker.setLngLat([posBreach.lng, posBreach.lat]);
+    breachEl.style.display = "block";
+  } else {
+    breachEl.style.display = "none";
+  }
+
+  if (FEATURES.prediction && (conflict4D?.conflict || boundaryPrediction)) {
+    const p = conflict4D?.conflict ? conflict4D.pos : boundaryPrediction?.pos;
+
+    if (!p) {
+      entryEl.style.display = "none";
     } else {
-      breachEl.style.display = "none";
-    }
-
-    if (FEATURES.prediction && (conflict4D?.conflict || boundaryPrediction)) {
-
-      const p = conflict4D?.conflict ? conflict4D.pos : boundaryPrediction?.pos;
-
-      if (!p) {
-        entryEl.style.display = "none";
-        return;
-      }
-
       entryMarker.setLngLat([p.lng, p.lat]);
       entryEl.style.display = "block";
 
@@ -2353,29 +2330,22 @@ const envelopeActive = !!predictiveEnvelope;
         entryEl.style.border = "3px solid #ffbf00";
         entryEl.style.background = "rgba(255,191,0,0.18)";
       }
-
-    } else {
-      entryEl.style.display = "none";
     }
+  } else {
+    entryEl.style.display = "none";
+  }
 
-    if (map.getLayer("airspace-3d")) {
-      map.setLayoutProperty("airspace-3d", "visibility", FEATURES.cone ? "visible" : "none");
-    }
+  if (map.getLayer("airspace-3d")) {
+    map.setLayoutProperty(
+      "airspace-3d",
+      "visibility",
+      FEATURES.cone ? "visible" : "none"
+    );
+  }
 
-    console.log("HUD EL", hud);
+  if (hud) {
 
-    console.log("HUD DATA", {
-      zoneName,
-      zoneType,
-      status,
-      basis,
-      upperM,
-      lowerM,
-      margin,
-      progress
-    });
-
-     
+    console.log("HUD REACHED");
     hud.innerHTML = `
       <div class="hud-header">
         <div class="hud-title">MISSION CONTROL</div>
@@ -2388,12 +2358,6 @@ const envelopeActive = !!predictiveEnvelope;
         <div class="hud-k">TIME</div><div class="hud-v">${new Date(t).toLocaleTimeString()}</div>
         <div class="hud-k">LAT</div><div class="hud-v">${pos.lat.toFixed(5)}</div>
         <div class="hud-k">LON</div><div class="hud-v">${pos.lng.toFixed(5)}</div>
-        <div class="hud-k">TRND</div>
-        <div class="hud-v">
-          ${FEATURES.trend
-            ? `<span class="trend-chip"><span class="trend-arrow">${brgArrow}</span> BRG ${brg.toFixed(0)}°  +${TREND_SECONDS}s</span>`
-            : "OFF"}
-        </div>
         <div class="hud-k">ALT AMSL</div><div class="hud-v">${fmtM(altAmsl)}</div>
         <div class="hud-k">ALT AGL</div><div class="hud-v">${fmtM(altAgl)}</div>
         <div class="hud-k">TERRAIN</div><div class="hud-v">${fmtM(terrainAmsl)}</div>
@@ -2422,98 +2386,45 @@ const envelopeActive = !!predictiveEnvelope;
         <div class="hud-k">PRED DIST</div><div class="hud-v">${predictedDistanceM.toFixed(1)} m</div>
         <div class="hud-k">ENVELOPE</div><div class="hud-v">${envelopeActive ? "ON" : "OFF"}</div>
         <div class="hud-k">ENV CONFLICTS</div><div class="hud-v">${envelopeConflictCount}</div>
-        <div class="hud-k">BND</div>
-        <div class="hud-v">
-          ${zone?.boundary_distance_m === null || zone?.boundary_distance_m === undefined
-            ? "—"
-            : `${Number(zone.boundary_distance_m).toFixed(1)} m`}
-        </div>
-
-        <div class="hud-k">IN/OUT</div>
-        <div class="hud-v" style="color:${zone?.inside_zone === true ? '#ffbf00' : '#e8eefc'}">
-          ${zone?.inside_zone === true ? "INSIDE" : zone?.inside_zone === false ? "OUTSIDE" : "—"}
-        </div>
-
-        <div class="hud-k">HTB</div>
-        <div class="hud-v">
-          ${boundaryPrediction ? `${Math.round(boundaryPrediction.ttb_s)} s` : "—"}
-        </div>
-        <div><strong>Pred Horizon:</strong> ${predictSeconds.toFixed(1)} s</div>
-        <div><strong>Pred Dist:</strong> ${predictedDistanceM.toFixed(1)} m</div>
-        <div class="hud-k">ENTRY DIST</div>
-        <div class="hud-v">
-           ${boundaryPrediction ? `${boundaryPrediction.distance_m.toFixed(1)} m` : "—"}
-        </div>
-
-        <div class="hud-k">TRACK</div>
-        <div class="hud-v" style="color:${conflict4D?.conflict ? '#ff0000' : boundaryPrediction ? '#ffbf00' : '#e8eefc'}">
-          ${conflict4D?.conflict
-            ? `${conflict4D.zoneName} IN ${Math.round(conflict4D.ttb_s)}s`
-            : boundaryPrediction
-              ? `${boundaryPrediction.zoneName} IN ${Math.round(boundaryPrediction.ttb_s)}s`
-              : "CLEAR"}
-        </div>
-
-        <div class="hud-k">4D ALT</div>
-        <div class="hud-v">
-          ${conflict4D?.predicted_alt_m !== null && conflict4D?.predicted_alt_m !== undefined
-            ? `${conflict4D.predicted_alt_m.toFixed(1)} m`
-            : "—"}
-        </div>
-
-        <div class="hud-k">4D CONFLICT</div>
-        <div class="hud-v" style="color:${conflict4D?.conflict ? '#ff0000' : '#e8eefc'}">
-          ${conflict4D?.conflict ? "YES" : "NO"}
-        </div>
-
-        <div class="hud-k">TTB</div><div class="hud-v">${FEATURES.prediction && ttb !== null ? `${Math.max(0, Math.round(ttb))} s` : "—"}</div>
         <div class="hud-k">RESULT</div><div class="hud-v" style="color:${breachColor}">${breachText}</div>
-
-        <div class="riskbar">
-          <div class="riskbar-fill ${riskInfo.cls} ${margin < 0 ? "breach-flash" : ""}"
-               style="width:${marginPct}%"></div>
-          <div class="riskbar-tick tick20"></div>
-          <div class="riskbar-tick tick50"></div>
-          <div class="riskbar-label label20">20m</div>
-          <div class="riskbar-label label50">50m</div>
-        </div>
       </div>
 
       <div class="warnstrip ${warnShow ? "show" : ""} ${warnClass}">
         ${warnText}
       </div>
     `;
-
-    slider.value = simElapsed / duration;
-    requestAnimationFrame(loop);
   }
 
-   /* =========================
-     FINAL UI EVENT HANDLERS
-     - play/pause
-     - slider scrub
-     - replay speed
-     - feature menu open/close
-  ========================= */
+  if (slider) {
+    slider.value = simElapsed / duration;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+if (playBtn) {
+  playBtn.onclick = () => {
+    playing = !playing;
+    playBtn.textContent = playing ? "Pause" : "Play";
+    if (playing) {
+      lastFrame = null;
+      requestAnimationFrame(loop);
+    }
+  };
+}
 
 if (slider) {
   slider.oninput = (e) => {
-    simElapsed = e.target.value * duration;
+    simElapsed = Number(e.target.value) * duration;
     currentIndex = 0;
     lastSmoothedPos = null;
   };
-} else {
-  console.warn("Slider not found in DOM");
 }
 
-const speedSelEl = document.getElementById("speed");
-
-if (speedSelEl) {
-  speedSelEl.onchange = () => {
-    speed = Number(speedSelEl.value) || 1;
+if (speedSel) {
+  speedSel.onchange = () => {
+    speed = Number(speedSel.value) || 1;
   };
-} else {
-  console.warn("Speed selector not found in DOM");
 }
 
 const featureToggleBtn = document.getElementById("feature-toggle");
@@ -2525,6 +2436,9 @@ if (featureToggleBtn) {
     }
   };
 }
+
+})();
 </script>
 </body>
+
 </html>
