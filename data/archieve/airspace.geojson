@@ -6,8 +6,8 @@
       "properties": {
         "name": "Bristol Test Restricted Zone",
         "class": "RESTRICTED",
-        "lower_m": 120,
-        "upper_m": 500
+        "lower_m": 0,
+        "upper_m": 120
       },
       "geometry": {
         "type": "Polygon",
