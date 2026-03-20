@@ -301,7 +301,6 @@
       const zoomAirspaceBtn = document.getElementById("zoomAirspace");
       const zoomBothBtn = document.getElementById("zoomBoth");
 
-      
       const FEATURES = {
         trend: true,
         prediction: true,
@@ -316,12 +315,14 @@
       let simElapsed = 0;
       let lastFrame = null;
       let currentIndex = 0;
+
       let flightBounds = null;
       let airspaceBounds = null;
       let airspaceGeojson = null;
+
       let lastSmoothedPos = null;
       let lastPrediction = null;
-      
+
       let lastRiskLabel = null;
       let lastRiskTransitionTs = null;
       let smoothedRiskScore = 0;
@@ -338,26 +339,6 @@
       let pendingAdvisoryTs = 0;
       let pendingAdvisory = null;
       let lastStableAdvisoryTs = 0;
-
-      let eventSeq = 0;
-
-    const flightEventLog = [];
-
-      let lastEventState = {
-        riskLabel: null,
-        advisoryKey: null,
-        boundaryActive: false,
-        conflict4DActive: false,
-        envelopeActive: false,
-        ttbBands: {
-          le20: false,
-          le10: false,
-          le5: false,
-          le2: false
-        }
-      };
-
-window.flightEventLog = flightEventLog;
 
       function bindToggle(id, key) {
         const el = document.getElementById(id);
@@ -1855,199 +1836,6 @@ if (effectiveTtb != null) {
         };
       }
 
-      function nextEventId() {
-  eventSeq += 1;
-  return `evt_${String(eventSeq).padStart(6, "0")}`;
-}
-
-function pushFlightEvent({
-  event_type,
-  source,
-  severity = null,
-  value = {},
-  context = {},
-  replayIso,
-  simTimeMs
-}) {
-  flightEventLog.push({
-    id: nextEventId(),
-    flight_id,
-    sim_time_ms: Math.round(simTimeMs),
-    replay_ts: replayIso,
-    event_type,
-    source,
-    severity,
-    value,
-    context
-  });
-}
-
-function buildEventContext({
-  zoneName,
-  zoneType,
-  ttb,
-  boundaryPrediction,
-  conflict4D,
-  margin,
-  verticalRelation,
-  advisory
-}) {
-  return {
-    zone_name: zoneName,
-    zone_type: zoneType,
-    ttb_s: ttb ?? null,
-    boundary_ttb_s: boundaryPrediction?.ttb_s ?? null,
-    conflict_ttb_s: conflict4D?.ttb_s ?? null,
-    margin_m: margin ?? null,
-    vertical_relation: verticalRelation ?? null,
-    advisory: advisory?.text ?? null
-  };
-}
-
-
-
-function logFlightEvents({
-  replayIso,
-  simTimeMs,
-  riskLabel,
-  riskScore,
-  advisory,
-  ttb,
-  boundaryPrediction,
-  conflict4D,
-  envelopeConflictCount,
-  zoneName,
-  zoneType,
-  margin,
-  verticalRelation
-}) {
-  const advisoryKey = advisory
-    ? `${advisory.level}|${advisory.text}`
-    : "INFO|NO ACTION REQUIRED";
-
-  const context = buildEventContext({
-    zoneName,
-    zoneType,
-    ttb,
-    boundaryPrediction,
-    conflict4D,
-    margin,
-    verticalRelation,
-    advisory
-  });
-
-  if (lastEventState.riskLabel !== riskLabel) {
-    pushFlightEvent({
-      event_type: "risk_transition",
-      source: "risk",
-      severity: riskLabel,
-      value: {
-        from: lastEventState.riskLabel,
-        to: riskLabel,
-        score: riskScore
-      },
-      context,
-      replayIso,
-      simTimeMs
-    });
-    lastEventState.riskLabel = riskLabel;
-  }
-
-  if (lastEventState.advisoryKey !== advisoryKey) {
-    pushFlightEvent({
-      event_type: "advisory_transition",
-      source: "advisory",
-      severity: advisory?.level ?? "INFO",
-      value: {
-        from: lastEventState.advisoryKey,
-        to: advisoryKey
-      },
-      context,
-      replayIso,
-      simTimeMs
-    });
-    lastEventState.advisoryKey = advisoryKey;
-  }
-
-  const boundaryActive = !!boundaryPrediction;
-  if (!lastEventState.boundaryActive && boundaryActive) {
-    pushFlightEvent({
-      event_type: "boundary_prediction_started",
-      source: "prediction",
-      severity: "CAUTION",
-      value: {
-        zone_name: boundaryPrediction?.zoneName ?? null,
-        ttb_s: boundaryPrediction?.ttb_s ?? null
-      },
-      context,
-      replayIso,
-      simTimeMs
-    });
-  }
-  lastEventState.boundaryActive = boundaryActive;
-
-  const conflict4DActive = !!conflict4D?.conflict;
-  if (!lastEventState.conflict4DActive && conflict4DActive) {
-    pushFlightEvent({
-      event_type: "conflict_4d_started",
-      source: "prediction",
-      severity: "WARNING",
-      value: {
-        zone_name: conflict4D?.zoneName ?? null,
-        ttb_s: conflict4D?.ttb_s ?? null
-      },
-      context,
-      replayIso,
-      simTimeMs
-    });
-  }
-  lastEventState.conflict4DActive = conflict4DActive;
-
-  const envelopeActive = (envelopeConflictCount || 0) > 0;
-  if (!lastEventState.envelopeActive && envelopeActive) {
-    pushFlightEvent({
-      event_type: "envelope_conflict_started",
-      source: "prediction",
-      severity: "CAUTION",
-      value: {
-        count: envelopeConflictCount
-      },
-      context,
-      replayIso,
-      simTimeMs
-    });
-  }
-  lastEventState.envelopeActive = envelopeActive;
-
-  const bands = {
-    le20: ttb != null && ttb <= 20,
-    le10: ttb != null && ttb <= 10,
-    le5: ttb != null && ttb <= 5,
-    le2: ttb != null && ttb <= 2
-  };
-
-  for (const key of ["le20", "le10", "le5", "le2"]) {
-    if (!lastEventState.ttbBands[key] && bands[key]) {
-      pushFlightEvent({
-        event_type: "prediction_threshold_crossed",
-        source: "prediction",
-        severity:
-          key === "le2" ? "CRITICAL" :
-          key === "le5" ? "WARNING" :
-          "CAUTION",
-        value: {
-          threshold: key,
-          ttb_s: ttb
-        },
-        context,
-        replayIso,
-        simTimeMs
-      });
-    }
-    lastEventState.ttbBands[key] = bands[key];
-  }
-}
-
       const map = new maplibregl.Map({
         container: "map",
         style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_KEY}`,
@@ -2199,54 +1987,53 @@ function logFlightEvents({
         requestAnimationFrame(loop);
       });
 
-    function loop(now) {
-  if (lastFrame === null) lastFrame = now;
-  const dt = now - lastFrame;
-  lastFrame = now;
+      function loop(now) {
+        if (!lastFrame) lastFrame = now;
+        const dt = now - lastFrame;
+        lastFrame = now;
 
-  if (playing) {
-    simElapsed += dt * speed;
-    if (simElapsed > duration) {
-      simElapsed = duration;
-      playing = false;
-      playBtn.textContent = "Play";
-    }
-  }
+        if (playing) {
+          simElapsed += dt * speed;
+          if (simElapsed > duration) {
+            simElapsed = duration;
+            playing = false;
+            playBtn.textContent = "Play";
+          }
+        }
 
-  const t = t0 + simElapsed;
-  let pos = interpolate(t);
+        const t = t0 + simElapsed;
+        let pos = interpolate(t);
 
-  if (FEATURES.kalman) {
-    pos = kalmanLike(lastSmoothedPos || pos, pos);
-    lastSmoothedPos = pos;
-  } else {
-    lastSmoothedPos = null;
-  }
+        if (FEATURES.kalman) {
+          pos = kalmanLike(lastSmoothedPos || pos, pos);
+          lastSmoothedPos = pos;
+        } else {
+          lastSmoothedPos = null;
+        }
 
-  aircraft.setLngLat([pos.lng, pos.lat]);
+        aircraft.setLngLat([pos.lng, pos.lat]);
 
-  if (playing) {
-    map.easeTo({ center: [pos.lng, pos.lat], duration: 250, easing: (x) => x });
-  }
+        if (playing) {
+          map.easeTo({ center: [pos.lng, pos.lat], duration: 250, easing: (x) => x });
+        }
 
-  const progress = duration > 0 ? (simElapsed / duration) * 100 : 0;
+        const progress = duration > 0 ? (simElapsed / duration) * 100 : 0;
 
-  const replayTime = pts?.[currentIndex]?.t ?? t;
-  const curr = pts[currentIndex] || pts[0];
-  const next = pts[Math.min(pts.length - 1, currentIndex + 1)] || curr;
+        const replayTime = pts?.[currentIndex]?.t ?? t;
+        const curr = pts[currentIndex] || pts[0];
+        const next = pts[Math.min(pts.length - 1, currentIndex + 1)] || curr;
 
-  const dtTrack = Math.max(0.001, (next.t - curr.t) / 1000);
-  const groundspeed = distanceM(
-    { lng: curr.lng, lat: curr.lat },
-    { lng: next.lng, lat: next.lat }
-  ) / dtTrack;
-  const brg = bearingDeg(
-    { lng: curr.lng, lat: curr.lat },
-    { lng: next.lng, lat: next.lat }
-  );
-  const vz = ((next.alt ?? 0) - (curr.alt ?? 0)) / dtTrack;
+        const dtTrack = Math.max(0.001, (next.t - curr.t) / 1000);
+        const groundspeed = distanceM(
+          { lng: curr.lng, lat: curr.lat },
+          { lng: next.lng, lat: next.lat }
+        ) / dtTrack;
+        const brg = bearingDeg(
+          { lng: curr.lng, lat: curr.lat },
+          { lng: next.lng, lat: next.lat }
+        );
+        const vz = ((next.alt ?? 0) - (curr.alt ?? 0)) / dtTrack;
 
-  
         const tFutureTrend = Math.min(t0 + duration, t + TREND_SECONDS * 1000);
         const posFuture = interpolate(tFutureTrend);
 
@@ -2431,7 +2218,7 @@ function logFlightEvents({
           vz
         });
 
-      smoothedRiskScore = smoothValue(smoothedRiskScore, rawRiskScore, 0.25);
+        smoothedRiskScore = smoothValue(smoothedRiskScore, rawRiskScore, 0.25);
 
         const displayRiskScore = Math.round(smoothedRiskScore);
         const displayRiskInfo = computeRiskLevel(displayRiskScore);
@@ -2478,8 +2265,6 @@ function logFlightEvents({
           { holdMs: 1500, candidateDwellMs: 700 }
         );
 
-  
-
         const actionText = stableAdvisory?.actionChoice
           ? [stableAdvisory.actionChoice.primary, stableAdvisory.actionChoice.secondary]
               .filter(Boolean)
@@ -2505,23 +2290,7 @@ function logFlightEvents({
         const envelopeConflictCount = predictiveEnvelopeConflicts.length;
         const envelopeActive = !!predictiveEnvelope;
 
-                    logFlightEvents({
-  replayIso: new Date(t).toISOString(),
-  simTimeMs: simElapsed,
-  riskLabel: displayRiskInfo.label,
-  riskScore: displayRiskScore,
-  advisory: stableAdvisory,
-  ttb,
-  boundaryPrediction,
-  conflict4D,
-  envelopeConflictCount,
-  zoneName,
-  zoneType,
-  margin,
-  verticalRelation
-});
-
-         aircraftEl.style.background =
+        aircraftEl.style.background =
           c?.breach_unknown ? "#ffbf00" :
           c?.breach ? "#ff0000" :
           c ? "#00ff00" : "#0057ff";
@@ -2687,31 +2456,6 @@ function logFlightEvents({
             ${warnText}
           </div>
         `;
-
-        window._fsmsDebug = {
-  simElapsed,
-  t,
-  playing,
-  currentIndex,
-  risk: displayRiskInfo?.label ?? null,
-  advisory: stableAdvisory?.text ?? null
-};
-
-if (
-  playing &&
-  (!window._lastDebugEventMs || simElapsed - window._lastDebugEventMs >= 3000)
-) {
-  pushFlightEvent({
-    event_type: "debug_tick",
-    source: "debug",
-    severity: "INFO",
-    value: { sim_time_ms: Math.round(simElapsed) },
-    context: {},
-    replayIso: new Date(t).toISOString(),
-    simTimeMs: simElapsed
-  });
-  window._lastDebugEventMs = simElapsed;
-}
 
         if (slider) slider.value = duration > 0 ? simElapsed / duration : 0;
         requestAnimationFrame(loop);

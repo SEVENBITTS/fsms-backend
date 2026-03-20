@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>FSMS Flight Replay</title>
-
-  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
   <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
 
   <style>
@@ -35,7 +34,7 @@
     #speed-container { bottom: 140px; }
     #zoom-container { bottom: 190px; }
 
-    input[type=range] {
+    input[type="range"] {
       width: 320px;
     }
 
@@ -49,7 +48,8 @@
       border-radius: 12px;
       font-family: ui-monospace, Menlo, Consolas, monospace;
       font-size: 12px;
-      min-width: 330px;
+      min-width: 360px;
+      max-width: 440px;
       z-index: 30;
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
@@ -77,7 +77,7 @@
 
     .hud-grid {
       display: grid;
-      grid-template-columns: 90px 1fr;
+      grid-template-columns: 100px 1fr;
       gap: 6px 10px;
     }
 
@@ -90,11 +90,9 @@
       margin: 10px 0;
     }
 
-    .risk-safe { color: #00ff00; }
     .risk-caution { color: #eab308; }
     .risk-warning { color: #f97316; }
     .risk-breach { color: #ef4444; }
-    .risk-unknown { color: #bbbbbb; }
     .risk-ok { color: #22c55e; font-weight: 700; }
 
     .risk-bar-wrap {
@@ -102,8 +100,8 @@
       height: 10px;
       border-radius: 999px;
       overflow: hidden;
-      background: rgba(255,255,255,0.12);
-      margin: 6px 0 10px 0;
+      background: rgba(255, 255, 255, 0.12);
+      margin: 8px 0 10px 0;
     }
 
     .risk-bar-fill {
@@ -266,19 +264,19 @@
   <div id="feature-menu">
     <button id="feature-toggle">⚙ Features</button>
     <div id="feature-panel">
-      <label><input type="checkbox" id="toggleTrend" checked> Trend Vector</label>
-      <label><input type="checkbox" id="togglePrediction" checked> Breach Predictor</label>
-      <label><input type="checkbox" id="toggleEnvelope"> Predictive Envelope</label>
-      <label><input type="checkbox" id="toggleCone"> 3D Zones</label>
-      <label><input type="checkbox" id="toggleKalman"> Smooth Track</label>
-      <label><input type="checkbox" id="toggleVectors"> Heading / Speed Overlay</label>
+      <label><input type="checkbox" id="toggleTrend" checked /> Trend Vector</label>
+      <label><input type="checkbox" id="togglePrediction" checked /> Breach Predictor</label>
+      <label><input type="checkbox" id="toggleEnvelope" /> Predictive Envelope</label>
+      <label><input type="checkbox" id="toggleCone" /> 3D Zones</label>
+      <label><input type="checkbox" id="toggleKalman" /> Smooth Track</label>
+      <label><input type="checkbox" id="toggleVectors" /> Heading / Speed Overlay</label>
 
-      <hr>
+      <hr />
       <div><b>Airspace Filters</b></div>
-      <label><input type="checkbox" class="zone-filter" value="controlled" checked> Controlled</label>
-      <label><input type="checkbox" class="zone-filter" value="restricted" checked> Restricted</label>
-      <label><input type="checkbox" class="zone-filter" value="prohibited" checked> Prohibited</label>
-      <label><input type="checkbox" class="zone-filter" value="danger" checked> Danger</label>
+      <label><input type="checkbox" class="zone-filter" value="controlled" checked /> Controlled</label>
+      <label><input type="checkbox" class="zone-filter" value="restricted" checked /> Restricted</label>
+      <label><input type="checkbox" class="zone-filter" value="prohibited" checked /> Prohibited</label>
+      <label><input type="checkbox" class="zone-filter" value="danger" checked /> Danger</label>
     </div>
   </div>
 
@@ -321,20 +319,36 @@
       let simElapsed = 0;
       let lastFrame = null;
       let currentIndex = 0;
+
       let flightBounds = null;
       let airspaceBounds = null;
       let airspaceGeojson = null;
+
       let lastSmoothedPos = null;
       let lastPrediction = null;
 
       let lastRiskLabel = null;
       let lastRiskTransitionTs = null;
+      let smoothedRiskScore = 0;
+      let lastDisplayedRiskScore = 0;
+
+      let lastStableAdvisory = {
+        level: "INFO",
+        text: "NO ACTION REQUIRED",
+        cls: "risk-ok",
+        actionChoice: null,
+        priorityScore: 0
+      };
+
+      let pendingAdvisoryTs = 0;
+      let pendingAdvisory = null;
+      let lastStableAdvisoryTs = 0;
 
       function bindToggle(id, key) {
         const el = document.getElementById(id);
         if (!el) return;
         FEATURES[key] = !!el.checked;
-        el.addEventListener("change", e => {
+        el.addEventListener("change", (e) => {
           FEATURES[key] = e.target.checked;
         });
       }
@@ -378,21 +392,31 @@
       }
 
       function bearingDeg(a, b) {
-        const toRad = d => d * Math.PI / 180;
-        const toDeg = r => r * 180 / Math.PI;
-        const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+        const toRad = (d) => d * Math.PI / 180;
+        const toDeg = (r) => r * 180 / Math.PI;
+        const lat1 = toRad(a.lat);
+        const lat2 = toRad(b.lat);
         const dLon = toRad(b.lng - a.lng);
         const y = Math.sin(dLon) * Math.cos(lat2);
         const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
         let brng = toDeg(Math.atan2(y, x));
-        brng = (brng + 360) % 360;
-        return brng;
+        return (brng + 360) % 360;
       }
 
-      function bearingArrow(deg) {
-        const dirs = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
-        const idx = Math.round(deg / 45) % 8;
-        return dirs[idx];
+      function normalizeAngle180(deg) {
+        return ((deg + 180) % 360 + 360) % 360 - 180;
+      }
+
+      function computeTurnBias({ brg, zoneBearing }) {
+        if (!Number.isFinite(brg) || !Number.isFinite(zoneBearing)) {
+          return { turn: "NONE", delta: null };
+        }
+
+        const delta = normalizeAngle180(zoneBearing - brg);
+
+        if (delta > 5) return { turn: "LEFT", delta };
+        if (delta < -5) return { turn: "RIGHT", delta };
+        return { turn: "NONE", delta };
       }
 
       function kalmanLike(prev, current) {
@@ -410,7 +434,9 @@
         const lat2 = b.lat * Math.PI / 180;
         const dLat = (b.lat - a.lat) * Math.PI / 180;
         const dLon = (b.lng - a.lng) * Math.PI / 180;
-        const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+        const x =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
         return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
       }
 
@@ -481,82 +507,6 @@
         if (geometry.type === "Polygon") return pointInRing(point, geometry.coordinates[0]);
         if (geometry.type === "MultiPolygon") return geometry.coordinates.some(poly => pointInRing(point, poly[0]));
         return false;
-      }
-
-      function segmentIntersection(p1, p2, q1, q2) {
-        const x1 = p1.lng, y1 = p1.lat;
-        const x2 = p2.lng, y2 = p2.lat;
-        const x3 = q1[0], y3 = q1[1];
-        const x4 = q2[0], y4 = q2[1];
-
-        const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-        if (Math.abs(denom) < 1e-12) return null;
-
-        const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-        const u = ((x1 - x3) * (y1 - y2) - (y1 - y3) * (x1 - x2)) / denom;
-
-        if (t < 0 || t > 1 || u < 0 || u > 1) return null;
-
-        return {
-          lng: x1 + t * (x2 - x1),
-          lat: y1 + t * (y2 - y1),
-          t_line: t
-        };
-      }
-
-      function getPolygonOuterRings(geometry) {
-        if (!geometry) return [];
-        if (geometry.type === "Polygon") return [geometry.coordinates[0]];
-        if (geometry.type === "MultiPolygon") return geometry.coordinates.map(poly => poly[0]);
-        return [];
-      }
-
-      function predictBoundaryIntersection(currentPos, futurePos, zoneFeature, groundspeedVal) {
-        if (!zoneFeature?.geometry) return null;
-        if (!groundspeedVal || groundspeedVal <= 0) return null;
-
-        const rings = getPolygonOuterRings(zoneFeature.geometry);
-        let bestHit = null;
-
-        for (const ring of rings) {
-          for (let i = 0; i < ring.length - 1; i++) {
-            const hit = segmentIntersection(currentPos, futurePos, ring[i], ring[i + 1]);
-            if (!hit) continue;
-            if (!bestHit || hit.t_line < bestHit.t_line) bestHit = hit;
-          }
-        }
-
-        if (!bestHit) return null;
-
-        const totalDistM = distanceM(currentPos, futurePos);
-        const distToHitM = totalDistM * bestHit.t_line;
-        const ttb_s = distToHitM / groundspeedVal;
-
-        return {
-          pos: { lng: bestHit.lng, lat: bestHit.lat },
-          distance_m: distToHitM,
-          ttb_s
-        };
-      }
-
-      function predictAltAtTime(currentAlt, vzMps, dtSeconds) {
-        if (currentAlt === null || currentAlt === undefined || Number.isNaN(currentAlt)) return null;
-        if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
-        return Number(currentAlt) + Number(vzMps) * Number(dtSeconds);
-      }
-
-      function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
-        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
-        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return false;
-        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return false;
-        return true;
-      }
-
-      function describeVerticalRelation(predictedAlt, lowerM, upperM) {
-        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return "UNKNOWN";
-        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return "BELOW FLOOR";
-        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return "ABOVE CEILING";
-        return "INSIDE BAND";
       }
 
       function predictFuturePath(currentPos, headingDeg, groundspeedVal, vz, secondsAhead = 60, stepSeconds = 1) {
@@ -669,6 +619,20 @@
         return best;
       }
 
+      function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
+        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
+        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return false;
+        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return false;
+        return true;
+      }
+
+      function describeVerticalRelation(predictedAlt, lowerM, upperM) {
+        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return "UNKNOWN";
+        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return "BELOW FLOOR";
+        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return "ABOVE CEILING";
+        return "INSIDE BAND";
+      }
+
       function predictVerticalConflictTtb(pathPoints, zoneFeature) {
         if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) return null;
 
@@ -741,7 +705,7 @@
         if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null;
         if (typeof turf === "undefined") return null;
 
-        const coords = pathPoints.map(p => [p.lng, p.lat]);
+        const coords = pathPoints.map((p) => [p.lng, p.lat]);
         const line = turf.lineString(coords);
 
         try {
@@ -766,7 +730,6 @@
                 zoneId: feature?.properties?.id ?? null,
                 zoneName: feature?.properties?.name ?? "Unknown",
                 zoneType: feature?.properties?.zone_type ?? "-",
-                feature,
                 overlap
               });
             }
@@ -818,11 +781,383 @@
         return Math.min(100, score);
       }
 
+      function normalizeZoneType(zoneType) {
+        return String(zoneType || "").trim().toUpperCase();
+      }
+
+      function zoneSeverityWeight(zoneType) {
+        const z = normalizeZoneType(zoneType);
+
+        if (z.includes("PROHIBITED")) return 1.30;
+        if (z.includes("RESTRICTED")) return 1.15;
+        if (z.includes("DANGER")) return 1.10;
+        if (z.includes("CONTROLLED")) return 0.95;
+        if (z.includes("CTA")) return 0.95;
+        if (z.includes("CTR")) return 1.00;
+        if (z.includes("TMA")) return 0.95;
+        if (z.includes("RMZ")) return 0.85;
+        if (z.includes("TMZ")) return 0.85;
+        if (z.includes("ADVISORY")) return 0.75;
+
+        return 1.00;
+      }
+
+      function computeAdvisoryPriority({
+        level,
+        ttb,
+        zoneType,
+        conflict4D,
+        boundaryPrediction,
+        verticalRelation
+      }) {
+        const levelBase =
+          level === "IMMEDIATE" ? 100 :
+          level === "WARNING" ? 70 :
+          level === "CAUTION" ? 40 :
+          10;
+
+        const severity = zoneSeverityWeight(zoneType);
+
+        let timeBoost = 0;
+        if (ttb != null) {
+          if (ttb <= 10) timeBoost = 30;
+          else if (ttb <= 20) timeBoost = 20;
+          else if (ttb <= 30) timeBoost = 12;
+          else if (ttb <= 60) timeBoost = 6;
+        }
+
+        let conflictBoost = 0;
+        if (conflict4D?.conflict) conflictBoost += 20;
+        else if (boundaryPrediction) conflictBoost += 8;
+
+        let verticalBoost = 0;
+        if (verticalRelation === "INSIDE BAND") verticalBoost += 8;
+
+        return (levelBase + timeBoost + conflictBoost + verticalBoost) * severity;
+      }
+
+      function selectHighestPriorityAdvisory(candidates) {
+        const valid = (candidates || []).filter(Boolean);
+
+        if (!valid.length) {
+          return {
+            level: "INFO",
+            text: "NO ACTION REQUIRED",
+            cls: "risk-ok",
+            actionChoice: null,
+            priorityScore: 0
+          };
+        }
+
+        return valid.reduce((best, candidate) => {
+          return (candidate.priorityScore || 0) > (best.priorityScore || 0) ? candidate : best;
+        });
+      }
+
+      function choosePrimaryAction({
+        conflict4D,
+        boundaryPrediction,
+        verticalRelation,
+        vz,
+        margin,
+        ttb,
+        turnBias
+      }) {
+        const turnText =
+          turnBias?.turn === "LEFT" ? "TURN LEFT" :
+          turnBias?.turn === "RIGHT" ? "TURN RIGHT" :
+          "TURN";
+
+        const descendStrong =
+          verticalRelation === "INSIDE BAND" &&
+          vz != null &&
+          vz > 0 &&
+          ttb != null &&
+          ttb <= 45;
+
+        if (descendStrong) {
+          return {
+            primary: "DESCEND",
+            secondary: turnText
+          };
+        }
+
+        if (margin != null && margin <= 20 && vz != null && vz > 0) {
+          return {
+            primary: "DESCEND",
+            secondary: turnText
+          };
+        }
+
+        if (conflict4D?.conflict || boundaryPrediction) {
+          return {
+            primary: turnText,
+            secondary: "DESCEND"
+          };
+        }
+
+        return {
+          primary: turnText,
+          secondary: "DESCEND"
+        };
+      }
+
+      function computeAdvisory({
+        margin,
+        vz,
+        ttb,
+        conflict4D,
+        boundaryPrediction,
+        verticalRelation,
+        zoneName,
+        zoneType,
+        groundspeed,
+        turnBias
+      }) {
+        const candidates = [];
+
+        if (margin != null && margin < 0) {
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
+
+          const advisory = (vz != null && vz > 0)
+            ? {
+                level: "IMMEDIATE",
+                text: `DESCEND IMMEDIATELY — AIRSPACE BREACH (${zoneName || "ACTIVE ZONE"})`,
+                cls: "risk-breach",
+                actionChoice
+              }
+            : {
+                level: "IMMEDIATE",
+                text: `EXIT RESTRICTED AIRSPACE IMMEDIATELY (${zoneName || "ACTIVE ZONE"})`,
+                cls: "risk-breach",
+                actionChoice
+              };
+
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb: 0,
+            zoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation
+          });
+
+          candidates.push(advisory);
+        }
+
+        if (conflict4D?.conflict) {
+          const zoneLabel = conflict4D.zoneName || zoneName || "ZONE";
+          const effectiveZoneType = conflict4D.zoneType || zoneType;
+
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
+
+          const useCombined =
+            verticalRelation === "INSIDE BAND" &&
+            ttb != null &&
+            ttb <= 20;
+
+          const advisory = {
+            level: "WARNING",
+            text: useCombined
+              ? `${actionChoice.primary} OR ${actionChoice.secondary} TO AVOID ${zoneLabel}`
+              : `${actionChoice.primary} TO AVOID ${zoneLabel}`,
+            cls: "risk-warning",
+            actionChoice
+          };
+
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb: conflict4D.ttb_s ?? ttb,
+            zoneType: effectiveZoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation
+          });
+
+          candidates.push(advisory);
+        }
+
+        if (boundaryPrediction && boundaryPrediction.ttb_s != null && boundaryPrediction.ttb_s <= 10) {
+          const zoneLabel = boundaryPrediction.zoneName || zoneName || "ZONE";
+          const effectiveZoneType = boundaryPrediction.zoneType || zoneType;
+
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
+
+          const boundaryText =
+            actionChoice.primary === "TURN LEFT" ? "PREPARE TO TURN LEFT" :
+            actionChoice.primary === "TURN RIGHT" ? "PREPARE TO TURN RIGHT" :
+            "PREPARE TO TURN";
+
+          const advisory = {
+            level: "CAUTION",
+            text: `${boundaryText} — BOUNDARY AHEAD (${zoneLabel})`,
+            cls: "risk-caution",
+            actionChoice
+          };
+
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb: boundaryPrediction.ttb_s,
+            zoneType: effectiveZoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation
+          });
+
+          candidates.push(advisory);
+        }
+
+        if (ttb != null && ttb <= 30) {
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
+
+          const advisory = (vz != null && vz > 0)
+            ? {
+                level: "WARNING",
+                text: "DESCEND SOON — VERTICAL LIMIT APPROACHING",
+                cls: "risk-warning",
+                actionChoice
+              }
+            : {
+                level: "CAUTION",
+                text: "MONITOR VERTICAL MARGIN CLOSELY",
+                cls: "risk-caution",
+                actionChoice
+              };
+
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb,
+            zoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation
+          });
+
+          candidates.push(advisory);
+        }
+
+        if (margin != null && margin <= 20) {
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
+
+          const advisory = {
+            level: "CAUTION",
+            text: "LOW VERTICAL MARGIN — HOLD CURRENT PROFILE CAREFULLY",
+            cls: "risk-caution",
+            actionChoice
+          };
+
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb,
+            zoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation
+          });
+
+          candidates.push(advisory);
+        }
+
+        if (!candidates.length && groundspeed != null && groundspeed > 0) {
+          candidates.push({
+            level: "INFO",
+            text: "TRACK STABLE — CONTINUE MONITORING",
+            cls: "risk-ok",
+            actionChoice: null,
+            priorityScore: 1
+          });
+        }
+
+        if (!candidates.length) {
+          candidates.push({
+            level: "INFO",
+            text: "NO ACTION REQUIRED",
+            cls: "risk-ok",
+            actionChoice: null,
+            priorityScore: 0
+          });
+        }
+
+        return selectHighestPriorityAdvisory(candidates);
+      }
+
+      function advisoryLevelRank(level) {
+        if (level === "IMMEDIATE") return 4;
+        if (level === "WARNING") return 3;
+        if (level === "CAUTION") return 2;
+        return 1;
+      }
+
+      function advisoryKey(advisory) {
+        if (!advisory) return "INFO|NO ACTION REQUIRED";
+        return `${advisory.level || "INFO"}|${advisory.text || "NO ACTION REQUIRED"}`;
+      }
+
       function getRiskBarClass(score) {
         if (score >= 75) return "risk-fill-critical";
         if (score >= 50) return "risk-fill-warning";
         if (score >= 25) return "risk-fill-caution";
         return "risk-fill-safe";
+      }
+
+      function smoothValue(previous, next, alpha = 0.2) {
+        if (previous === null || previous === undefined || Number.isNaN(Number(previous))) {
+          return Number(next) || 0;
+        }
+        if (next === null || next === undefined || Number.isNaN(Number(next))) {
+          return Number(previous) || 0;
+        }
+        return previous + alpha * (next - previous);
+      }
+
+      function getRiskTrend(previousScore, currentScore, deadband = 2) {
+        const prev = Number(previousScore) || 0;
+        const curr = Number(currentScore) || 0;
+        const delta = curr - prev;
+
+        if (Math.abs(delta) < deadband) return { label: "STEADY", arrow: "→", delta };
+        if (delta > 0) return { label: "RISING", arrow: "↑", delta };
+        return { label: "FALLING", arrow: "↓", delta };
       }
 
       function getRiskReasonSummary({ margin, ttb, conflict4D, boundaryPrediction, envelopeCount = 0 }) {
@@ -862,6 +1197,117 @@
 
         lastRiskTransitionTs = now;
         return currentRiskLabel;
+      }
+
+      function computeAdvisoryConfidence({
+        conflict4D,
+        boundaryPrediction,
+        turnBias,
+        ttb,
+        verticalRelation
+      }) {
+        let score = 0;
+
+        if (conflict4D?.conflict) score += 40;
+        if (boundaryPrediction?.ttb_s != null && boundaryPrediction.ttb_s <= 10) score += 25;
+        if (turnBias?.turn && turnBias.turn !== "NONE") score += 20;
+        if (ttb != null && ttb <= 20) score += 10;
+        if (verticalRelation === "INSIDE BAND") score += 5;
+
+        if (score >= 70) return "HIGH";
+        if (score >= 40) return "MEDIUM";
+        return "LOW";
+      }
+
+      function stabilizeAdvisoryDisplay(
+        newAdvisory,
+        nowTs,
+        { holdMs = 1500, candidateDwellMs = 700 } = {}
+      ) {
+        const incoming = newAdvisory && newAdvisory.text
+          ? newAdvisory
+          : { level: "INFO", text: "NO ACTION REQUIRED", cls: "risk-ok", actionChoice: null, priorityScore: 0 };
+
+        const current = lastStableAdvisory || {
+          level: "INFO",
+          text: "NO ACTION REQUIRED",
+          cls: "risk-ok",
+          actionChoice: null,
+          priorityScore: 0
+        };
+
+        const incomingRank = advisoryLevelRank(incoming.level);
+        const currentRank = advisoryLevelRank(current.level);
+
+        const incomingKey = advisoryKey(incoming);
+        const currentKey = advisoryKey(current);
+
+        if (incomingKey === currentKey) {
+          pendingAdvisory = null;
+          pendingAdvisoryTs = 0;
+          lastStableAdvisoryTs = nowTs;
+          return current;
+        }
+
+        if (incomingRank > currentRank) {
+          lastStableAdvisory = incoming;
+          lastStableAdvisoryTs = nowTs;
+          pendingAdvisory = null;
+          pendingAdvisoryTs = 0;
+          return lastStableAdvisory;
+        }
+
+        const withinHold = (nowTs - lastStableAdvisoryTs) < holdMs;
+        if (withinHold) {
+          return current;
+        }
+
+        const pendingKey = advisoryKey(pendingAdvisory);
+        if (pendingKey !== incomingKey) {
+          pendingAdvisory = incoming;
+          pendingAdvisoryTs = nowTs;
+          return current;
+        }
+
+        const pendingReady = (nowTs - pendingAdvisoryTs) >= candidateDwellMs;
+        if (!pendingReady) {
+          return current;
+        }
+
+        lastStableAdvisory = incoming;
+        lastStableAdvisoryTs = nowTs;
+        pendingAdvisory = null;
+        pendingAdvisoryTs = 0;
+        return lastStableAdvisory;
+      }
+
+      function computeGeojsonBounds(fc) {
+        const b = new maplibregl.LngLatBounds();
+        for (const f of (fc.features || [])) {
+          const g = f.geometry;
+          if (!g) continue;
+          if (g.type === "Polygon") {
+            for (const ring of g.coordinates) for (const coord of ring) b.extend(coord);
+          } else if (g.type === "MultiPolygon") {
+            for (const poly of g.coordinates) for (const ring of poly) for (const coord of ring) b.extend(coord);
+          }
+        }
+        return b;
+      }
+
+      function zoomTo(map, bounds) {
+        if (!bounds) return;
+        map.fitBounds(bounds, { padding: 80, duration: 800 });
+      }
+
+      function unionBounds(a, b) {
+        if (!a && !b) return null;
+        if (a && !b) return a;
+        if (!a && b) return b;
+        const u = new maplibregl.LngLatBounds(a.getSouthWest(), a.getNorthEast());
+        u.extend(b.getSouthWest());
+        u.extend(b.getNorthEast());
+        return u;
       }
 
       function ensureTrendLayer(map) {
@@ -1029,35 +1475,6 @@
         if (map.getLayer("airspace-3d")) map.setFilter("airspace-3d", filter);
       }
 
-      function computeGeojsonBounds(fc) {
-        const b = new maplibregl.LngLatBounds();
-        for (const f of (fc.features || [])) {
-          const g = f.geometry;
-          if (!g) continue;
-          if (g.type === "Polygon") {
-            for (const ring of g.coordinates) for (const coord of ring) b.extend(coord);
-          } else if (g.type === "MultiPolygon") {
-            for (const poly of g.coordinates) for (const ring of poly) for (const coord of ring) b.extend(coord);
-          }
-        }
-        return b;
-      }
-
-      function zoomTo(map, bounds) {
-        if (!bounds) return;
-        map.fitBounds(bounds, { padding: 80, duration: 800 });
-      }
-
-      function unionBounds(a, b) {
-        if (!a && !b) return null;
-        if (a && !b) return a;
-        if (!a && b) return b;
-        const u = new maplibregl.LngLatBounds(a.getSouthWest(), a.getNorthEast());
-        u.extend(b.getSouthWest());
-        u.extend(b.getNorthEast());
-        return u;
-      }
-
       let data;
       try {
         const r = await fetch(API_URL);
@@ -1073,7 +1490,7 @@
         return;
       }
 
-      const pts = data.replay.map(p => ({
+      const pts = data.replay.map((p) => ({
         lng: p.lon,
         lat: p.lat,
         alt: p.altitude_m ?? 0,
@@ -1084,7 +1501,7 @@
       const duration = pts[pts.length - 1].t - t0;
 
       flightBounds = new maplibregl.LngLatBounds();
-      pts.forEach(p => flightBounds.extend([p.lng, p.lat]));
+      pts.forEach((p) => flightBounds.extend([p.lng, p.lat]));
 
       let pointStatus = [];
       try {
@@ -1135,6 +1552,7 @@
 
       function interpolate(time) {
         while (currentIndex < pts.length - 2 && pts[currentIndex + 1].t <= time) currentIndex++;
+
         const a = pts[currentIndex];
         const b = pts[currentIndex + 1] ?? a;
         const f = b.t === a.t ? 0 : (time - a.t) / (b.t - a.t);
@@ -1160,21 +1578,29 @@
 
       const aircraftEl = document.createElement("div");
       aircraftEl.className = "aircraft-dot";
-      const aircraft = new maplibregl.Marker({ element: aircraftEl }).setLngLat([pts[0].lng, pts[0].lat]).addTo(map);
+      const aircraft = new maplibregl.Marker({ element: aircraftEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
 
       const ghostEl = document.createElement("div");
       ghostEl.className = "ghost-dot";
-      const ghost = new maplibregl.Marker({ element: ghostEl }).setLngLat([pts[0].lng, pts[0].lat]).addTo(map);
+      const ghost = new maplibregl.Marker({ element: ghostEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
 
       const breachEl = document.createElement("div");
       breachEl.className = "breach-dot";
       breachEl.style.display = "none";
-      const breachMarker = new maplibregl.Marker({ element: breachEl }).setLngLat([pts[0].lng, pts[0].lat]).addTo(map);
+      const breachMarker = new maplibregl.Marker({ element: breachEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
 
       const entryEl = document.createElement("div");
       entryEl.className = "entry-dot";
       entryEl.style.display = "none";
-      const entryMarker = new maplibregl.Marker({ element: entryEl }).setLngLat([pts[0].lng, pts[0].lat]).addTo(map);
+      const entryMarker = new maplibregl.Marker({ element: entryEl })
+        .setLngLat([pts[0].lng, pts[0].lat])
+        .addTo(map);
 
       const vectorLabelEl = document.createElement("div");
       vectorLabelEl.style.background = "rgba(10,12,16,0.9)";
@@ -1256,7 +1682,7 @@
             zoomBothBtn.disabled = false;
           }
 
-          document.querySelectorAll(".zone-filter").forEach(cb => {
+          document.querySelectorAll(".zone-filter").forEach((cb) => {
             cb.addEventListener("change", () => updateZoneFilter(map));
           });
           updateZoneFilter(map);
@@ -1270,7 +1696,7 @@
             type: "Feature",
             geometry: {
               type: "LineString",
-              coordinates: pts.map(p => [p.lng, p.lat])
+              coordinates: pts.map((p) => [p.lng, p.lat])
             }
           }
         });
@@ -1318,26 +1744,30 @@
         aircraft.setLngLat([pos.lng, pos.lat]);
 
         if (playing) {
-          map.easeTo({ center: [pos.lng, pos.lat], duration: 250, easing: x => x });
+          map.easeTo({ center: [pos.lng, pos.lat], duration: 250, easing: (x) => x });
         }
 
         const progress = duration > 0 ? (simElapsed / duration) * 100 : 0;
 
         const replayTime = pts?.[currentIndex]?.t ?? t;
-        const prev = pts[Math.max(0, currentIndex - 1)] || pts[0];
         const curr = pts[currentIndex] || pts[0];
         const next = pts[Math.min(pts.length - 1, currentIndex + 1)] || curr;
 
         const dtTrack = Math.max(0.001, (next.t - curr.t) / 1000);
-        const groundspeed = distanceM({ lng: curr.lng, lat: curr.lat }, { lng: next.lng, lat: next.lat }) / dtTrack;
-        const brg = bearingDeg({ lng: curr.lng, lat: curr.lat }, { lng: next.lng, lat: next.lat });
+        const groundspeed = distanceM(
+          { lng: curr.lng, lat: curr.lat },
+          { lng: next.lng, lat: next.lat }
+        ) / dtTrack;
+        const brg = bearingDeg(
+          { lng: curr.lng, lat: curr.lat },
+          { lng: next.lng, lat: next.lat }
+        );
         const vz = ((next.alt ?? 0) - (curr.alt ?? 0)) / dtTrack;
 
         const tFutureTrend = Math.min(t0 + duration, t + TREND_SECONDS * 1000);
         const posFuture = interpolate(tFutureTrend);
 
         ghostEl.style.display = (playing && FEATURES.trend) ? "block" : "none";
-
         if (map.getLayer("trend-line")) {
           map.setLayoutProperty("trend-line", "visibility", (playing && FEATURES.trend) ? "visible" : "none");
         }
@@ -1478,7 +1908,7 @@
         if (map.getSource("predictive-envelope-conflicts")) {
           map.getSource("predictive-envelope-conflicts").setData({
             type: "FeatureCollection",
-            features: predictiveEnvelopeConflicts.map(c => c.overlap)
+            features: predictiveEnvelopeConflicts.map((x) => x.overlap)
           });
         }
 
@@ -1501,37 +1931,84 @@
 
         let verticalTtb = null;
         if (earliest4D?.zoneId && airspaceGeojson?.features?.length) {
-          const z = airspaceGeojson.features.find(f => (f?.properties?.id ?? null) === earliest4D.zoneId);
+          const z = airspaceGeojson.features.find((f) => (f?.properties?.id ?? null) === earliest4D.zoneId);
           if (z) verticalTtb = predictVerticalConflictTtb(futurePath, z);
         }
 
         const ttb = predictTtb(margin, vz);
 
-        const riskScore = computeOperationalRisk({
+        const rawRiskScore = computeOperationalRisk({
           margin,
           ttb,
           conflict4D,
           boundaryPrediction,
-          envelopeCount: predictiveEnvelopeConflicts?.length || 0
+          envelopeCount: predictiveEnvelopeConflicts.length || 0
         });
 
-        const riskInfo = computeRiskLevel(riskScore);
+        smoothedRiskScore = smoothValue(smoothedRiskScore, rawRiskScore, 0.25);
+
+        const displayRiskScore = Math.round(smoothedRiskScore);
+        const displayRiskInfo = computeRiskLevel(displayRiskScore);
+        const riskTrend = getRiskTrend(lastDisplayedRiskScore, displayRiskScore, 2);
+        const riskDelta = displayRiskScore - lastDisplayedRiskScore;
+        lastDisplayedRiskScore = displayRiskScore;
 
         const riskSummary = getRiskReasonSummary({
           margin,
           ttb,
           conflict4D,
           boundaryPrediction,
-          envelopeCount: predictiveEnvelopeConflicts?.length || 0
+          envelopeCount: predictiveEnvelopeConflicts.length || 0
         });
 
         lastRiskLabel = logRiskTransition({
           replayTime,
           previousRiskLabel: lastRiskLabel,
-          currentRiskLabel: riskInfo.label,
-          riskScore,
+          currentRiskLabel: displayRiskInfo.label,
+          riskScore: displayRiskScore,
           details: riskSummary
         });
+
+        const hazardPos = conflict4D?.conflict ? conflict4D.pos : boundaryPrediction?.pos || null;
+        const zoneBearing = hazardPos ? bearingDeg(pos, hazardPos) : null;
+        const turnBias = computeTurnBias({ brg, zoneBearing });
+
+        const advisory = computeAdvisory({
+          margin,
+          vz,
+          ttb,
+          conflict4D,
+          boundaryPrediction,
+          verticalRelation,
+          zoneName,
+          zoneType,
+          groundspeed,
+          turnBias
+        });
+
+        const stableAdvisory = stabilizeAdvisoryDisplay(
+          advisory,
+          replayTime || Date.now(),
+          { holdMs: 1500, candidateDwellMs: 700 }
+        );
+
+        const actionText = stableAdvisory?.actionChoice
+          ? [stableAdvisory.actionChoice.primary, stableAdvisory.actionChoice.secondary]
+              .filter(Boolean)
+              .join(" / ")
+          : "—";
+
+        const advisoryConfidence = computeAdvisoryConfidence({
+          conflict4D,
+          boundaryPrediction,
+          turnBias,
+          ttb,
+          verticalRelation
+        });
+
+        const advisoryPriorityText = stableAdvisory?.priorityScore != null
+          ? stableAdvisory.priorityScore.toFixed(1)
+          : "—";
 
         const boundaryTtb = boundaryPrediction?.ttb_s ?? null;
         const conflictTtb = conflict4D?.conflict ? conflict4D.ttb_s : null;
@@ -1546,11 +2023,13 @@
 
         const breachText =
           c?.breach_unknown ? "UNKNOWN" :
-          c?.breach ? "BREACH" : "OK";
+          c?.breach ? "BREACH" :
+          "OK";
 
         const breachColor =
           c?.breach_unknown ? "#bbbbbb" :
-          c?.breach ? "#ff0000" : "#00ff00";
+          c?.breach ? "#ff0000" :
+          "#00ff00";
 
         const marginPct =
           margin === null || margin === undefined || Number.isNaN(margin)
@@ -1593,6 +2072,12 @@
           }
         }
 
+        if (stableAdvisory.level !== "INFO") {
+          warnShow = true;
+          warnClass = stableAdvisory.cls;
+          warnText = stableAdvisory.text;
+        }
+
         if (FEATURES.prediction && ttb !== null && ttb > 0 && ttb <= 120) {
           const tBreach = Math.min(t0 + duration, t + ttb * 1000);
           const breachPos = interpolate(tBreach);
@@ -1626,67 +2111,77 @@
           map.setLayoutProperty("airspace-3d", "visibility", FEATURES.cone ? "visible" : "none");
         }
 
-        if (hud) {
-          hud.innerHTML = `
-            <div class="hud-header">
-              <div class="hud-title">MISSION CONTROL</div>
-              <div class="hud-chip ${riskInfo.cls}">${riskInfo.label}</div>
-            </div>
+        hud.innerHTML = `
+          <div class="hud-header">
+            <div class="hud-title">MISSION CONTROL</div>
+            <div class="hud-chip ${displayRiskInfo.cls}">${displayRiskInfo.label}</div>
+          </div>
 
-            <div class="hud-grid">
-              <div class="hud-k">TIME</div><div class="hud-v">${new Date(t).toLocaleTimeString()}</div>
-              <div class="hud-k">LAT</div><div class="hud-v">${pos.lat.toFixed(5)}</div>
-              <div class="hud-k">LON</div><div class="hud-v">${pos.lng.toFixed(5)}</div>
-              <div class="hud-k">ALT AMSL</div><div class="hud-v">${fmtM(altAmsl)}</div>
-              <div class="hud-k">ALT AGL</div><div class="hud-v">${fmtM(altAgl)}</div>
-              <div class="hud-k">TERRAIN</div><div class="hud-v">${fmtM(terrainAmsl)}</div>
-              <div class="hud-k">V/S</div><div class="hud-v">${vz !== null ? `${vsArrow(vz)} ${vz.toFixed(1)} m/s` : "—"}</div>
-              <div class="hud-k">HDG</div><div class="hud-v">${Number.isFinite(brg) ? `${brg.toFixed(0)}°` : "—"}</div>
-              <div class="hud-k">GS</div><div class="hud-v">${groundspeed !== null ? `${groundspeed.toFixed(1)} m/s` : "—"}</div>
-              <div class="hud-k">SPEED</div><div class="hud-v">${speed}×</div>
-              <div class="hud-k">PROGRESS</div><div class="hud-v">${progress.toFixed(1)}%</div>
-            </div>
+          <div class="hud-grid">
+            <div class="hud-k">TIME</div><div class="hud-v">${new Date(t).toLocaleTimeString()}</div>
+            <div class="hud-k">LAT</div><div class="hud-v">${pos.lat.toFixed(5)}</div>
+            <div class="hud-k">LON</div><div class="hud-v">${pos.lng.toFixed(5)}</div>
+            <div class="hud-k">ALT AMSL</div><div class="hud-v">${fmtM(altAmsl)}</div>
+            <div class="hud-k">ALT AGL</div><div class="hud-v">${fmtM(altAgl)}</div>
+            <div class="hud-k">TERRAIN</div><div class="hud-v">${fmtM(terrainAmsl)}</div>
+            <div class="hud-k">V/S</div><div class="hud-v">${vz !== null ? `${vsArrow(vz)} ${vz.toFixed(1)} m/s` : "—"}</div>
+            <div class="hud-k">HDG</div><div class="hud-v">${Number.isFinite(brg) ? `${brg.toFixed(0)}°` : "—"}</div>
+            <div class="hud-k">GS</div><div class="hud-v">${groundspeed !== null ? `${groundspeed.toFixed(1)} m/s` : "—"}</div>
+            <div class="hud-k">SPEED</div><div class="hud-v">${speed}×</div>
+            <div class="hud-k">PROGRESS</div><div class="hud-v">${progress.toFixed(1)}%</div>
+          </div>
 
-            <div class="hud-divider"></div>
+          <div class="hud-divider"></div>
 
-            <div class="hud-grid">
-              <div class="hud-k">ZONE</div><div class="hud-v">${zoneName}</div>
-              <div class="hud-k">TYPE</div><div class="hud-v">${zoneType}</div>
-              <div class="hud-k">STATUS</div><div class="hud-v">${status}</div>
-              <div class="hud-k">LIMITS</div><div class="hud-v">${fmtLimit(lowerM)} → ${fmtLimit(upperM)}</div>
-              <div class="hud-k">BASIS</div><div class="hud-v">${basis}</div>
-              <div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
-              <div class="hud-k">ZONE SRC</div><div class="hud-v">${zoneSource}</div>
-              <div class="hud-k">VERT REL</div><div class="hud-v">${verticalRelation}</div>
-              <div class="hud-k">MARGIN %</div><div class="hud-v">${marginPct.toFixed(0)}%</div>
-              <div class="hud-k">TTB</div><div class="hud-v">${ttb !== null ? `${ttb.toFixed(1)} s` : "—"}</div>
-              <div class="hud-k">BND TTB</div><div class="hud-v">${boundaryTtb !== null ? `${boundaryTtb.toFixed(1)} s` : "—"}</div>
-              <div class="hud-k">VERT TTB</div><div class="hud-v">${verticalConflictTtb !== null ? `${verticalConflictTtb.toFixed(1)} s` : "—"}</div>
-              <div class="hud-k">4D TTB</div><div class="hud-v">${conflictTtb !== null ? `${conflictTtb.toFixed(1)} s` : "—"}</div>
-              <div class="hud-k">PRED HOR</div><div class="hud-v">${predictSeconds.toFixed(1)} s</div>
-              <div class="hud-k">PRED DIST</div><div class="hud-v">${predictedDistanceM.toFixed(1)} m</div>
-              <div class="hud-k">ENVELOPE</div><div class="hud-v">${envelopeActive ? "ON" : "OFF"}</div>
-              <div class="hud-k">ENV CONFLICTS</div><div class="hud-v">${envelopeConflictCount}</div>
-              <div class="hud-k">RESULT</div><div class="hud-v" style="color:${breachColor}">${breachText}</div>
-            </div>
+          <div class="hud-grid">
+            <div class="hud-k">ZONE</div><div class="hud-v">${zoneName}</div>
+            <div class="hud-k">TYPE</div><div class="hud-v">${zoneType}</div>
+            <div class="hud-k">STATUS</div><div class="hud-v">${status}</div>
+            <div class="hud-k">LIMITS</div><div class="hud-v">${fmtLimit(lowerM)} → ${fmtLimit(upperM)}</div>
+            <div class="hud-k">BASIS</div><div class="hud-v">${basis}</div>
+            <div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
+            <div class="hud-k">ZONE SRC</div><div class="hud-v">${zoneSource}</div>
+            <div class="hud-k">VERT REL</div><div class="hud-v">${verticalRelation}</div>
+            <div class="hud-k">MARGIN %</div><div class="hud-v">${marginPct.toFixed(0)}%</div>
+            <div class="hud-k">TTB</div><div class="hud-v">${ttb !== null ? `${ttb.toFixed(1)} s` : "—"}</div>
+            <div class="hud-k">BND TTB</div><div class="hud-v">${boundaryTtb !== null ? `${boundaryTtb.toFixed(1)} s` : "—"}</div>
+            <div class="hud-k">VERT TTB</div><div class="hud-v">${verticalConflictTtb !== null ? `${verticalConflictTtb.toFixed(1)} s` : "—"}</div>
+            <div class="hud-k">4D TTB</div><div class="hud-v">${conflictTtb !== null ? `${conflictTtb.toFixed(1)} s` : "—"}</div>
+            <div class="hud-k">PRED HOR</div><div class="hud-v">${predictSeconds.toFixed(1)} s</div>
+            <div class="hud-k">PRED DIST</div><div class="hud-v">${predictedDistanceM.toFixed(1)} m</div>
+            <div class="hud-k">ENVELOPE</div><div class="hud-v">${envelopeActive ? "ON" : "OFF"}</div>
+            <div class="hud-k">ENV CONFLICTS</div><div class="hud-v">${envelopeConflictCount}</div>
+            <div class="hud-k">RESULT</div><div class="hud-v" style="color:${breachColor}">${breachText}</div>
+          </div>
 
-            <div class="hud-divider"></div>
+          <div class="hud-divider"></div>
 
-            <div class="hud-grid">
-              <div class="hud-k">RISK</div><div class="hud-v ${riskInfo.cls}">${riskInfo.label}</div>
-              <div class="hud-k">SCORE</div><div class="hud-v">${riskScore}%</div>
-              <div class="hud-k">DRIVERS</div><div class="hud-v">${riskSummary}</div>
-            </div>
+          <div class="hud-grid">
+            <div class="hud-k">RISK</div><div class="hud-v ${displayRiskInfo.cls}">${displayRiskInfo.label}</div>
+            <div class="hud-k">SCORE</div><div class="hud-v">${displayRiskScore}%</div>
+            <div class="hud-k">TREND</div><div class="hud-v">${riskTrend.arrow} ${riskTrend.label}</div>
+            <div class="hud-k">ΔRISK</div><div class="hud-v">${riskDelta > 0 ? "+" : ""}${riskDelta}</div>
+            <div class="hud-k">DRIVERS</div><div class="hud-v">${riskSummary}</div>
+          </div>
 
-            <div class="risk-bar-wrap" title="${riskSummary}">
-              <div class="risk-bar-fill ${getRiskBarClass(riskScore)}" style="width:${riskScore}%"></div>
-            </div>
+          <div class="risk-bar-wrap" title="${riskSummary}">
+            <div class="risk-bar-fill ${getRiskBarClass(displayRiskScore)}" style="width:${displayRiskScore}%"></div>
+          </div>
 
-            <div class="warnstrip ${warnShow ? "show" : ""} ${warnClass}">
-              ${warnText}
-            </div>
-          `;
-        }
+          <div class="hud-divider"></div>
+
+          <div class="hud-grid">
+            <div class="hud-k">ADV PRI</div><div class="hud-v">${advisoryPriorityText}</div>
+            <div class="hud-k">ADVISORY</div><div class="hud-v ${stableAdvisory.cls}">${stableAdvisory.level}</div>
+            <div class="hud-k">ACTION</div><div class="hud-v ${stableAdvisory.cls}">${stableAdvisory.text}</div>
+            <div class="hud-k">CONFIDENCE</div><div class="hud-v">${advisoryConfidence}</div>
+            <div class="hud-k">MANEUVER</div><div class="hud-v">${actionText}</div>
+          </div>
+
+          <div class="warnstrip ${warnShow ? "show" : ""} ${warnClass}">
+            ${warnText}
+          </div>
+        `;
 
         if (slider) slider.value = duration > 0 ? simElapsed / duration : 0;
         requestAnimationFrame(loop);
@@ -1699,16 +2194,14 @@
       playBtn.onclick = () => {
         playing = !playing;
         playBtn.textContent = playing ? "Pause" : "Play";
-        if (playing) {
-          lastFrame = null;
-          requestAnimationFrame(loop);
-        }
+        if (playing) lastFrame = null;
       };
 
-      slider.oninput = e => {
+      slider.oninput = (e) => {
         simElapsed = Number(e.target.value) * duration;
         currentIndex = 0;
         lastSmoothedPos = null;
+        lastPrediction = null;
       };
 
       speedSel.onchange = () => {
