@@ -38,38 +38,19 @@
       width: 320px;
     }
 
-    #event-log {
+    #warn-strip-root {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
-  width: 340px;
-  max-height: 280px;
-  overflow-y: auto;
-  font-size: 11px;
-  background: rgba(10,10,15,0.85);
+  bottom: 60px; /* adjust if needed */
+  left: 20px;
+  right: 20px;
+  z-index: 5;
+}
+
+.warnstrip {
+  background: rgba(0,0,0,0.85);
   border-radius: 10px;
-  padding: 10px;
-  backdrop-filter: blur(6px);
-}
-
-.event-item {
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-
-.event-time {
-  color: #888;
-  font-size: 10px;
-}
-
-.event-type {
+  padding: 10px 14px;
   font-weight: bold;
-  color: #fff;
-}
-
-.event-value {
-  color: #ccc;
 }
 
   #hud {
@@ -326,19 +307,6 @@
     <input id="slider" type="range" min="0" max="1" step="0.0001" value="0" />
   </div>
 
-  <div id="event-log"></div>
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  width:320px;
-  max-height:300px;
-  overflow:auto;
-  font-size:11px;
-  background:rgba(0,0,0,0.7);
-  padding:8px;
-  border-radius:8px;
-"></div>
-
   <div id="feature-menu">
     <button id="feature-toggle">⚙ Features</button>
     <div id="feature-panel">
@@ -423,7 +391,7 @@
 
       let eventSeq = 0;
 
-        const flightEventLog = [];
+    const flightEventLog = [];
 
       let lastEventState = {
         riskLabel: null,
@@ -1052,107 +1020,6 @@ if (effectiveTtb != null && effectiveTtb <= 5) {
 }
 
 // GRADUATED IMMINENCE OVERRIDE
-if (effectiveTtb != null) {
-  // 0–2 s: essentially unavoidable without immediate action
-  if (effectiveTtb <= 2) {
-    return {
-      score: 100,
-      effectiveTtb,
-      severity: sev,
-      factors: {
-        timeUrgency,
-        nearTermUrgency,
-        marginUrgency,
-        geometryUrgency,
-        verticalUrgency,
-        envelopeUrgency,
-        climbPenalty,
-        override: "TTB_LE_2"
-      }
-    };
-  }
-
-  // 2–5 s: critical, near-max urgency
-  if (effectiveTtb <= 5) {
-    return {
-      score: 96,
-      effectiveTtb,
-      severity: sev,
-      factors: {
-        timeUrgency,
-        nearTermUrgency,
-        marginUrgency,
-        geometryUrgency,
-        verticalUrgency,
-        envelopeUrgency,
-        climbPenalty,
-        override: "TTB_LE_5"
-      }
-    };
-  }
-
-  // 5–10 s: very high urgency, but not absolute max
-  if (effectiveTtb <= 10) {
-    const boostedScore = Math.max(
-      88,
-      Math.round(Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier))
-    );
-
-    return {
-      score: boostedScore,
-      effectiveTtb,
-      severity: sev,
-      factors: {
-        timeUrgency,
-        nearTermUrgency,
-        marginUrgency,
-        geometryUrgency,
-        verticalUrgency,
-        envelopeUrgency,
-        climbPenalty,
-        override: "TTB_LE_10"
-      }
-    };
-  }
-
-  // 10–20 s: strong warning floor
-  if (effectiveTtb <= 20) {
-    const boostedScore = Math.max(
-      72,
-      Math.round(Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier))
-    );
-
-    return {
-      score: boostedScore,
-      effectiveTtb,
-      severity: sev,
-      factors: {
-        timeUrgency,
-        nearTermUrgency,
-        marginUrgency,
-        geometryUrgency,
-        verticalUrgency,
-        envelopeUrgency,
-        climbPenalty,
-        override: "TTB_LE_20"
-      }
-    };
-  }
-}
-
-        // 🚨 HARD OVERRIDE — IMMINENT COLLISION
-if (effectiveTtb != null && effectiveTtb <= 5) {
-  return {
-    score: 100,
-    effectiveTtb,
-    severity: sev,
-    factors: {
-      override: "IMMINENT_TTB"
-    }
-  };
-}
-
-        // GRADUATED IMMINENCE OVERRIDE
 if (effectiveTtb != null) {
   // 0–2 s: essentially unavoidable without immediate action
   if (effectiveTtb <= 2) {
@@ -1946,44 +1813,6 @@ if (effectiveTtb != null) {
         }
       }
 
-      function renderEventLog() {
-  const el = document.getElementById("event-log");
-  if (!el) return;
-
-  const last = flightEventLog.slice(-20).reverse();
-
-  el.innerHTML = last.map(e => `
-    <div style="margin-bottom:6px;">
-      <div style="color:#aaa;">
-        ${Math.round(e.sim_time_ms/1000)}s — ${e.event_type}
-      </div>
-      <div style="color:#fff;">
-        ${JSON.stringify(e.value)}
-      </div>
-    </div>
-  `).join("");
-}
-
-function formatEventValue(e) {
-  if (e.event_type === "risk_transition") {
-    return `${e.value.from || "—"} → ${e.value.to} (${e.value.score})`;
-  }
-
-  if (e.event_type === "advisory_transition") {
-    return `${e.value.to}`;
-  }
-
-  if (e.event_type === "prediction_threshold_crossed") {
-    return `TTB ${e.value.threshold.replace("le", "≤")} (${e.value.ttb_s?.toFixed(1)}s)`;
-  }
-
-  if (e.event_type.includes("conflict")) {
-    return e.value.zone_name || "conflict detected";
-  }
-
-  return JSON.stringify(e.value);
-}
-
       function updateZoneFilter(map) {
         if (!map.getLayer("airspace-fill")) return;
 
@@ -2291,8 +2120,6 @@ function logFlightEvents({
   }
 }
 
-    renderEventLog();
-
       const map = new maplibregl.Map({
         container: "map",
         style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_KEY}`,
@@ -2490,8 +2317,6 @@ function logFlightEvents({
     { lng: next.lng, lat: next.lat }
   );
   const vz = ((next.alt ?? 0) - (curr.alt ?? 0)) / dtTrack;
-
-  // keep the rest of your existing loop logic here...
 
   
         const tFutureTrend = Math.min(t0 + duration, t + TREND_SECONDS * 1000);
@@ -2791,7 +2616,7 @@ const focusZoneUpperM = focusZoneFeature?.properties?.upper_m ?? upperM;
 const focusZoneActiveText = focusZone.active ? "ACTIVE" : "INACTIVE";
 const focusZoneVertBlock = `${fmtLimit(focusZoneLowerM)} → ${fmtLimit(focusZoneUpperM)}`;
 
-logFlightEvents({
+                    logFlightEvents({
   replayIso: new Date(t).toISOString(),
   simTimeMs: simElapsed,
   riskLabel: displayRiskInfo.label,
@@ -2806,8 +2631,6 @@ logFlightEvents({
   margin,
   verticalRelation
 });
-
-renderEventLog();
 
          aircraftEl.style.background =
           c?.breach_unknown ? "#ffbf00" :
@@ -2904,17 +2727,7 @@ renderEventLog();
           map.setLayoutProperty("airspace-3d", "visibility", FEATURES.cone ? "visible" : "none");
         }
 
-    const zoneTtbText = focusZone.ttb !== null ? focusZone.ttb.toFixed(1) + " s" : "—";
-const boundaryTtbText = boundaryTtb !== null ? boundaryTtb.toFixed(1) + " s" : "—";
-const conflictTtbText = conflictTtb !== null ? conflictTtb.toFixed(1) + " s" : "—";
-const verticalConflictTtbText = verticalConflictTtb !== null ? verticalConflictTtb.toFixed(1) + " s" : "—";
-const marginText = margin === null ? "—" : margin.toFixed(1) + " m";
-const ttbText = ttb !== null ? ttb.toFixed(1) + " s" : "—";
-const vsText = vz !== null ? `${vsArrow(vz)} ${vz.toFixed(1)} m/s` : "—";
-const hdgText = Number.isFinite(brg) ? `${brg.toFixed(0)}°` : "—";
-const gsText = groundspeed !== null ? `${groundspeed.toFixed(1)} m/s` : "—";
-
-hud.innerHTML = `
+      hud.innerHTML = `
   <div class="hud-header">
     <div class="hud-title">MISSION CONTROL</div>
     <div class="hud-chip ${displayRiskInfo.cls}">${displayRiskInfo.label}</div>
@@ -2927,9 +2740,9 @@ hud.innerHTML = `
     <div class="hud-k">ALT AMSL</div><div class="hud-v">${fmtM(altAmsl)}</div>
     <div class="hud-k">ALT AGL</div><div class="hud-v">${fmtM(altAgl)}</div>
     <div class="hud-k">TERRAIN</div><div class="hud-v">${fmtM(terrainAmsl)}</div>
-    <div class="hud-k">V/S</div><div class="hud-v">${vsText}</div>
-    <div class="hud-k">HDG</div><div class="hud-v">${hdgText}</div>
-    <div class="hud-k">GS</div><div class="hud-v">${gsText}</div>
+    <div class="hud-k">V/S</div><div class="hud-v">${vz !== null ? `${vsArrow(vz)} ${vz.toFixed(1)} m/s` : "—"}</div>
+    <div class="hud-k">HDG</div><div class="hud-v">${Number.isFinite(brg) ? `${brg.toFixed(0)}°` : "—"}</div>
+    <div class="hud-k">GS</div><div class="hud-v">${groundspeed !== null ? `${groundspeed.toFixed(1)} m/s` : "—"}</div>
     <div class="hud-k">SPEED</div><div class="hud-v">${speed}×</div>
     <div class="hud-k">PROGRESS</div><div class="hud-v">${progress.toFixed(1)}%</div>
   </div>
@@ -2941,14 +2754,16 @@ hud.innerHTML = `
   <div class="hud-grid">
     <div class="hud-k">ZONE NAME</div><div class="hud-v">${focusZone.name}</div>
     <div class="hud-k">ZONE TYPE</div><div class="hud-v">${focusZone.type}</div>
-    <div class="hud-k">ZONE STATUS</div><div class="hud-v ${getZoneStatusClass(focusZone.source)}">${focusZone.source}</div>
-    <div class="hud-k">ZONE ACTIVE</div><div class="hud-v ${getZoneActiveClass(focusZoneActiveText)}">${focusZoneActiveText}</div>
+    <div class="hud-k">ZONE STATUS</div>
+    <div class="hud-v ${getZoneStatusClass(focusZone.source)}">${focusZone.source}</div>
+    <div class="hud-k">ZONE ACTIVE</div>
+    <div class="hud-v ${getZoneActiveClass(focusZoneActiveText)}">${focusZoneActiveText}</div>
     <div class="hud-k">ZONE VERT BLOCK</div><div class="hud-v">${focusZoneVertBlock}</div>
     <div class="hud-k">ZONE SRC</div><div class="hud-v">${zoneSource}</div>
-    <div class="hud-k">ZONE TTB</div><div class="hud-v">${zoneTtbText}</div>
-    <div class="hud-k">BND TTB</div><div class="hud-v">${boundaryTtbText}</div>
-    <div class="hud-k">4D TTB</div><div class="hud-v">${conflictTtbText}</div>
-    <div class="hud-k">VERT TTB</div><div class="hud-v">${verticalConflictTtbText}</div>
+    <div class="hud-k">ZONE TTB</div><div class="hud-v">${focusZone.ttb !== null ? `${focusZone.ttb.toFixed(1)} s` : "—"}</div>
+    <div class="hud-k">BND TTB</div><div class="hud-v">${boundaryTtb !== null ? `${boundaryTtb.toFixed(1)} s` : "—"}</div>
+    <div class="hud-k">4D TTB</div><div class="hud-v">${conflictTtb !== null ? `${conflictTtb.toFixed(1)} s` : "—"}</div>
+    <div class="hud-k">VERT TTB</div><div class="hud-v">${verticalConflictTtb !== null ? `${verticalConflictTtb.toFixed(1)} s` : "—"}</div>
     <div class="hud-k">ENVELOPE</div><div class="hud-v">${envelopeActive ? "ON" : "OFF"}</div>
     <div class="hud-k">ENV CONFLICTS</div><div class="hud-v">${envelopeConflictCount}</div>
   </div>
@@ -2963,12 +2778,13 @@ hud.innerHTML = `
     <div class="hud-k">UAV STATUS</div><div class="hud-v">${status}</div>
     <div class="hud-k">CURRENT ALT</div><div class="hud-v">${fmtM(predictionAltNow)}</div>
     <div class="hud-k">VERT REL</div><div class="hud-v">${verticalRelation}</div>
-    <div class="hud-k">MARGIN</div><div class="hud-v">${marginText}</div>
+    <div class="hud-k">MARGIN</div><div class="hud-v">${margin === null ? "—" : `${margin.toFixed(1)} m`}</div>
     <div class="hud-k">MARGIN %</div><div class="hud-v">${marginPct.toFixed(0)}%</div>
-    <div class="hud-k">TTB</div><div class="hud-v">${ttbText}</div>
+    <div class="hud-k">TTB</div><div class="hud-v">${ttb !== null ? `${ttb.toFixed(1)} s` : "—"}</div>
     <div class="hud-k">PRED HOR</div><div class="hud-v">${predictSeconds.toFixed(1)} s</div>
     <div class="hud-k">PRED DIST</div><div class="hud-v">${predictedDistanceM.toFixed(1)} m</div>
-    <div class="hud-k">RESULT</div><div class="hud-v ${getResultClass(breachText)}">${breachText}</div>
+    <div class="hud-k">RESULT</div>
+    <div class="hud-v ${getResultClass(breachText)}">${breachText}</div>
   </div>
 
   <div class="hud-divider"></div>
@@ -2990,20 +2806,22 @@ hud.innerHTML = `
   <div class="hud-grid">
     <div class="hud-k">ADV PRI</div><div class="hud-v">${advisoryPriorityText}</div>
     <div class="hud-k">ADVISORY</div><div class="hud-v ${stableAdvisory.cls}">${stableAdvisory.level}</div>
-    <div class="hud-k">ACTION</div><div class="hud-v">${actionText}</div>
+    <div class="hud-k">ACTION</div><div class="hud-v ${stableAdvisory.cls}">${stableAdvisory.text}</div>
     <div class="hud-k">CONFIDENCE</div><div class="hud-v">${advisoryConfidence}</div>
     <div class="hud-k">MANEUVER</div><div class="hud-v">${actionText}</div>
   </div>
+    <div id="warn-strip-root"></div>
+
 `;
 
 const warnRoot = document.getElementById("warn-strip-root");
 if (warnRoot) {
   warnRoot.innerHTML = warnShow
-    ? `<div class="warnstrip show ${warnClass}">${warnText}</div>`
+    ? `<div class="warnstrip ${warnClass}">${warnText}</div>`
     : "";
 }
-    
-         window._fsmsDebug = {
+
+        window._fsmsDebug = {
   simElapsed,
   t,
   playing,
