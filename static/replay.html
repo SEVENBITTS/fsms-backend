@@ -40,36 +40,44 @@
 
     #event-log {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
-  width: 340px;
-  max-height: 280px;
+  right: 20px;
+  bottom: 120px;
+  width: 320px;
+  max-height: 300px;
   overflow-y: auto;
-  font-size: 11px;
-  background: rgba(10,10,15,0.85);
-  border-radius: 10px;
+  background: rgba(0,0,0,0.75);
+  border-radius: 12px;
   padding: 10px;
-  backdrop-filter: blur(6px);
+  font-size: 12px;
+  z-index: 6;
+}
+
+.event-log-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  opacity: 0.8;
 }
 
 .event-item {
   margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
 .event-time {
-  color: #888;
-  font-size: 10px;
+  font-size: 11px;
+  opacity: 0.6;
 }
 
 .event-type {
-  font-weight: bold;
-  color: #fff;
+  font-size: 11px;
+  text-transform: uppercase;
+  margin: 2px 0;
 }
 
-.event-value {
-  color: #ccc;
+.event-text {
+  font-size: 12px;
+  font-weight: 500;
 }
 
   #hud {
@@ -1946,22 +1954,52 @@ if (effectiveTtb != null) {
         }
       }
 
-      function renderEventLog() {
+     function renderEventLog() {
   const el = document.getElementById("event-log");
   if (!el) return;
 
-  const last = flightEventLog.slice(-20).reverse();
+  const items = flightEventLog.slice(-12).reverse();
 
-  el.innerHTML = last.map(e => `
-    <div style="margin-bottom:6px;">
-      <div style="color:#aaa;">
-        ${Math.round(e.sim_time_ms/1000)}s — ${e.event_type}
-      </div>
-      <div style="color:#fff;">
-        ${JSON.stringify(e.value)}
-      </div>
-    </div>
-  `).join("");
+  el.innerHTML = `
+    <div class="event-log-title">EVENT TIMELINE</div>
+    ${items.map(e => {
+      const tSec = Math.round((e.sim_time_ms || 0) / 1000);
+
+      let text = "";
+
+      if (e.event_type === "risk_transition") {
+        text = `${e.value?.from || "NONE"} → ${e.value?.to || "UNKNOWN"} (${e.value?.score ?? "—"})`;
+      } 
+      else if (e.event_type === "advisory_transition") {
+        text = `${e.value?.to?.split("|")[1] || e.value?.to || "UNKNOWN"}`;
+      } 
+      else if (e.event_type === "prediction_threshold_crossed") {
+        text = `TTB ${e.value?.threshold?.replace("le", "≤")} (${Number(e.value?.ttb_s || 0).toFixed(1)}s)`;
+      } 
+      else if (e.event_type === "boundary_prediction_started") {
+        text = `${e.value?.zone_name || "Zone"} boundary ahead`;
+      } 
+      else if (e.event_type === "conflict_4d_started") {
+        text = `${e.value?.zone_name || "Zone"} 4D conflict`;
+      } 
+      else if (e.event_type === "envelope_conflict_started") {
+        text = `Envelope conflicts: ${e.value?.count ?? 0}`;
+      } 
+      else {
+        text = e.event_type;
+      }
+
+      return `
+        <div class="event-item">
+          <div class="event-time">T+${tSec}s</div>
+          <div class="event-type ${eventSeverityClass(e.severity)}">
+            ${e.event_type.replace(/_/g, " ")}
+          </div>
+          <div class="event-text">${text}</div>
+        </div>
+      `;
+    }).join("")}
+  `;
 }
 
 function formatEventValue(e) {
