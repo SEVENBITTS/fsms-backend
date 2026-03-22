@@ -264,62 +264,59 @@
       margin: 8px 0;
     }
 
-    #event-log {
-        position: absolute;
-        right: 20px;
-        bottom: 120px;
-        width: 320px;
-        max-height: 300px;
-        overflow-y: auto;
-        background: rgba(10, 12, 16, 0.92); /* match HUD */
-        border-radius: 12px;
-        padding: 10px;
-        font-size: 12px;
-        z-index: 50;
+        #event-log {
+  position: absolute;
+  right: 20px;
+  bottom: 120px;
+  width: 320px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.75);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 12px;
+  z-index: 50;
 }
 
-    .event-log-title {
-    font-weight: bold;
-    margin-bottom: 8px;
-    opacity: 0.8;
-    }
-
-    .event-item {
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+.event-log-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  opacity: 0.8;
 }
 
-    .event-time {
+.event-item {
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: 6px;
+}
+
+.event-time {
   font-size: 11px;
-  opacity: 0.7;
-  color: #9aa4b2;
+  opacity: 0.6;
 }
 
 .event-type {
   font-size: 11px;
   text-transform: uppercase;
-  margin: 3px 0;
-  letter-spacing: 0.04em;
+  margin: 2px 0;
 }
 
 .event-text {
   font-size: 12px;
-  font-weight: 600;
-  color: #e8eefc;
+  font-weight: 500;
 }
 
-    .event-sev-info { color: #22c55e; }
-    .event-sev-caution { color: #facc15; }
-    .event-sev-warning { color: #fb923c; }
-    .event-sev-critical { color: #f87171; font-weight: 700; }
+.event-sev-info { color: #22c55e; }
+.event-sev-caution { color: #eab308; }
+.event-sev-warning { color: #f97316; }
+.event-sev-critical { color: #ef4444; }
 
-    #warn-strip-root {
-    position: absolute;
-    left: 20px;
-    right: 20px;
-    bottom: 60px;
-    z-index: 7;
+#warn-strip-root {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 60px;
+  z-index: 7;
 }
 
   </style>
@@ -1972,14 +1969,7 @@ function renderEventLog() {
   el.innerHTML = `
     <div class="event-log-title">EVENT TIMELINE</div>
     ${items.map(e => {
-        const tSecRaw = (e.sim_time_ms || 0) / 1000;
-        const tSec = Math.round(tSecRaw);
-
-    <div class="event-time">${timeLabel}</div>
-
-const timeLabel =
-  tSecRaw < 0.5 ? "INIT"
-  : `T+${tSec}s`;
+      const tSec = Math.round((e.sim_time_ms || 0) / 1000);
 
       let text = "";
 
@@ -2000,28 +1990,16 @@ const timeLabel =
       }
 
       return `
-        <div class="event-item" onclick="jumpToSimTime(${e.sim_time_ms || 0})">
-    <div class="event-time">
-      ${((e.sim_time_ms || 0) / 1000) < 0.5
-        ? "INIT"
-        : `T+${Math.round((e.sim_time_ms || 0) / 1000)}s`}
-    </div>
-    <div class="event-type ${eventSeverityClass(e.severity)}">
-      ${e.event_type}
-    </div>
-    <div class="event-text">
-      ${formatEventText(e)}
-    </div>
-  </div>
+        <div class="event-item">
+          <div class="event-time">${tSec < 1 ? "INIT" : `T+${tSec}s`}</div>
+          <div class="event-type ${eventSeverityClass(e.severity)}">
+            ${e.event_type.replace(/_/g, " ")}
+          </div>
+          <div class="event-text">${text}</div>
+        </div>
       `;
     }).join("")}
   `;
-}
-
-function jumpToSimTime(ms) {
-  simElapsed = Math.max(0, Math.min(ms, duration));
-  lastFrame = null; // prevents time jump glitch
-  playing = false;
 }
 
 function formatEventValue(e) {
@@ -3128,7 +3106,6 @@ if (
 }
 
         if (slider) slider.value = duration > 0 ? simElapsed / duration : 0;
-        renderEventLog();
         requestAnimationFrame(loop);
       }
 
