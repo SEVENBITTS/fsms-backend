@@ -303,6 +303,28 @@
       border-top: 1px solid #ddd;
       margin: 8px 0;
     }
+
+    #event-log {
+  position: absolute;
+  right: 20px;
+  bottom: 120px;
+  width: 320px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 12px;
+  z-index: 6;
+}
+
+#warn-strip-root {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 60px;
+  z-index: 7;
+}
   </style>
 </head>
 
@@ -333,19 +355,6 @@
   <div id="slider-container" class="panel">
     <input id="slider" type="range" min="0" max="1" step="0.0001" value="0" />
   </div>
-
-  <div id="event-log"></div>
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  width:320px;
-  max-height:300px;
-  overflow:auto;
-  font-size:11px;
-  background:rgba(0,0,0,0.7);
-  padding:8px;
-  border-radius:8px;
-"></div>
 
   <div id="feature-menu">
     <button id="feature-toggle">⚙ Features</button>
@@ -1954,7 +1963,7 @@ if (effectiveTtb != null) {
         }
       }
 
-     function renderEventLog() {
+function renderEventLog() {
   const el = document.getElementById("event-log");
   if (!el) return;
 
@@ -1969,29 +1978,23 @@ if (effectiveTtb != null) {
 
       if (e.event_type === "risk_transition") {
         text = `${e.value?.from || "NONE"} → ${e.value?.to || "UNKNOWN"} (${e.value?.score ?? "—"})`;
-      } 
-      else if (e.event_type === "advisory_transition") {
+      } else if (e.event_type === "advisory_transition") {
         text = `${e.value?.to?.split("|")[1] || e.value?.to || "UNKNOWN"}`;
-      } 
-      else if (e.event_type === "prediction_threshold_crossed") {
+      } else if (e.event_type === "prediction_threshold_crossed") {
         text = `TTB ${e.value?.threshold?.replace("le", "≤")} (${Number(e.value?.ttb_s || 0).toFixed(1)}s)`;
-      } 
-      else if (e.event_type === "boundary_prediction_started") {
+      } else if (e.event_type === "boundary_prediction_started") {
         text = `${e.value?.zone_name || "Zone"} boundary ahead`;
-      } 
-      else if (e.event_type === "conflict_4d_started") {
+      } else if (e.event_type === "conflict_4d_started") {
         text = `${e.value?.zone_name || "Zone"} 4D conflict`;
-      } 
-      else if (e.event_type === "envelope_conflict_started") {
+      } else if (e.event_type === "envelope_conflict_started") {
         text = `Envelope conflicts: ${e.value?.count ?? 0}`;
-      } 
-      else {
+      } else {
         text = e.event_type;
       }
 
       return `
         <div class="event-item">
-          <div class="event-time">T+${tSec}s</div>
+          <div class="event-time">${tSec < 1 ? "INIT" : `T+${tSec}s`}</div>
           <div class="event-type ${eventSeverityClass(e.severity)}">
             ${e.event_type.replace(/_/g, " ")}
           </div>
@@ -2185,8 +2188,6 @@ function buildEventContext({
   };
 }
 
-
-
 function logFlightEvents({
   replayIso,
   simTimeMs,
@@ -2329,7 +2330,48 @@ function logFlightEvents({
   }
 }
 
-    renderEventLog();
+function eventSeverityClass(severity) {
+  const s = String(severity || "").toUpperCase();
+  if (s === "CRITICAL" || s === "IMMEDIATE") return "event-sev-critical";
+  if (s === "WARNING") return "event-sev-warning";
+  if (s === "CAUTION") return "event-sev-caution";
+  return "event-sev-info";
+}
+
+function formatEventText(e) {
+  if (!e) return "—";
+
+  if (e.event_type === "risk_transition") {
+    return `${e.value?.from || "NONE"} → ${e.value?.to || "UNKNOWN"}${e.value?.score != null ? ` (${e.value.score})` : ""}`;
+  }
+
+  if (e.event_type === "advisory_transition") {
+    return `${e.value?.to || "UNKNOWN"}`;
+  }
+
+  if (e.event_type === "prediction_threshold_crossed") {
+    const ttb = e.value?.ttb_s != null ? `${Number(e.value.ttb_s).toFixed(1)} s` : "—";
+    return `${e.value?.threshold || "threshold"} at ${ttb}`;
+  }
+
+  if (e.event_type === "boundary_prediction_started") {
+    return `${e.value?.zone_name || "Zone"} boundary ahead`;
+  }
+
+  if (e.event_type === "conflict_4d_started") {
+    return `${e.value?.zone_name || "Zone"} 4D conflict`;
+  }
+
+  if (e.event_type === "envelope_conflict_started") {
+    return `Envelope conflicts: ${e.value?.count ?? 0}`;
+  }
+
+  if (e.event_type === "debug_tick") {
+    return `sim ${e.value?.sim_time_ms ?? 0} ms`;
+  }
+
+  return JSON.stringify(e.value || {});
+}
 
       const map = new maplibregl.Map({
         container: "map",
@@ -3028,7 +3070,7 @@ hud.innerHTML = `
   <div class="hud-grid">
     <div class="hud-k">ADV PRI</div><div class="hud-v">${advisoryPriorityText}</div>
     <div class="hud-k">ADVISORY</div><div class="hud-v ${stableAdvisory.cls}">${stableAdvisory.level}</div>
-    <div class="hud-k">ACTION</div><div class="hud-v">${actionText}</div>
+    <div class="hud-k">INSTRUCTION</div><div class="hud-v ${stableAdvisory.cls}">${stableAdvisory.text}</div>
     <div class="hud-k">CONFIDENCE</div><div class="hud-v">${advisoryConfidence}</div>
     <div class="hud-k">MANEUVER</div><div class="hud-v">${actionText}</div>
   </div>
