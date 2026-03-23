@@ -38,8 +38,6 @@
       width: 320px;
     }
 
-
-
   #hud {
   position: absolute;
   top: 15px;
@@ -264,93 +262,80 @@
       margin: 8px 0;
     }
 
-    #event-log-panel {
-    position: absolute;
-    right: 20px;
-    bottom: 120px;
-    width: 320px;
-    background: rgba(10, 12, 16, 0.92);
-    border-radius: 12px;
-    font-size: 12px;
-    z-index: 50;
-    overflow: hidden;
+   #event-log-panel {
+  position: absolute;
+  right: 20px;
+  bottom: 120px;
+  width: 360px;
+  background: rgba(10, 12, 16, 0.94);
+  border-radius: 14px;
+  font-size: 12px;
+  z-index: 50;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 18px 45px rgba(0,0,0,0.45);
 }
 
 #event-log {
-    max-height: 300px;
-    overflow-y: auto;
-    padding: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 10px;
 }
 
- .event-log-title {
-  font-weight: 700;
-  margin-bottom: 0;
-  opacity: 1;
-  color: #e8eefc;
+#event-log::-webkit-scrollbar {
+  width: 8px;
 }
 
-.event-log-status {
-  font-size: 11px;
-  opacity: 0.8;
-  color: #c7d2e3;
+#event-log::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.16);
+  border-radius: 999px;
 }
 
-.event-log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.03);
-}
-
-.event-log-status {
-    font-size: 11px;
-    opacity: 0.7;
-}
-
-    .event-item {
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-
-    .event-time {
-  font-size: 11px;
-  opacity: 0.7;
-  color: #9aa4b2;
-}
-
-.event-item.selected {
-  outline: 1px solid rgba(255,255,255,0.22);
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
-  padding: 6px;
-}
-
-.event-item.current {
-  box-shadow: inset 3px 0 0 rgba(255,255,255,0.55);
-  border-radius: 8px;
-  padding: 6px;
+.event-item {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .event-item:hover {
   background: rgba(255,255,255,0.04);
-  border-radius: 8px;
+  border-color: rgba(255,255,255,0.08);
   cursor: pointer;
 }
 
-.event-type {
+.event-item.selected {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.24);
+}
+
+.event-item.current {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: inset 3px 0 0 #00ffcc;
+}
+
+.event-time {
   font-size: 11px;
+  opacity: 0.7;
+  color: #9aa4b2;
+  margin-bottom: 2px;
+}
+
+.event-type {
+  font-size: 10px;
   text-transform: uppercase;
-  margin: 3px 0;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+  font-weight: 800;
 }
 
 .event-text {
   font-size: 12px;
   font-weight: 600;
   color: #e8eefc;
+  line-height: 1.35;
 }
 
     .event-sev-info { color: #22c55e; }
@@ -491,6 +476,8 @@ let lastStableAdvisory = {
   priorityScore: 0
 };
 
+let startupMutedUntilMs = 2000;
+
       let pendingAdvisoryTs = 0;
       let pendingAdvisory = null;
       let lastStableAdvisoryTs = 0;
@@ -526,7 +513,6 @@ window.flightEventLog = flightEventLog;
 //   .event-text
 //   .event-sev-info / caution / warning / critical
 // ==========================================
-
 function getEventLogEl() {
   return document.getElementById("event-log");
 }
@@ -550,183 +536,121 @@ function escapeHtml(value) {
 
 function eventTypeLabel(eventType) {
   switch (eventType) {
-    case "RISK_ESCALATED":
-    case "RISK_REDUCED":
-      return "RISK";
-
-    case "ACTION_CHANGED":
-      return "ACTION";
-
-    case "BOUNDARY_PREDICTED":
-      return "BOUNDARY";
-
-    case "CONFLICT_PREDICTED":
-      return "CONFLICT";
-
-    case "VERTICAL_LIMIT_ALERT":
-      return "VERTICAL";
-
-    case "ENVELOPE_ALERT":
-      return "ENVELOPE";
-
-    case "THRESHOLD_CROSSED":
-      return "THRESHOLD";
-
-    case "SYSTEM_READY":
-      return "SYSTEM";
-
-    case "REPLAY_STARTED":
-    case "REPLAY_PAUSED":
-    case "REPLAY_RESUMED":
-      return "REPLAY";
-
-    case "BREACH_CONFIRMED":
-      return "BREACH";
-
-    case "BREACH_CLEARED":
-      return "CLEAR";
-
+    case "risk_transition": return "RISK";
+    case "advisory_transition": return "ACTION";
+    case "prediction_threshold_crossed": return "THRESHOLD";
+    case "boundary_prediction_started": return "BOUNDARY";
+    case "conflict_4d_started": return "CONFLICT";
+    case "vertical_conflict_started": return "VERTICAL";
+    case "envelope_conflict_started": return "ENVELOPE";
+    case "INIT": return "INIT";
     default:
-      return "EVENT";
+      return String(eventType || "event")
+        .replaceAll("_", " ")
+        .toUpperCase();
   }
 }
 
 function eventSeverityClass(severity) {
-  const sev = String(severity || "").toLowerCase();
-  if (sev === "critical" || sev === "immediate") return "event-sev-critical";
-  if (sev === "warning") return "event-sev-warning";
-  if (sev === "caution") return "event-sev-caution";
+  const s = String(severity || "").toLowerCase();
+  if (s === "critical" || s === "immediate") return "event-sev-critical";
+  if (s === "warning") return "event-sev-warning";
+  if (s === "caution") return "event-sev-caution";
   return "event-sev-info";
-}
-
-function summarizeValue(value) {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-
-  if (typeof value === "object") {
-    if ("from" in value || "to" in value) {
-      return `${value.from ?? "?"} → ${value.to ?? "?"}`;
-    }
-    if ("ttb_band" in value) {
-      return `TTB < ${value.ttb_band}s`;
-    }
-    if ("message" in value) {
-      return String(value.message);
-    }
-    if ("label" in value) {
-      return String(value.label);
-    }
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return "[object]";
-    }
-  }
-
-  return String(value);
-}
-
-function formatEventText(evt) {
-  const type = evt?.event_type || "";
-  const source = evt?.source ? ` [${evt.source}]` : "";
-  const valueText = summarizeValue(evt?.value);
-
-  switch (type) {
-    case "RISK_CHANGE":
-      return `Risk changed${source}: ${valueText}`;
-    case "ADVISORY_CHANGE":
-      return `Advisory changed${source}: ${valueText}`;
-    case "TTB_THRESHOLD":
-      return `Prediction threshold crossed${source}: ${valueText}`;
-    case "BOUNDARY_CONFLICT_START":
-      return `Boundary conflict started${source}${valueText ? `: ${valueText}` : ""}`;
-    case "CONFLICT4D_START":
-      return `4D conflict started${source}${valueText ? `: ${valueText}` : ""}`;
-    case "VERTICAL_CONFLICT_START":
-      return `Vertical conflict started${source}${valueText ? `: ${valueText}` : ""}`;
-    case "ENVELOPE_CONFLICT_START":
-      return `Envelope conflict started${source}${valueText ? `: ${valueText}` : ""}`;
-    case "INIT":
-      return `Replay initialized${valueText ? `: ${valueText}` : ""}`;
-    default:
-      return `${eventTypeLabel(type)}${source}${valueText ? `: ${valueText}` : ""}`;
-  }
 }
 
 function findCurrentPlaybackEvent(events, simTimeMs) {
   if (!Array.isArray(events) || !events.length) return null;
 
   let current = null;
-  for (let i = 0; i < events.length; i += 1) {
-    const evt = events[i];
-    if ((evt?.sim_time_ms ?? -1) <= simTimeMs) {
-      current = evt;
-    } else {
-      break;
-    }
+  for (const evt of events) {
+    if ((evt.sim_time_ms ?? 0) <= simTimeMs) current = evt;
+    else break;
   }
   return current;
 }
 
-function jumpToSimTime(simTimeMs) {
-  try {
-    if (typeof window.setReplayTime === "function") {
-      window.setReplayTime(simTimeMs);
-      return;
+function jumpToSimTime(ms, eventId = null) {
+  simElapsed = Math.max(0, Math.min(Number(ms) || 0, duration));
+  lastFrame = null;
+  playing = false;
+  playBtn.textContent = "Play";
+  selectedEventId = eventId;
+}
+
+function formatEventText(evt) {
+  if (!evt) return "—";
+
+  switch (evt.event_type) {
+    case "risk_transition":
+      return `Risk ${evt.value?.from || "NONE"} → ${evt.value?.to || "UNKNOWN"} (${evt.value?.score ?? "—"})`;
+
+    case "advisory_transition": {
+      const advisoryText = evt.value?.to?.split("|")[1];
+      return advisoryText || evt.value?.to || "Advisory updated";
     }
 
-    if (typeof window.simElapsed === "number") {
-      window.simElapsed = simTimeMs;
-      return;
+    case "prediction_threshold_crossed": {
+      const label = String(evt.value?.threshold || "").replace("le", "≤ ");
+      const ttb = evt.value?.ttb_s != null ? `${Number(evt.value.ttb_s).toFixed(1)}s` : "—";
+      return `TTB ${label} (${ttb})`;
     }
 
-    console.warn("jumpToSimTime: no replay setter available");
-  } catch (err) {
-    console.warn("jumpToSimTime failed", err);
+    case "boundary_prediction_started":
+      return `${evt.value?.zone_name || "Zone"} boundary ahead`;
+
+    case "conflict_4d_started":
+      return `${evt.value?.zone_name || "Zone"} 4D conflict`;
+
+    case "vertical_conflict_started":
+      return "Vertical conflict detected";
+
+    case "envelope_conflict_started":
+      return `Envelope conflicts: ${evt.value?.count ?? 0}`;
+
+    case "INIT":
+      return "Replay initialized";
+
+    default:
+      return eventTypeLabel(evt.event_type);
   }
 }
 
-function renderEventLog(events, simTimeMs) {
+function renderEventLog(events = flightEventLog, simTimeMs = simElapsed) {
   const root = getEventLogEl();
   const statusEl = document.getElementById("event-log-status");
   if (!root) return;
 
   const safeEvents = Array.isArray(events) ? events : [];
+  const visibleEvents = safeEvents
+    .filter(evt => evt.event_type !== "INIT")
+    .slice(-100)
+    .reverse();
+
+  const currentEvent = findCurrentPlaybackEvent(safeEvents, simTimeMs);
+  currentPlaybackEventId = currentEvent?.id ?? null;
 
   if (statusEl) {
     statusEl.textContent = `${safeEvents.length} event${safeEvents.length === 1 ? "" : "s"}`;
   }
 
-  if (!safeEvents.length) {
+  if (!visibleEvents.length) {
     root.innerHTML = `
       <div class="event-item">
         <div class="event-text">No events recorded.</div>
       </div>
     `;
-    currentPlaybackEventId = null;
     return;
   }
 
-  const currentEvent = findCurrentPlaybackEvent(safeEvents, simTimeMs);
-  currentPlaybackEventId = currentEvent?.id ?? null;
-
-  const recentEvents = safeEvents.slice(-100);
-
-  root.innerHTML = recentEvents.map((evt) => {
-    const sevClass = eventSeverityClass(evt.severity);
+  root.innerHTML = visibleEvents.map((evt) => {
     const isSelected = evt.id === selectedEventId;
     const isCurrent = evt.id === currentPlaybackEventId;
-
-    const extraClasses = [
-      "event-item",
-      isSelected ? "selected" : "",
-      isCurrent ? "current" : "",
-    ].filter(Boolean).join(" ");
+    const sevClass = eventSeverityClass(evt.severity);
 
     return `
       <div
-        class="${extraClasses}"
+        class="event-item${isSelected ? " selected" : ""}${isCurrent ? " current" : ""}"
         data-event-id="${escapeHtml(evt.id)}"
         data-sim-time="${Number(evt.sim_time_ms || 0)}"
       >
@@ -737,18 +661,16 @@ function renderEventLog(events, simTimeMs) {
     `;
   }).join("");
 
-  const items = root.querySelectorAll(".event-item[data-event-id]");
-  items.forEach((item) => {
+  root.querySelectorAll(".event-item[data-event-id]").forEach((item) => {
     item.addEventListener("click", () => {
       const eventId = item.getAttribute("data-event-id");
       const targetMs = Number(item.getAttribute("data-sim-time") || 0);
-      selectedEventId = eventId;
-      jumpToSimTime(targetMs);
-      renderEventLog(safeEvents, targetMs);
+      jumpToSimTime(targetMs, eventId);
+      renderEventLog(flightEventLog, targetMs);
     });
   });
 }
-
+ 
 function safeRenderEventLog() {
   try {
     const events = Array.isArray(window.flightEventLog) ? window.flightEventLog : [];
@@ -759,584 +681,596 @@ function safeRenderEventLog() {
   }
 }
 
+function scrollCurrentEventIntoView() {
+  const root = getEventLogEl();
+  if (!root) return;
+
+  const active = root.querySelector(".event-item.current");
+  if (!active) return;
+
+  active.scrollIntoView({
+    block: "nearest",
+    behavior: "smooth"
+  });
+}
 
 
-      function bindToggle(id, key) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        FEATURES[key] = !!el.checked;
-        el.addEventListener("change", (e) => {
-          FEATURES[key] = e.target.checked;
+function bindToggle(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  FEATURES[key] = !!el.checked;
+  el.addEventListener("change", (e) => {
+    FEATURES[key] = e.target.checked;
+  });
+}
+
+function setupFeatureToggles() {
+  bindToggle("toggleTrend", "trend");
+  bindToggle("togglePrediction", "prediction");
+  bindToggle("toggleEnvelope", "envelope");
+  bindToggle("toggleCone", "cone");
+  bindToggle("toggleKalman", "kalman");
+  bindToggle("toggleVectors", "vectors");
+ }
+
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function clamp01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+
+function sigmoid(x, center, width) {
+  if (!Number.isFinite(x)) return 0;
+  return 1 / (1 + Math.exp((x - center) / width));
+}
+
+function marginToPct(m) {
+  if (m === null || m === undefined || Number.isNaN(m)) return 0;
+  return clamp(Number(m), 0, 100);
+}
+
+function fmtLimit(v) {
+  if (v === null || v === undefined) return "—";
+  const m = Number(v);
+  if (Math.abs(m - 121.92) < 2) return "120.0 m (400 ft)";
+  const ft = m * 3.28084;
+  return `${m.toFixed(1)} m (${Math.round(ft)} ft)`;
+}
+
+function fmtM(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  return `${Number(v).toFixed(1)} m`;
+}
+
+function vsArrow(vz) {
+  if (vz === null || vz === undefined || Number.isNaN(vz)) return "—";
+  if (vz > 0.15) return "↑";
+  if (vz < -0.15) return "↓";
+return "→";
+}
+
+function bearingDeg(a, b) {
+  const toRad = (d) => d * Math.PI / 180;
+  const toDeg = (r) => r * 180 / Math.PI;
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const dLon = toRad(b.lng - a.lng);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  let brng = toDeg(Math.atan2(y, x));
+  return (brng + 360) % 360;
+}
+
+function normalizeAngle180(deg) {
+  return ((deg + 180) % 360 + 360) % 360 - 180;
+}
+
+function computeTurnBias({ brg, zoneBearing }) {
+  if (!Number.isFinite(brg) || !Number.isFinite(zoneBearing)) {
+    return { turn: "NONE", delta: null };
+  }
+
+  const delta = normalizeAngle180(zoneBearing - brg);
+
+  if (delta > 5) return { turn: "LEFT", delta };
+  if (delta < -5) return { turn: "RIGHT", delta };
+  return { turn: "NONE", delta };
+}
+
+function kalmanLike(prev, current) {
+  const k = 0.2;
+  return {
+    lat: prev.lat + k * (current.lat - prev.lat),
+    lng: prev.lng + k * (current.lng - prev.lng),
+    alt: prev.alt + k * (current.alt - prev.alt)
+  };
+}
+
+function distanceM(a, b) {
+  const R = 6371000;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lng - a.lng) * Math.PI / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function movePoint(start, headingDeg, distanceMVal) {
+  const R = 6371000;
+  const brng = headingDeg * Math.PI / 180;
+  const lat1 = start.lat * Math.PI / 180;
+  const lon1 = start.lng * Math.PI / 180;
+
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(distanceMVal / R) +
+    Math.cos(lat1) * Math.sin(distanceMVal / R) * Math.cos(brng)
+  );
+
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(brng) * Math.sin(distanceMVal / R) * Math.cos(lat1),
+    Math.cos(distanceMVal / R) - Math.sin(lat1) * Math.sin(lat2)
+  );
+
+  return {
+    lat: lat2 * 180 / Math.PI,
+    lng: lon2 * 180 / Math.PI
+  };
+}
+
+function normalizeHeading(deg) {
+  return ((deg % 360) + 360) % 360;
+}
+
+function makeArrowHead(endPos, headingDeg, arrowLengthM = 18, arrowAngleDeg = 28) {
+  const left = movePoint(endPos, normalizeHeading(headingDeg + 180 - arrowAngleDeg), arrowLengthM);
+  const right = movePoint(endPos, normalizeHeading(headingDeg + 180 + arrowAngleDeg), arrowLengthM);
+
+  return {
+    type: "Feature",
+    geometry: {
+      type: "Polygon",
+      coordinates: [[
+        [endPos.lng, endPos.lat],
+        [left.lng, left.lat],
+        [right.lng, right.lat],
+        [endPos.lng, endPos.lat]
+      ]]
+    }
+  };
+}
+
+function pointInRing(point, ring) {
+  const x = point.lng;
+  const y = point.lat;
+  let inside = false;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect =
+      ((yi > y) !== (yj > y)) &&
+      (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi);
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+function pointInPolygon(point, geometry) {
+  if (!geometry) return false;
+  if (geometry.type === "Polygon") return pointInRing(point, geometry.coordinates[0]);
+  if (geometry.type === "MultiPolygon") return geometry.coordinates.some((poly) => pointInRing(point, poly[0]));
+  return false;
+}
+
+function predictFuturePath(currentPos, headingDeg, groundspeedVal, vz, secondsAhead = 60, stepSeconds = 1) {
+  if (!groundspeedVal || groundspeedVal <= 0) return [];
+
+  const adaptiveStep =
+    groundspeedVal > 50 ? 0.25 :
+    groundspeedVal > 25 ? 0.5 :
+    stepSeconds;
+
+  const points = [];
+  let pos = { lat: currentPos.lat, lng: currentPos.lng };
+  let alt = currentPos.alt ?? 0;
+
+  for (let s = adaptiveStep; s <= secondsAhead; s += adaptiveStep) {
+    const dist = groundspeedVal * adaptiveStep;
+    pos = movePoint(pos, headingDeg, dist);
+    alt = alt + (vz || 0) * adaptiveStep;
+    points.push({ lat: pos.lat, lng: pos.lng, alt, ttb_s: s });
+  }
+
+  return points;
+}
+
+function predictPathIntersection(pathPoints, zoneFeature) {
+  if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) return null;
+
+  let best = null;
+
+  for (let i = 1; i < pathPoints.length; i++) {
+    const p0 = pathPoints[i - 1];
+    const p1 = pathPoints[i];
+    const inside0 = pointInPolygon(p0, zoneFeature.geometry);
+    const inside1 = pointInPolygon(p1, zoneFeature.geometry);
+
+    if (inside1 && !best) {
+      best = { lng: p1.lng, lat: p1.lat, alt: p1.alt, ttb_s: p1.ttb_s };
+    }
+
+    if (!inside0 && inside1) {
+      const seg = turf.lineString([[p0.lng, p0.lat], [p1.lng, p1.lat]]);
+      let poly;
+
+      if (zoneFeature.geometry.type === "Polygon") {
+        poly = turf.polygon(zoneFeature.geometry.coordinates);
+      } else if (zoneFeature.geometry.type === "MultiPolygon") {
+        poly = turf.multiPolygon(zoneFeature.geometry.coordinates);
+      } else {
+        continue;
+      }
+
+      const hits = turf.lineIntersect(seg, poly);
+
+      if (hits?.features?.length) {
+        const hit = hits.features[0];
+        const [hitLng, hitLat] = hit.geometry.coordinates;
+        const segDx = p1.lng - p0.lng;
+        const segDy = p1.lat - p0.lat;
+
+        let frac = 0.5;
+        if (Math.abs(segDx) >= Math.abs(segDy) && segDx !== 0) {
+          frac = (hitLng - p0.lng) / segDx;
+        } else if (segDy !== 0) {
+          frac = (hitLat - p0.lat) / segDy;
+        }
+
+        frac = Math.max(0, Math.min(1, frac));
+
+        return {
+          lng: hitLng,
+          lat: hitLat,
+          alt: p0.alt + (p1.alt - p0.alt) * frac,
+          ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * frac
+        };
+      }
+
+      return {
+        lng: p0.lng + (p1.lng - p0.lng) * 0.5,
+        lat: p0.lat + (p1.lat - p0.lat) * 0.5,
+        alt: p0.alt + (p1.alt - p0.alt) * 0.5,
+        ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * 0.5
+      };
+    }
+  }
+
+  return best;
+}
+
+function predictEarliestZoneEntry(pathPoints, airspaceGeojson) {
+  if (!airspaceGeojson?.features?.length) return null;
+
+  let best = null;
+
+  for (const feature of airspaceGeojson.features) {
+    const hit = predictPathIntersection(pathPoints, feature);
+    if (!hit) continue;
+
+    const candidate = {
+      zoneId: feature?.properties?.id ?? null,
+      zoneName: feature?.properties?.name ?? "Unknown",
+      zoneType: feature?.properties?.zone_type ?? "-",
+      pos: { lng: hit.lng, lat: hit.lat },
+      ttb_s: hit.ttb_s,
+      alt: hit.alt
+    };
+
+    if (!best || candidate.ttb_s < best.ttb_s) best = candidate;
+  }
+
+  return best;
+}
+
+function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
+  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
+  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return false;
+  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return false;
+  return true;
+}
+
+function describeVerticalRelation(predictedAlt, lowerM, upperM) {
+  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return "UNKNOWN";
+  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return "BELOW FLOOR";
+  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return "ABOVE CEILING";
+  return "INSIDE BAND";
+}
+
+function predictVerticalConflictTtb(pathPoints, zoneFeature) {
+  if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) return null;
+
+  const lowerM = zoneFeature?.properties?.lower_m ?? null;
+  const upperM = zoneFeature?.properties?.upper_m ?? null;
+
+  for (const p of pathPoints) {
+    const verticalOk = isWithinVerticalBand(p.alt, lowerM, upperM);
+    if (verticalOk === true) {
+      return { ttb_s: p.ttb_s, alt: p.alt, lower_m: lowerM, upper_m: upperM };
+    }
+  }
+
+  return null;
+}
+
+function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
+  if (!airspaceGeojson?.features?.length) return null;
+
+  let bestConflict = null;
+  let bestLateralOnly = null;
+
+  for (const feature of airspaceGeojson.features) {
+    const hit = predictPathIntersection(pathPoints, feature);
+    if (!hit) continue;
+
+    const lowerM = feature?.properties?.lower_m ?? null;
+    const upperM = feature?.properties?.upper_m ?? null;
+    const verticalOk = isWithinVerticalBand(hit.alt, lowerM, upperM);
+    const verticalKnown = verticalOk !== null;
+    const isConflict = verticalOk === true;
+
+    const candidate = {
+      zoneId: feature?.properties?.id ?? null,
+      zoneName: feature?.properties?.name ?? "Unknown",
+      zoneType: feature?.properties?.zone_type ?? "-",
+      pos: { lng: hit.lng, lat: hit.lat },
+      ttb_s: hit.ttb_s,
+      predicted_alt_m: hit.alt,
+      lower_m: lowerM,
+      upper_m: upperM,
+      vertical_ok: verticalOk,
+      vertical_known: verticalKnown,
+      conflict: isConflict
+    };
+
+    if (isConflict) {
+      if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) bestConflict = candidate;
+    } else {
+      if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) bestLateralOnly = candidate;
+    }
+  }
+
+  return bestConflict || bestLateralOnly;
+}
+
+function smoothPrediction(newPrediction) {
+  if (!newPrediction) return lastPrediction;
+  if (!lastPrediction) {
+    lastPrediction = newPrediction;
+    return newPrediction;
+  }
+  const dt = Math.abs(newPrediction.ttb_s - lastPrediction.ttb_s);
+  if (dt < 0.5) return lastPrediction;
+  lastPrediction = newPrediction;
+  return newPrediction;
+}
+
+function buildPredictiveConflictEnvelope(pathPoints, corridorWidthM = 20) {
+  if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null;
+  if (typeof turf === "undefined") return null;
+
+  const coords = pathPoints.map((p) => [p.lng, p.lat]);
+  const line = turf.lineString(coords);
+
+  try {
+    return turf.buffer(line, corridorWidthM, { units: "meters" });
+  } catch (e) {
+    console.warn("Failed to build predictive envelope:", e.message);
+    return null;
+  }
+}
+
+function findEnvelopeConflicts(envelopeFeature, airspaceGeojson) {
+  if (!envelopeFeature || !airspaceGeojson?.features?.length) return [];
+  if (typeof turf === "undefined") return [];
+
+  const conflicts = [];
+
+  for (const feature of airspaceGeojson.features) {
+    try {
+      const overlap = turf.intersect(turf.featureCollection([envelopeFeature, feature]));
+      if (overlap) {
+        conflicts.push({
+          zoneId: feature?.properties?.id ?? null,
+          zoneName: feature?.properties?.name ?? "Unknown",
+          zoneType: feature?.properties?.zone_type ?? "-",
+          overlap
         });
       }
-
-      function setupFeatureToggles() {
-        bindToggle("toggleTrend", "trend");
-        bindToggle("togglePrediction", "prediction");
-        bindToggle("toggleEnvelope", "envelope");
-        bindToggle("toggleCone", "cone");
-        bindToggle("toggleKalman", "kalman");
-        bindToggle("toggleVectors", "vectors");
-      }
-
-      function clamp(n, a, b) {
-        return Math.max(a, Math.min(b, n));
-      }
-
-      function clamp01(v) {
-        return Math.max(0, Math.min(1, v));
-      }
-
-      function sigmoid(x, center, width) {
-        if (!Number.isFinite(x)) return 0;
-        return 1 / (1 + Math.exp((x - center) / width));
-      }
-
-      function marginToPct(m) {
-        if (m === null || m === undefined || Number.isNaN(m)) return 0;
-        return clamp(Number(m), 0, 100);
-      }
-
-      function fmtLimit(v) {
-        if (v === null || v === undefined) return "—";
-        const m = Number(v);
-        if (Math.abs(m - 121.92) < 2) return "120.0 m (400 ft)";
-        const ft = m * 3.28084;
-        return `${m.toFixed(1)} m (${Math.round(ft)} ft)`;
-      }
-
-      function fmtM(v) {
-        if (v === null || v === undefined || Number.isNaN(v)) return "—";
-        return `${Number(v).toFixed(1)} m`;
-      }
-
-      function vsArrow(vz) {
-        if (vz === null || vz === undefined || Number.isNaN(vz)) return "—";
-        if (vz > 0.15) return "↑";
-        if (vz < -0.15) return "↓";
-        return "→";
-      }
-
-      function bearingDeg(a, b) {
-        const toRad = (d) => d * Math.PI / 180;
-        const toDeg = (r) => r * 180 / Math.PI;
-        const lat1 = toRad(a.lat);
-        const lat2 = toRad(b.lat);
-        const dLon = toRad(b.lng - a.lng);
-        const y = Math.sin(dLon) * Math.cos(lat2);
-        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-        let brng = toDeg(Math.atan2(y, x));
-        return (brng + 360) % 360;
-      }
-
-      function normalizeAngle180(deg) {
-        return ((deg + 180) % 360 + 360) % 360 - 180;
-      }
-
-      function computeTurnBias({ brg, zoneBearing }) {
-        if (!Number.isFinite(brg) || !Number.isFinite(zoneBearing)) {
-          return { turn: "NONE", delta: null };
-        }
-
-        const delta = normalizeAngle180(zoneBearing - brg);
-
-        if (delta > 5) return { turn: "LEFT", delta };
-        if (delta < -5) return { turn: "RIGHT", delta };
-        return { turn: "NONE", delta };
-      }
-
-      function kalmanLike(prev, current) {
-        const k = 0.2;
-        return {
-          lat: prev.lat + k * (current.lat - prev.lat),
-          lng: prev.lng + k * (current.lng - prev.lng),
-          alt: prev.alt + k * (current.alt - prev.alt)
-        };
-      }
-
-      function distanceM(a, b) {
-        const R = 6371000;
-        const lat1 = a.lat * Math.PI / 180;
-        const lat2 = b.lat * Math.PI / 180;
-        const dLat = (b.lat - a.lat) * Math.PI / 180;
-        const dLon = (b.lng - a.lng) * Math.PI / 180;
-        const x =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-        return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-      }
-
-      function movePoint(start, headingDeg, distanceMVal) {
-        const R = 6371000;
-        const brng = headingDeg * Math.PI / 180;
-        const lat1 = start.lat * Math.PI / 180;
-        const lon1 = start.lng * Math.PI / 180;
-
-        const lat2 = Math.asin(
-          Math.sin(lat1) * Math.cos(distanceMVal / R) +
-          Math.cos(lat1) * Math.sin(distanceMVal / R) * Math.cos(brng)
-        );
-
-        const lon2 = lon1 + Math.atan2(
-          Math.sin(brng) * Math.sin(distanceMVal / R) * Math.cos(lat1),
-          Math.cos(distanceMVal / R) - Math.sin(lat1) * Math.sin(lat2)
-        );
-
-        return {
-          lat: lat2 * 180 / Math.PI,
-          lng: lon2 * 180 / Math.PI
-        };
-      }
-
-      function normalizeHeading(deg) {
-        return ((deg % 360) + 360) % 360;
-      }
-
-      function makeArrowHead(endPos, headingDeg, arrowLengthM = 18, arrowAngleDeg = 28) {
-        const left = movePoint(endPos, normalizeHeading(headingDeg + 180 - arrowAngleDeg), arrowLengthM);
-        const right = movePoint(endPos, normalizeHeading(headingDeg + 180 + arrowAngleDeg), arrowLengthM);
-
-        return {
-          type: "Feature",
-          geometry: {
-            type: "Polygon",
-            coordinates: [[
-              [endPos.lng, endPos.lat],
-              [left.lng, left.lat],
-              [right.lng, right.lat],
-              [endPos.lng, endPos.lat]
-            ]]
-          }
-        };
-      }
-
-      function pointInRing(point, ring) {
-        const x = point.lng;
-        const y = point.lat;
-        let inside = false;
-
-        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-          const xi = ring[i][0], yi = ring[i][1];
-          const xj = ring[j][0], yj = ring[j][1];
-          const intersect =
-            ((yi > y) !== (yj > y)) &&
-            (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi);
-
-          if (intersect) inside = !inside;
-        }
-
-        return inside;
-      }
-
-      function pointInPolygon(point, geometry) {
-        if (!geometry) return false;
-        if (geometry.type === "Polygon") return pointInRing(point, geometry.coordinates[0]);
-        if (geometry.type === "MultiPolygon") return geometry.coordinates.some((poly) => pointInRing(point, poly[0]));
-        return false;
-      }
-
-      function predictFuturePath(currentPos, headingDeg, groundspeedVal, vz, secondsAhead = 60, stepSeconds = 1) {
-        if (!groundspeedVal || groundspeedVal <= 0) return [];
-
-        const adaptiveStep =
-          groundspeedVal > 50 ? 0.25 :
-          groundspeedVal > 25 ? 0.5 :
-          stepSeconds;
-
-        const points = [];
-        let pos = { lat: currentPos.lat, lng: currentPos.lng };
-        let alt = currentPos.alt ?? 0;
-
-        for (let s = adaptiveStep; s <= secondsAhead; s += adaptiveStep) {
-          const dist = groundspeedVal * adaptiveStep;
-          pos = movePoint(pos, headingDeg, dist);
-          alt = alt + (vz || 0) * adaptiveStep;
-          points.push({ lat: pos.lat, lng: pos.lng, alt, ttb_s: s });
-        }
-
-        return points;
-      }
-
-      function predictPathIntersection(pathPoints, zoneFeature) {
-        if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) return null;
-
-        let best = null;
-
-        for (let i = 1; i < pathPoints.length; i++) {
-          const p0 = pathPoints[i - 1];
-          const p1 = pathPoints[i];
-          const inside0 = pointInPolygon(p0, zoneFeature.geometry);
-          const inside1 = pointInPolygon(p1, zoneFeature.geometry);
-
-          if (inside1 && !best) {
-            best = { lng: p1.lng, lat: p1.lat, alt: p1.alt, ttb_s: p1.ttb_s };
-          }
-
-          if (!inside0 && inside1) {
-            const seg = turf.lineString([[p0.lng, p0.lat], [p1.lng, p1.lat]]);
-            let poly;
-
-            if (zoneFeature.geometry.type === "Polygon") {
-              poly = turf.polygon(zoneFeature.geometry.coordinates);
-            } else if (zoneFeature.geometry.type === "MultiPolygon") {
-              poly = turf.multiPolygon(zoneFeature.geometry.coordinates);
-            } else {
-              continue;
-            }
-
-            const hits = turf.lineIntersect(seg, poly);
-
-            if (hits?.features?.length) {
-              const hit = hits.features[0];
-              const [hitLng, hitLat] = hit.geometry.coordinates;
-              const segDx = p1.lng - p0.lng;
-              const segDy = p1.lat - p0.lat;
-
-              let frac = 0.5;
-              if (Math.abs(segDx) >= Math.abs(segDy) && segDx !== 0) {
-                frac = (hitLng - p0.lng) / segDx;
-              } else if (segDy !== 0) {
-                frac = (hitLat - p0.lat) / segDy;
-              }
-
-              frac = Math.max(0, Math.min(1, frac));
-
-              return {
-                lng: hitLng,
-                lat: hitLat,
-                alt: p0.alt + (p1.alt - p0.alt) * frac,
-                ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * frac
-              };
-            }
-
-            return {
-              lng: p0.lng + (p1.lng - p0.lng) * 0.5,
-              lat: p0.lat + (p1.lat - p0.lat) * 0.5,
-              alt: p0.alt + (p1.alt - p0.alt) * 0.5,
-              ttb_s: p0.ttb_s + (p1.ttb_s - p0.ttb_s) * 0.5
-            };
-          }
-        }
-
-        return best;
-      }
-
-      function predictEarliestZoneEntry(pathPoints, airspaceGeojson) {
-        if (!airspaceGeojson?.features?.length) return null;
-
-        let best = null;
-
-        for (const feature of airspaceGeojson.features) {
-          const hit = predictPathIntersection(pathPoints, feature);
-          if (!hit) continue;
-
-          const candidate = {
-            zoneId: feature?.properties?.id ?? null,
-            zoneName: feature?.properties?.name ?? "Unknown",
-            zoneType: feature?.properties?.zone_type ?? "-",
-            pos: { lng: hit.lng, lat: hit.lat },
-            ttb_s: hit.ttb_s,
-            alt: hit.alt
-          };
-
-          if (!best || candidate.ttb_s < best.ttb_s) best = candidate;
-        }
-
-        return best;
-      }
-
-      function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
-        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
-        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return false;
-        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return false;
-        return true;
-      }
-
-      function describeVerticalRelation(predictedAlt, lowerM, upperM) {
-        if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return "UNKNOWN";
-        if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return "BELOW FLOOR";
-        if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return "ABOVE CEILING";
-        return "INSIDE BAND";
-      }
-
-      function predictVerticalConflictTtb(pathPoints, zoneFeature) {
-        if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) return null;
-
-        const lowerM = zoneFeature?.properties?.lower_m ?? null;
-        const upperM = zoneFeature?.properties?.upper_m ?? null;
-
-        for (const p of pathPoints) {
-          const verticalOk = isWithinVerticalBand(p.alt, lowerM, upperM);
-          if (verticalOk === true) {
-            return { ttb_s: p.ttb_s, alt: p.alt, lower_m: lowerM, upper_m: upperM };
-          }
-        }
-
-        return null;
-      }
-
-      function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
-        if (!airspaceGeojson?.features?.length) return null;
-
-        let bestConflict = null;
-        let bestLateralOnly = null;
-
-        for (const feature of airspaceGeojson.features) {
-          const hit = predictPathIntersection(pathPoints, feature);
-          if (!hit) continue;
-
-          const lowerM = feature?.properties?.lower_m ?? null;
-          const upperM = feature?.properties?.upper_m ?? null;
-          const verticalOk = isWithinVerticalBand(hit.alt, lowerM, upperM);
-          const verticalKnown = verticalOk !== null;
-          const isConflict = verticalOk === true;
-
-          const candidate = {
-            zoneId: feature?.properties?.id ?? null,
-            zoneName: feature?.properties?.name ?? "Unknown",
-            zoneType: feature?.properties?.zone_type ?? "-",
-            pos: { lng: hit.lng, lat: hit.lat },
-            ttb_s: hit.ttb_s,
-            predicted_alt_m: hit.alt,
-            lower_m: lowerM,
-            upper_m: upperM,
-            vertical_ok: verticalOk,
-            vertical_known: verticalKnown,
-            conflict: isConflict
-          };
-
-          if (isConflict) {
-            if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) bestConflict = candidate;
-          } else {
-            if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) bestLateralOnly = candidate;
-          }
-        }
-
-        return bestConflict || bestLateralOnly;
-      }
-
-      function smoothPrediction(newPrediction) {
-        if (!newPrediction) return lastPrediction;
-        if (!lastPrediction) {
-          lastPrediction = newPrediction;
-          return newPrediction;
-        }
-        const dt = Math.abs(newPrediction.ttb_s - lastPrediction.ttb_s);
-        if (dt < 0.5) return lastPrediction;
-        lastPrediction = newPrediction;
-        return newPrediction;
-      }
-
-      function buildPredictiveConflictEnvelope(pathPoints, corridorWidthM = 20) {
-        if (!Array.isArray(pathPoints) || pathPoints.length < 2) return null;
-        if (typeof turf === "undefined") return null;
-
-        const coords = pathPoints.map((p) => [p.lng, p.lat]);
-        const line = turf.lineString(coords);
-
-        try {
-          return turf.buffer(line, corridorWidthM, { units: "meters" });
-        } catch (e) {
-          console.warn("Failed to build predictive envelope:", e.message);
-          return null;
-        }
-      }
-
-      function findEnvelopeConflicts(envelopeFeature, airspaceGeojson) {
-        if (!envelopeFeature || !airspaceGeojson?.features?.length) return [];
-        if (typeof turf === "undefined") return [];
-
-        const conflicts = [];
-
-        for (const feature of airspaceGeojson.features) {
-          try {
-            const overlap = turf.intersect(turf.featureCollection([envelopeFeature, feature]));
-            if (overlap) {
-              conflicts.push({
-                zoneId: feature?.properties?.id ?? null,
-                zoneName: feature?.properties?.name ?? "Unknown",
-                zoneType: feature?.properties?.zone_type ?? "-",
-                overlap
-              });
-            }
-          } catch (e) {
-            console.warn("Envelope conflict test failed:", e.message);
-          }
-        }
-
-        return conflicts;
-      }
-
-      function predictTtb(marginM, vzMps) {
-        if (marginM === null || marginM === undefined || Number.isNaN(marginM)) return null;
-        if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
-        if (vzMps <= 0) return null;
-        if (marginM <= 0) return 0;
-        return marginM / vzMps;
-      }
-
-      function computeRiskLevel(score) {
-        if (score >= 82) return { label: "CRITICAL", cls: "risk-breach" };
-        if (score >= 58) return { label: "WARNING", cls: "risk-warning" };
-        if (score >= 28) return { label: "CAUTION", cls: "risk-caution" };
-        return { label: "SAFE", cls: "risk-ok" };
-      }
-
-      function normalizeZoneType(zoneType) {
-        return String(zoneType || "").trim().toUpperCase();
-      }
-
-      function zoneSeverityProfile(zoneType) {
-        const z = normalizeZoneType(zoneType);
-
-        if (z.includes("PROHIBITED")) {
-          return {
-            class: "PROHIBITED",
-            riskMultiplier: 1.45,
-            advisoryBias: 26,
-            cautionTtb: 90,
-            warningTtb: 45,
-            immediateTtb: 18
-          };
-        }
-
-        if (z.includes("RESTRICTED")) {
-          return {
-            class: "RESTRICTED",
-            riskMultiplier: 1.28,
-            advisoryBias: 18,
-            cautionTtb: 75,
-            warningTtb: 35,
-            immediateTtb: 15
-          };
-        }
-
-        if (z.includes("DANGER")) {
-          return {
-            class: "DANGER",
-            riskMultiplier: 1.18,
-            advisoryBias: 12,
-            cautionTtb: 60,
-            warningTtb: 28,
-            immediateTtb: 12
-          };
-        }
-
-        if (z.includes("CTR")) {
-          return {
-            class: "CTR",
-            riskMultiplier: 1.08,
-            advisoryBias: 8,
-            cautionTtb: 60,
-            warningTtb: 25,
-            immediateTtb: 10
-          };
-        }
-
-        if (z.includes("CONTROLLED") || z.includes("CTA") || z.includes("TMA")) {
-          return {
-            class: "CONTROLLED",
-            riskMultiplier: 1.0,
-            advisoryBias: 5,
-            cautionTtb: 55,
-            warningTtb: 22,
-            immediateTtb: 9
-          };
-        }
-
-        if (z.includes("RMZ") || z.includes("TMZ")) {
-          return {
-            class: "RMZ/TMZ",
-            riskMultiplier: 0.88,
-            advisoryBias: 1,
-            cautionTtb: 45,
-            warningTtb: 18,
-            immediateTtb: 8
-          };
-        }
-
-        return {
-          class: "OTHER",
-          riskMultiplier: 1.0,
-          advisoryBias: 4,
-          cautionTtb: 50,
-          warningTtb: 22,
-          immediateTtb: 9
-        };
-      }
-
-      function getZoneActiveClass(activeText) {
-        if (!activeText) return "";
-        if (activeText.includes("ACTIVE")) return "hud-status-active";
-        if (activeText.includes("INACTIVE")) return "hud-status-inactive";
-        return "";
-      }
-
-      function getZoneStatusClass(source) {
-        if (!source) return "";
-        if (source.includes("4D")) return "hud-status-warning";
-        if (source.includes("PREDICT")) return "hud-status-caution";
-        return "";
-      }
-
-      function getResultClass(breachText) {
-        if (!breachText) return "";
-        if (breachText.includes("BREACH")) return "hud-status-critical";
-        if (breachText.includes("CONFLICT")) return "hud-status-warning";
-        if (breachText.includes("CLEAR")) return "hud-status-ok";
-        return "";
-      }
-
-      function computePilotRiskModel({
-        zoneType,
-        margin,
-        ttb,
-        boundaryPrediction,
-        conflict4D,
-        verticalRelation,
-        envelopeCount = 0,
-        vz
-      }) {
-        const sev = zoneSeverityProfile(zoneType);
-
-        const effectiveTtb =
-          conflict4D?.ttb_s ??
-          boundaryPrediction?.ttb_s ??
-          ttb ??
-          null;
-
-        const timeUrgency =
-          effectiveTtb == null ? 0 :
-          effectiveTtb <= 0 ? 1 :
-          sigmoid(effectiveTtb, 40, 10);
-
-        const nearTermUrgency =
-          effectiveTtb == null ? 0 :
-          effectiveTtb <= 0 ? 1 :
-          sigmoid(effectiveTtb, 20, 5);
-
-        let marginUrgency = 0;
-        if (margin != null && Number.isFinite(margin)) {
-          if (margin < 0) marginUrgency = 1;
-          else marginUrgency = sigmoid(margin, 35, 10);
-        }
-
-        let geometryUrgency = 0;
-        if (conflict4D?.conflict) geometryUrgency = 1;
-        else if (boundaryPrediction) geometryUrgency = 0.58;
-
-        let verticalUrgency = 0;
-        if (verticalRelation === "INSIDE BAND") verticalUrgency = 1;
-        else if (verticalRelation === "ABOVE CEILING") verticalUrgency = 0.75;
-        else if (verticalRelation === "BELOW FLOOR") verticalUrgency = 0.35;
-
-        const envelopeUrgency =
-          envelopeCount > 0 ? Math.min(0.35, 0.12 * envelopeCount) : 0;
-
-        const climbPenalty =
-          vz != null && vz > 0 && verticalRelation === "INSIDE BAND"
-            ? clamp01(vz / 3.5)
-            : 0;
+    } catch (e) {
+      console.warn("Envelope conflict test failed:", e.message);
+    }
+  }
+
+  return conflicts;
+}
+
+function predictTtb(marginM, vzMps) {
+  if (marginM === null || marginM === undefined || Number.isNaN(marginM)) return null;
+  if (vzMps === null || vzMps === undefined || Number.isNaN(vzMps)) return null;
+  if (vzMps <= 0) return null;
+  if (marginM <= 0) return 0;
+  return marginM / vzMps;
+}
+
+function computeRiskLevel(score) {
+  if (score >= 82) return { label: "CRITICAL", cls: "risk-breach" };
+  if (score >= 58) return { label: "WARNING", cls: "risk-warning" };
+  if (score >= 28) return { label: "CAUTION", cls: "risk-caution" };
+  return { label: "SAFE", cls: "risk-ok" };
+}
+
+function normalizeZoneType(zoneType) {
+  return String(zoneType || "").trim().toUpperCase();
+}
+
+function zoneSeverityProfile(zoneType) {
+  const z = normalizeZoneType(zoneType);
+
+  if (z.includes("PROHIBITED")) {
+    return {
+      class: "PROHIBITED",
+      riskMultiplier: 1.45,
+      advisoryBias: 26,
+      cautionTtb: 90,
+      warningTtb: 45,
+      immediateTtb: 18
+    };
+  }
+
+  if (z.includes("RESTRICTED")) {
+    return {
+      class: "RESTRICTED",
+      riskMultiplier: 1.28,
+      advisoryBias: 18,
+      cautionTtb: 75,
+      warningTtb: 35,
+      immediateTtb: 15
+    };
+  }
+
+  if (z.includes("DANGER")) {
+    return {
+      class: "DANGER",
+      riskMultiplier: 1.18,
+      advisoryBias: 12,
+      cautionTtb: 60,
+      warningTtb: 28,
+      immediateTtb: 12
+    };
+  }
+
+  if (z.includes("CTR")) {
+    return {
+      class: "CTR",
+      riskMultiplier: 1.08,
+      advisoryBias: 8,
+      cautionTtb: 60,
+      warningTtb: 25,
+      immediateTtb: 10
+    };
+  }
+
+  if (z.includes("CONTROLLED") || z.includes("CTA") || z.includes("TMA")) {
+    return {
+      class: "CONTROLLED",
+      riskMultiplier: 1.0,
+      advisoryBias: 5,
+      cautionTtb: 55,
+      warningTtb: 22,
+      immediateTtb: 9
+    };
+  }
+
+  if (z.includes("RMZ") || z.includes("TMZ")) {
+    return {
+      class: "RMZ/TMZ",
+      riskMultiplier: 0.88,
+      advisoryBias: 1,
+      cautionTtb: 45,
+      warningTtb: 18,
+      immediateTtb: 8
+    };
+  }
+
+  return {
+    class: "OTHER",
+    riskMultiplier: 1.0,
+    advisoryBias: 4,
+    cautionTtb: 50,
+    warningTtb: 22,
+    immediateTtb: 9
+  };
+}
+
+function getZoneActiveClass(activeText) {
+  if (!activeText) return "";
+  if (activeText.includes("ACTIVE")) return "hud-status-active";
+  if (activeText.includes("INACTIVE")) return "hud-status-inactive";
+  return "";
+}
+
+function getZoneStatusClass(source) {
+  if (!source) return "";
+  if (source.includes("4D")) return "hud-status-warning";
+  if (source.includes("PREDICT")) return "hud-status-caution";
+  return "";
+}
+
+function getResultClass(breachText) {
+  if (!breachText) return "";
+  if (breachText.includes("BREACH")) return "hud-status-critical";
+  if (breachText.includes("CONFLICT")) return "hud-status-warning";
+  if (breachText.includes("CLEAR")) return "hud-status-ok";
+  return "";
+}
+
+function computePilotRiskModel({
+  zoneType,
+  margin,
+  ttb,
+  boundaryPrediction,
+  conflict4D,
+  verticalRelation,
+  envelopeCount = 0,
+  vz
+}) {
+  const sev = zoneSeverityProfile(zoneType);
+
+  const effectiveTtb =
+    conflict4D?.ttb_s ??
+    boundaryPrediction?.ttb_s ??
+    ttb ??
+    null;
+
+  const timeUrgency =
+    effectiveTtb == null ? 0 :
+    effectiveTtb <= 0 ? 1 :
+    sigmoid(effectiveTtb, 40, 10);
+
+  const nearTermUrgency =
+    effectiveTtb == null ? 0 :
+    effectiveTtb <= 0 ? 1 :
+    sigmoid(effectiveTtb, 20, 5);
+
+  let marginUrgency = 0;
+  if (margin != null && Number.isFinite(margin)) {
+    if (margin < 0) marginUrgency = 1;
+    else marginUrgency = sigmoid(margin, 35, 10);
+  }
+
+  let geometryUrgency = 0;
+  if (conflict4D?.conflict) geometryUrgency = 1;
+  else if (boundaryPrediction) geometryUrgency = 0.58;
+
+  let verticalUrgency = 0;
+  if (verticalRelation === "INSIDE BAND") verticalUrgency = 1;
+  else if (verticalRelation === "ABOVE CEILING") verticalUrgency = 0.75;
+  else if (verticalRelation === "BELOW FLOOR") verticalUrgency = 0.35;
+
+  const envelopeUrgency =
+    envelopeCount > 0 ? Math.min(0.35, 0.12 * envelopeCount) : 0;
+
+  const climbPenalty =
+    vz != null && vz > 0 && verticalRelation === "INSIDE BAND"
+      ? clamp01(vz / 3.5)
+      : 0;
 
        // --- HARD TIME DOMINANCE ZONE ---
 let timeDominance = 0;
@@ -2273,7 +2207,12 @@ function renderEventLog() {
   const currentEvent = findCurrentPlaybackEvent();
   currentPlaybackEventId = currentEvent?.id ?? null;
 
-  const items = flightEventLog.slice(-12).reverse();
+  
+
+  const items = flightEventLog
+  .filter(e => e.event_type !== "INIT")
+  .slice(-12)
+  .reverse();
 
   el.innerHTML = `
       ${items.map(e => {
@@ -2673,32 +2612,48 @@ function findCurrentPlaybackEvent() {
 function formatEventText(e) {
   if (!e) return "—";
 
-  if (e.event_type === "risk_transition") {
-    return `${e.value?.from || "NONE"} → ${e.value?.to || "UNKNOWN"}${e.value?.score != null ? ` (${e.value.score})` : ""}`;
+  if (e.event_type === "RISK_CHANGE") {
+    const from = e.value?.from || "—";
+    const to = e.value?.to || "—";
+
+    if (from === to) return `Risk ${to}`;
+
+    return `${to} (${e.value?.score ?? ""})`;
   }
 
-  if (e.event_type === "advisory_transition") {
-    return `${e.value?.to || "UNKNOWN"}`;
+  if (e.event_type === "ADVISORY_CHANGE") {
+    return e.value?.to?.split("|")[1] || "Action updated";
   }
 
-  if (e.event_type === "prediction_threshold_crossed") {
-    const ttb = e.value?.ttb_s != null ? `${Number(e.value.ttb_s).toFixed(1)} s` : "—";
-    return `${e.value?.threshold || "threshold"} at ${ttb}`;
+  if (e.event_type === "TTB_THRESHOLD") {
+    const ttb = e.value?.ttb_s != null
+      ? `${Number(e.value.ttb_s).toFixed(1)} s`
+      : "—";
+
+    if (e.value?.threshold === "le5") return `Immediate risk (${ttb})`;
+    if (e.value?.threshold === "le10") return `High risk (${ttb})`;
+    if (e.value?.threshold === "le20") return `Approaching limit (${ttb})`;
+
+    return `Threshold crossed (${ttb})`;
   }
 
-  if (e.event_type === "boundary_prediction_started") {
-    return `${e.value?.zone_name || "Zone"} boundary ahead`;
+  if (e.event_type === "BOUNDARY_CONFLICT_START") {
+    return `${e.value?.zone_name || "Zone"} ahead`;
   }
 
-  if (e.event_type === "conflict_4d_started") {
-    return `${e.value?.zone_name || "Zone"} 4D conflict`;
+  if (e.event_type === "CONFLICT4D_START") {
+    return `Conflict with ${e.value?.zone_name || "zone"}`;
   }
 
-  if (e.event_type === "envelope_conflict_started") {
-    return `Envelope conflicts: ${e.value?.count ?? 0}`;
+  if (e.event_type === "VERTICAL_CONFLICT_START") {
+    return "Vertical conflict";
   }
 
-  
+  if (e.event_type === "ENVELOPE_CONFLICT_START") {
+    return `Multiple conflicts (${e.value?.count ?? 0})`;
+  }
+
+  return "";
 }
 
       const map = new maplibregl.Map({
@@ -2852,12 +2807,12 @@ function formatEventText(e) {
         requestAnimationFrame(loop);
       });
 
-    function loop(now) {
-  if (lastFrame === null) lastFrame = now;
-  const dt = now - lastFrame;
-  lastFrame = now;
+  function loop(now) {
+    if (lastFrame === null) lastFrame = now;
+    const dt = now - lastFrame;
+    lastFrame = now;
 
-  if (playing) {
+    if (playing) {
     simElapsed += dt * speed;
     if (simElapsed > duration) {
       simElapsed = duration;
@@ -2865,6 +2820,11 @@ function formatEventText(e) {
       playBtn.textContent = "Play";
     }
   }
+
+  const simTimeMs = simElapsed;
+
+    if (simTimeMs < startupMutedUntilMs) return;
+    if (simElapsed < startupMutedUntilMs) return;
 
   const t = t0 + simElapsed;
   let pos = interpolate(t);
@@ -3216,6 +3176,7 @@ logFlightEvents({
 });
 
 renderEventLog();
+scrollCurrentEventIntoView();
 
          aircraftEl.style.background =
           c?.breach_unknown ? "#ffbf00" :
