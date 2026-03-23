@@ -550,52 +550,24 @@ function escapeHtml(value) {
 
 function eventTypeLabel(eventType) {
   switch (eventType) {
-    case "RISK_ESCALATED":
-    case "RISK_REDUCED":
-      return "RISK";
-
-    case "ACTION_CHANGED":
-      return "ACTION";
-
-    case "BOUNDARY_PREDICTED":
-      return "BOUNDARY";
-
-    case "CONFLICT_PREDICTED":
-      return "CONFLICT";
-
-    case "VERTICAL_LIMIT_ALERT":
-      return "VERTICAL";
-
-    case "ENVELOPE_ALERT":
-      return "ENVELOPE";
-
-    case "THRESHOLD_CROSSED":
-      return "THRESHOLD";
-
-    case "SYSTEM_READY":
-      return "SYSTEM";
-
-    case "REPLAY_STARTED":
-    case "REPLAY_PAUSED":
-    case "REPLAY_RESUMED":
-      return "REPLAY";
-
-    case "BREACH_CONFIRMED":
-      return "BREACH";
-
-    case "BREACH_CLEARED":
-      return "CLEAR";
-
-    default:
-      return "EVENT";
+    case "RISK_CHANGE": return "RISK";
+    case "ADVISORY_CHANGE": return "ADVISORY";
+    case "TTB_THRESHOLD": return "TTB";
+    case "BOUNDARY_CONFLICT_START": return "BOUNDARY";
+    case "CONFLICT4D_START": return "4D CONFLICT";
+    case "VERTICAL_CONFLICT_START": return "VERTICAL";
+    case "ENVELOPE_CONFLICT_START": return "ENVELOPE";
+    case "INIT": return "INIT";
+    default: return eventType || "EVENT";
   }
 }
 
 function eventSeverityClass(severity) {
   const sev = String(severity || "").toLowerCase();
-  if (sev === "critical" || sev === "immediate") return "event-sev-critical";
+  if (sev === "critical") return "event-sev-critical";
   if (sev === "warning") return "event-sev-warning";
   if (sev === "caution") return "event-sev-caution";
+  if (sev === "info") return "event-sev-info";
   return "event-sev-info";
 }
 
@@ -689,9 +661,10 @@ function jumpToSimTime(simTimeMs) {
 
 function renderEventLog(events, simTimeMs) {
   const root = getEventLogEl();
-  const statusEl = document.getElementById("event-log-status");
-  if (!root) return;
-
+const statusEl = document.getElementById("event-log-status");
+if (statusEl) {
+  statusEl.textContent = `${items.length} event${items.length === 1 ? "" : "s"}`;
+}
   const safeEvents = Array.isArray(events) ? events : [];
 
   if (statusEl) {
