@@ -4,14 +4,10 @@
   <meta charset="UTF-8" />
   <title>FSMS Flight Replay</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
-  <link
-    href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css"
-    rel="stylesheet"
-  />
+  <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
 
   <style>
-    html,
-    body {
+    html, body {
       margin: 0;
       height: 100%;
     }
@@ -24,51 +20,40 @@
       position: absolute;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 10;
-      padding: 8px 12px;
       background: white;
+      padding: 8px 12px;
       border-radius: 6px;
+      z-index: 10;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
       font-family: ui-monospace, Menlo, Consolas, monospace;
       font-size: 12px;
     }
 
-    #controls {
-      bottom: 90px;
-    }
-
-    #slider-container {
-      bottom: 20px;
-    }
-
-    #speed-container {
-      bottom: 140px;
-    }
-
-    #zoom-container {
-      bottom: 190px;
-    }
+    #controls { bottom: 90px; }
+    #slider-container { bottom: 20px; }
+    #speed-container { bottom: 140px; }
+    #zoom-container { bottom: 190px; }
 
     input[type="range"] {
       width: 320px;
     }
 
-    #hud {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      z-index: 30;
-      min-width: 420px;
-      max-width: 520px;
-      padding: 14px;
-      background: rgba(10, 12, 16, 0.92);
-      color: #e8eefc;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
-      font-family: ui-monospace, Menlo, Consolas, monospace;
-      font-size: 12px;
-    }
+  #hud {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(10, 12, 16, 0.92);
+  color: #e8eefc;
+  padding: 14px;
+  border-radius: 12px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  min-width: 420px;
+  max-width: 520px;
+  z-index: 30;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+}
 
     .hud-header {
       display: flex;
@@ -85,122 +70,96 @@
 
     .hud-chip {
       padding: 4px 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 999px;
       font-weight: 800;
+      border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     .hud-grid {
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      gap: 6px 10px;
-    }
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 6px 10px;
+}
 
-    .hud-k {
-      opacity: 0.65;
-    }
-
-    .hud-v {
-      font-weight: 700;
-    }
+    .hud-k { opacity: 0.65; }
+    .hud-v { font-weight: 700; }
 
     .hud-divider {
       height: 1px;
-      margin: 10px 0;
       background: rgba(255, 255, 255, 0.08);
+      margin: 10px 0;
     }
 
     .hud-section-title {
-      margin-bottom: 8px;
-      font-size: 13px;
-      opacity: 0.9;
-    }
+  font-size: 13px;
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
 
-    /* STATUS COLORS */
-    .hud-status-ok {
-      color: #00ff88;
-    }
+/* STATUS COLORS */
 
-    .hud-status-caution {
-      color: #ffbf00;
-    }
+.hud-status-ok {
+  color: #00ff88;
+}
 
-    .hud-status-warning {
-      color: #ff8800;
-    }
+.hud-status-caution {
+  color: #ffbf00;
+}
 
-    .hud-status-critical {
-      color: #ff3b3b;
-      font-weight: 600;
-    }
+.hud-status-warning {
+  color: #ff8800;
+}
 
-    /* ACTIVE STATE */
-    .hud-status-active {
-      color: #00ffcc;
-    }
+.hud-status-critical {
+  color: #ff3b3b;
+  font-weight: 600;
+}
 
-    .hud-status-inactive {
-      color: #888;
-    }
+/* ACTIVE STATE */
 
-    .risk-caution {
-      color: #eab308;
-    }
+.hud-status-active {
+  color: #00ffcc;
+}
 
-    .risk-warning {
-      color: #f97316;
-    }
+.hud-status-inactive {
+  color: #888;
+}
 
-    .risk-breach {
-      color: #ef4444;
-    }
-
-    .risk-ok {
-      color: #22c55e;
-      font-weight: 700;
-    }
+    .risk-caution { color: #eab308; }
+    .risk-warning { color: #f97316; }
+    .risk-breach { color: #ef4444; }
+    .risk-ok { color: #22c55e; font-weight: 700; }
 
     .risk-bar-wrap {
       width: 100%;
       height: 10px;
-      margin: 8px 0 10px 0;
+      border-radius: 999px;
       overflow: hidden;
       background: rgba(255, 255, 255, 0.12);
-      border-radius: 999px;
+      margin: 8px 0 10px 0;
     }
 
     .risk-bar-fill {
-      width: 0%;
       height: 100%;
+      width: 0%;
       transition: width 0.2s ease;
     }
 
-    .risk-fill-safe {
-      background: #22c55e;
-    }
-
-    .risk-fill-caution {
-      background: #eab308;
-    }
-
-    .risk-fill-warning {
-      background: #f97316;
-    }
-
-    .risk-fill-critical {
-      background: #ef4444;
-    }
+    .risk-fill-safe { background: #22c55e; }
+    .risk-fill-caution { background: #eab308; }
+    .risk-fill-warning { background: #f97316; }
+    .risk-fill-critical { background: #ef4444; }
 
     .warnstrip {
-      display: none;
       margin-top: 10px;
       padding: 8px 10px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.05);
       font-weight: 800;
       letter-spacing: 0.06em;
       text-transform: uppercase;
+      display: none;
     }
 
     .warnstrip.show {
@@ -208,41 +167,35 @@
     }
 
     @keyframes breachFlash {
-      0% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.2;
-      }
-      100% {
-        opacity: 1;
-      }
+      0% { opacity: 1; }
+      50% { opacity: 0.2; }
+      100% { opacity: 1; }
     }
 
     .aircraft-dot {
       width: 14px;
       height: 14px;
+      border-radius: 50%;
       background: #00ff00;
       border: 2px solid #ffffff;
-      border-radius: 50%;
       box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
     }
 
     .ghost-dot {
       width: 12px;
       height: 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 2px dashed rgba(255, 255, 255, 0.95);
       border-radius: 50%;
+      border: 2px dashed rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.10);
       box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
     }
 
     .breach-dot {
       width: 16px;
       height: 16px;
-      background: rgba(255, 0, 0, 0.15);
-      border: 3px solid #ff0000;
       border-radius: 50%;
+      border: 3px solid #ff0000;
+      background: rgba(255, 0, 0, 0.15);
       box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
       animation: breachFlash 0.8s infinite;
     }
@@ -250,30 +203,24 @@
     .entry-dot {
       width: 16px;
       height: 16px;
-      background: rgba(255, 191, 0, 0.18);
-      border: 3px solid #ffbf00;
       border-radius: 50%;
-      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+      border: 3px solid #ffbf00;
+      background: rgba(255, 191, 0, 0.18);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.30);
       animation: breachFlash 0.8s infinite;
     }
 
     .btn {
-      margin-left: 6px;
       padding: 6px 10px;
-      background: #fff;
       border: 1px solid #ccc;
       border-radius: 6px;
+      background: #fff;
       cursor: pointer;
+      margin-left: 6px;
     }
 
-    .btn:active {
-      transform: translateY(1px);
-    }
-
-    .btn[disabled] {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    .btn:active { transform: translateY(1px); }
+    .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
     #feature-menu {
       position: absolute;
@@ -284,9 +231,9 @@
     }
 
     #feature-toggle {
-      padding: 8px 12px;
       background: white;
       border: none;
+      padding: 8px 12px;
       border-radius: 8px;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
       cursor: pointer;
@@ -295,12 +242,12 @@
 
     #feature-panel {
       display: none;
-      min-width: 220px;
       margin-top: 8px;
-      padding: 10px 12px;
       background: white;
+      padding: 10px 12px;
       border-radius: 8px;
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+      min-width: 220px;
     }
 
     #feature-panel label {
@@ -310,140 +257,125 @@
     }
 
     #feature-panel hr {
-      margin: 8px 0;
       border: none;
       border-top: 1px solid #ddd;
+      margin: 8px 0;
     }
 
-    #event-log-panel {
-      position: absolute;
-      right: 20px;
-      bottom: 120px;
-      z-index: 50;
-      width: 360px;
-      overflow: hidden;
-      background: rgba(10, 12, 16, 0.94);
-      color: #e8eefc;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
-      font-family: ui-monospace, Menlo, Consolas, monospace;
-      font-size: 12px;
-    }
+   #event-log-panel {
+  position: absolute;
+  right: 20px;
+  bottom: 120px;
+  width: 360px;
+  background: rgba(10, 12, 16, 0.94);
+  border-radius: 14px;
+  font-size: 12px;
+  z-index: 50;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 18px 45px rgba(0,0,0,0.45);
+  color: #e8eefc;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
 
-    .event-log-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 14px;
-      background: rgba(255, 255, 255, 0.03);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
+.event-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
 
-    .event-log-title {
-      margin: 0;
-      color: #e8eefc;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
+.event-log-title {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e8eefc;
+  margin: 0;
+}
 
-    .event-log-status {
-      font-size: 11px;
-      color: #9aa4b2;
-      opacity: 1;
-    }
+.event-log-status {
+  font-size: 11px;
+  color: #9aa4b2;
+  opacity: 1;
+}
 
-    #event-log {
-      max-height: 360px;
-      overflow-y: auto;
-      padding: 10px 12px 14px;
-    }
+#event-log {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 10px 12px 14px;
+}
 
-    #event-log::-webkit-scrollbar {
-      width: 8px;
-    }
+#event-log::-webkit-scrollbar {
+  width: 8px;
+}
 
-    #event-log::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.16);
-      border-radius: 999px;
-    }
+#event-log::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.16);
+  border-radius: 999px;
+}
 
-    .event-item {
-      margin-bottom: 8px;
-      padding: 8px 10px;
-      border: 1px solid transparent;
-      border-radius: 10px;
-      transition:
-        background 0.15s ease,
-        border-color 0.15s ease,
-        transform 0.15s ease;
-    }
+.event-item {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
 
-    .event-item:hover {
-      cursor: pointer;
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(255, 255, 255, 0.08);
-    }
+.event-item:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08);
+  cursor: pointer;
+}
 
-    .event-item.selected {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(255, 255, 255, 0.24);
-    }
+.event-item.selected {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.24);
+}
 
-    .event-item.current {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.12);
-      box-shadow: inset 3px 0 0 #00ffcc;
-    }
+.event-item.current {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: inset 3px 0 0 #00ffcc;
+}
 
-    .event-time {
-      margin-bottom: 2px;
-      font-size: 11px;
-      color: #9aa4b2;
-      opacity: 0.7;
-    }
+.event-time {
+  font-size: 11px;
+  opacity: 0.7;
+  color: #9aa4b2;
+  margin-bottom: 2px;
+}
 
-    .event-type {
-      margin-bottom: 4px;
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
+.event-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+  font-weight: 800;
+}
 
-    .event-text {
-      color: #e8eefc;
-      font-size: 12px;
-      font-weight: 600;
-      line-height: 1.35;
-    }
+.event-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e8eefc;
+  line-height: 1.35;
+}
 
-    .event-sev-info {
-      color: #22c55e;
-    }
-
-    .event-sev-caution {
-      color: #facc15;
-    }
-
-    .event-sev-warning {
-      color: #fb923c;
-    }
-
-    .event-sev-critical {
-      color: #f87171;
-      font-weight: 700;
-    }
+    .event-sev-info { color: #22c55e; }
+    .event-sev-caution { color: #facc15; }
+    .event-sev-warning { color: #fb923c; }
+    .event-sev-critical { color: #f87171; font-weight: 700; }
 
     #warn-strip-root {
-      position: absolute;
-      left: 20px;
-      right: 20px;
-      bottom: 60px;
-      z-index: 7;
-    }
-  
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    bottom: 60px;
+    z-index: 7;
+}
+
   </style>
 </head>
 
@@ -475,15 +407,15 @@
     <input id="slider" type="range" min="0" max="1" step="0.0001" value="0" />
   </div>
 
-  <div id="warn-strip-root"></div>
+    <div id="warn-strip-root"></div>
 
-  <div id="event-log-panel">
-    <div class="event-log-header">
-      <div class="event-log-title">EVENT TIMELINE</div>
-      <div id="event-log-status" class="event-log-status">0 events</div>
-    </div>
-    <div id="event-log"></div>
+    <div id="event-log-panel" class="event-log-panel">
+  <div class="event-log-header">
+    <div class="event-log-title">EVENT TIMELINE</div>
+    <div id="event-log-status" class="event-log-status">0 events</div>
   </div>
+  <div id="event-log" class="event-log"></div>
+</div>
 
   <div id="feature-menu">
     <button id="feature-toggle">⚙ Features</button>
@@ -529,6 +461,7 @@
       const zoomAirspaceBtn = document.getElementById("zoomAirspace");
       const zoomBothBtn = document.getElementById("zoomBoth");
 
+      
       const FEATURES = {
         trend: true,
         prediction: true,
@@ -539,35 +472,36 @@
       };
 
       let playing = false;
-      let speed = 1;
-      let simElapsed = 0;
-      let lastFrame = null;
-      let currentIndex = 0;
+let speed = 1;
+let simElapsed = 0;
+let lastFrame = null;
+let currentIndex = 0;
 
-      let flightBounds = null;
-      let airspaceBounds = null;
-      let airspaceGeojson = null;
+let flightBounds = null;
+let airspaceBounds = null;
+let airspaceGeojson = null;
 
-      let lastSmoothedPos = null;
-      let lastPrediction = null;
+let lastSmoothedPos = null;
+let lastPrediction = null;
 
-      let lastRiskLabel = null;
-      let lastRiskTransitionTs = null;
-      let smoothedRiskScore = 0;
-      let lastDisplayedRiskScore = 0;
+let lastRiskLabel = null;
+let lastRiskTransitionTs = null;
+let smoothedRiskScore = 0;
+let lastDisplayedRiskScore = 0;
 
-      let selectedEventId = null;
-      let currentPlaybackEventId = null;
+// 👇 ADD THEM HERE
+let selectedEventId = null;
+let currentPlaybackEventId = null;
 
-      let lastStableAdvisory = {
-        level: "INFO",
-        text: "NO ACTION REQUIRED",
-        cls: "risk-ok",
-        actionChoice: null,
-        priorityScore: 0
-      };
+let lastStableAdvisory = {
+  level: "INFO",
+  text: "NO ACTION REQUIRED",
+  cls: "risk-ok",
+  actionChoice: null,
+  priorityScore: 0
+};
 
-      let startupMutedUntilMs = 2000;
+let startupMutedUntilMs = 2000;
 
       let pendingAdvisoryTs = 0;
       let pendingAdvisory = null;
@@ -575,7 +509,7 @@
 
       let eventSeq = 0;
 
-      const flightEventLog = [];
+        const flightEventLog = [];
 
       let lastEventState = {
         riskLabel: null,
@@ -591,7 +525,7 @@
         }
       };
 
-      window.flightEventLog = flightEventLog;
+window.flightEventLog = flightEventLog;
 
 // ==========================================
 // EVENT TIMELINE MODULE
@@ -604,18 +538,15 @@
 //   .event-text
 //   .event-sev-info / caution / warning / critical
 // ==========================================
-
 function getEventLogEl() {
   return document.getElementById("event-log");
 }
 
 function formatSimTime(ms) {
-  const safeMs = Number(ms) || 0;
-  const totalSeconds = Math.max(0, Math.floor(safeMs / 1000));
+  const totalSeconds = Math.max(0, Math.floor((ms || 0) / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  const tenths = Math.floor((safeMs % 1000) / 100);
-
+  const tenths = Math.floor(((ms || 0) % 1000) / 100);
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
 }
 
@@ -630,22 +561,14 @@ function escapeHtml(value) {
 
 function eventTypeLabel(eventType) {
   switch (eventType) {
-    case "risk_transition":
-      return "RISK";
-    case "advisory_transition":
-      return "ACTION";
-    case "prediction_threshold_crossed":
-      return "THRESHOLD";
-    case "boundary_prediction_started":
-      return "BOUNDARY";
-    case "conflict_4d_started":
-      return "CONFLICT";
-    case "vertical_conflict_started":
-      return "VERTICAL";
-    case "envelope_conflict_started":
-      return "ENVELOPE";
-    case "INIT":
-      return "INIT";
+    case "risk_transition": return "RISK";
+    case "advisory_transition": return "ACTION";
+    case "prediction_threshold_crossed": return "THRESHOLD";
+    case "boundary_prediction_started": return "BOUNDARY";
+    case "conflict_4d_started": return "CONFLICT";
+    case "vertical_conflict_started": return "VERTICAL";
+    case "envelope_conflict_started": return "ENVELOPE";
+    case "INIT": return "INIT";
     default:
       return String(eventType || "event")
         .replaceAll("_", " ")
@@ -655,11 +578,9 @@ function eventTypeLabel(eventType) {
 
 function eventSeverityClass(severity) {
   const s = String(severity || "").toLowerCase();
-
   if (s === "critical" || s === "immediate") return "event-sev-critical";
   if (s === "warning") return "event-sev-warning";
   if (s === "caution") return "event-sev-caution";
-
   return "event-sev-info";
 }
 
@@ -668,13 +589,9 @@ function findCurrentPlaybackEvent(events, simTimeMs) {
 
   let current = null;
   for (const evt of events) {
-    if ((evt.sim_time_ms ?? 0) <= simTimeMs) {
-      current = evt;
-    } else {
-      break;
-    }
+    if ((evt.sim_time_ms ?? 0) <= simTimeMs) current = evt;
+    else break;
   }
-
   return current;
 }
 
@@ -700,10 +617,7 @@ function formatEventText(evt) {
 
     case "prediction_threshold_crossed": {
       const label = String(evt.value?.threshold || "").replace("le", "≤ ");
-      const ttb =
-        evt.value?.ttb_s != null
-          ? `${Number(evt.value.ttb_s).toFixed(1)}s`
-          : "—";
+      const ttb = evt.value?.ttb_s != null ? `${Number(evt.value.ttb_s).toFixed(1)}s` : "—";
       return `TTB ${label} (${ttb})`;
     }
 
@@ -734,7 +648,7 @@ function renderEventLog(events = flightEventLog, simTimeMs = simElapsed) {
 
   const safeEvents = Array.isArray(events) ? events : [];
   const visibleEvents = safeEvents
-    .filter((evt) => evt.event_type !== "INIT")
+    .filter(evt => evt.event_type !== "INIT")
     .slice(-100)
     .reverse();
 
@@ -754,25 +668,23 @@ function renderEventLog(events = flightEventLog, simTimeMs = simElapsed) {
     return;
   }
 
-  root.innerHTML = visibleEvents
-    .map((evt) => {
-      const isSelected = evt.id === selectedEventId;
-      const isCurrent = evt.id === currentPlaybackEventId;
-      const sevClass = eventSeverityClass(evt.severity);
+  root.innerHTML = visibleEvents.map((evt) => {
+    const isSelected = evt.id === selectedEventId;
+    const isCurrent = evt.id === currentPlaybackEventId;
+    const sevClass = eventSeverityClass(evt.severity);
 
-      return `
-        <div
-          class="event-item${isSelected ? " selected" : ""}${isCurrent ? " current" : ""}"
-          data-event-id="${escapeHtml(evt.id)}"
-          data-sim-time="${Number(evt.sim_time_ms || 0)}"
-        >
-          <div class="event-time">${escapeHtml(formatSimTime(evt.sim_time_ms || 0))}</div>
-          <div class="event-type ${sevClass}">${escapeHtml(eventTypeLabel(evt.event_type))}</div>
-          <div class="event-text">${escapeHtml(formatEventText(evt))}</div>
-        </div>
-      `;
-    })
-    .join("");
+    return `
+      <div
+        class="event-item${isSelected ? " selected" : ""}${isCurrent ? " current" : ""}"
+        data-event-id="${escapeHtml(evt.id)}"
+        data-sim-time="${Number(evt.sim_time_ms || 0)}"
+      >
+        <div class="event-time">${escapeHtml(formatSimTime(evt.sim_time_ms || 0))}</div>
+        <div class="event-type ${sevClass}">${escapeHtml(eventTypeLabel(evt.event_type))}</div>
+        <div class="event-text">${escapeHtml(formatEventText(evt))}</div>
+      </div>
+    `;
+  }).join("");
 
   root.querySelectorAll(".event-item[data-event-id]").forEach((item) => {
     item.addEventListener("click", () => {
@@ -783,7 +695,7 @@ function renderEventLog(events = flightEventLog, simTimeMs = simElapsed) {
     });
   });
 }
-
+ 
 function safeRenderEventLog() {
   try {
     const events = Array.isArray(window.flightEventLog) ? window.flightEventLog : [];
@@ -807,12 +719,11 @@ function scrollCurrentEventIntoView() {
   });
 }
 
+
 function bindToggle(id, key) {
   const el = document.getElementById(id);
   if (!el) return;
-
   FEATURES[key] = !!el.checked;
-
   el.addEventListener("change", (e) => {
     FEATURES[key] = e.target.checked;
   });
@@ -825,7 +736,7 @@ function setupFeatureToggles() {
   bindToggle("toggleCone", "cone");
   bindToggle("toggleKalman", "kalman");
   bindToggle("toggleVectors", "vectors");
-}
+ }
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -847,10 +758,8 @@ function marginToPct(m) {
 
 function fmtLimit(v) {
   if (v === null || v === undefined) return "—";
-
   const m = Number(v);
   if (Math.abs(m - 121.92) < 2) return "120.0 m (400 ft)";
-
   const ft = m * 3.28084;
   return `${m.toFixed(1)} m (${Math.round(ft)} ft)`;
 }
@@ -864,23 +773,18 @@ function vsArrow(vz) {
   if (vz === null || vz === undefined || Number.isNaN(vz)) return "—";
   if (vz > 0.15) return "↑";
   if (vz < -0.15) return "↓";
-  return "→";
+return "→";
 }
 
 function bearingDeg(a, b) {
-  const toRad = (d) => (d * Math.PI) / 180;
-  const toDeg = (r) => (r * 180) / Math.PI;
-
+  const toRad = (d) => d * Math.PI / 180;
+  const toDeg = (r) => r * 180 / Math.PI;
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
   const dLon = toRad(b.lng - a.lng);
-
   const y = Math.sin(dLon) * Math.cos(lat2);
-  const x =
-    Math.cos(lat1) * Math.sin(lat2) -
-    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-
-  const brng = toDeg(Math.atan2(y, x));
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  let brng = toDeg(Math.atan2(y, x));
   return (brng + 360) % 360;
 }
 
@@ -897,13 +801,11 @@ function computeTurnBias({ brg, zoneBearing }) {
 
   if (delta > 5) return { turn: "LEFT", delta };
   if (delta < -5) return { turn: "RIGHT", delta };
-
   return { turn: "NONE", delta };
 }
 
 function kalmanLike(prev, current) {
   const k = 0.2;
-
   return {
     lat: prev.lat + k * (current.lat - prev.lat),
     lng: prev.lng + k * (current.lng - prev.lng),
@@ -913,39 +815,35 @@ function kalmanLike(prev, current) {
 
 function distanceM(a, b) {
   const R = 6371000;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLon = ((b.lng - a.lng) * Math.PI) / 180;
-
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lng - a.lng) * Math.PI / 180;
   const x =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
 function movePoint(start, headingDeg, distanceMVal) {
   const R = 6371000;
-  const brng = (headingDeg * Math.PI) / 180;
-  const lat1 = (start.lat * Math.PI) / 180;
-  const lon1 = (start.lng * Math.PI) / 180;
+  const brng = headingDeg * Math.PI / 180;
+  const lat1 = start.lat * Math.PI / 180;
+  const lon1 = start.lng * Math.PI / 180;
 
   const lat2 = Math.asin(
     Math.sin(lat1) * Math.cos(distanceMVal / R) +
-      Math.cos(lat1) * Math.sin(distanceMVal / R) * Math.cos(brng)
+    Math.cos(lat1) * Math.sin(distanceMVal / R) * Math.cos(brng)
   );
 
-  const lon2 =
-    lon1 +
-    Math.atan2(
-      Math.sin(brng) * Math.sin(distanceMVal / R) * Math.cos(lat1),
-      Math.cos(distanceMVal / R) - Math.sin(lat1) * Math.sin(lat2)
-    );
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(brng) * Math.sin(distanceMVal / R) * Math.cos(lat1),
+    Math.cos(distanceMVal / R) - Math.sin(lat1) * Math.sin(lat2)
+  );
 
   return {
-    lat: (lat2 * 180) / Math.PI,
-    lng: (lon2 * 180) / Math.PI
+    lat: lat2 * 180 / Math.PI,
+    lng: lon2 * 180 / Math.PI
   };
 }
 
@@ -954,16 +852,8 @@ function normalizeHeading(deg) {
 }
 
 function makeArrowHead(endPos, headingDeg, arrowLengthM = 18, arrowAngleDeg = 28) {
-  const left = movePoint(
-    endPos,
-    normalizeHeading(headingDeg + 180 - arrowAngleDeg),
-    arrowLengthM
-  );
-  const right = movePoint(
-    endPos,
-    normalizeHeading(headingDeg + 180 + arrowAngleDeg),
-    arrowLengthM
-  );
+  const left = movePoint(endPos, normalizeHeading(headingDeg + 180 - arrowAngleDeg), arrowLengthM);
+  const right = movePoint(endPos, normalizeHeading(headingDeg + 180 + arrowAngleDeg), arrowLengthM);
 
   return {
     type: "Feature",
@@ -985,14 +875,11 @@ function pointInRing(point, ring) {
   let inside = false;
 
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0];
-    const yi = ring[i][1];
-    const xj = ring[j][0];
-    const yj = ring[j][1];
-
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
     const intersect =
-      (yi > y) !== (yj > y) &&
-      x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi;
+      ((yi > y) !== (yj > y)) &&
+      (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi);
 
     if (intersect) inside = !inside;
   }
@@ -1002,23 +889,12 @@ function pointInRing(point, ring) {
 
 function pointInPolygon(point, geometry) {
   if (!geometry) return false;
-  if (geometry.type === "Polygon") {
-    return pointInRing(point, geometry.coordinates[0]);
-  }
-  if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates.some((poly) => pointInRing(point, poly[0]));
-  }
+  if (geometry.type === "Polygon") return pointInRing(point, geometry.coordinates[0]);
+  if (geometry.type === "MultiPolygon") return geometry.coordinates.some((poly) => pointInRing(point, poly[0]));
   return false;
 }
 
-function predictFuturePath(
-  currentPos,
-  headingDeg,
-  groundspeedVal,
-  vz,
-  secondsAhead = 60,
-  stepSeconds = 1
-) {
+function predictFuturePath(currentPos, headingDeg, groundspeedVal, vz, secondsAhead = 60, stepSeconds = 1) {
   if (!groundspeedVal || groundspeedVal <= 0) return [];
 
   const adaptiveStep =
@@ -1033,7 +909,7 @@ function predictFuturePath(
   for (let s = adaptiveStep; s <= secondsAhead; s += adaptiveStep) {
     const dist = groundspeedVal * adaptiveStep;
     pos = movePoint(pos, headingDeg, dist);
-    alt += (vz || 0) * adaptiveStep;
+    alt = alt + (vz || 0) * adaptiveStep;
     points.push({ lat: pos.lat, lng: pos.lng, alt, ttb_s: s });
   }
 
@@ -1041,16 +917,13 @@ function predictFuturePath(
 }
 
 function predictPathIntersection(pathPoints, zoneFeature) {
-  if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) {
-    return null;
-  }
+  if (!zoneFeature?.geometry || !Array.isArray(pathPoints) || pathPoints.length < 2) return null;
 
   let best = null;
 
   for (let i = 1; i < pathPoints.length; i++) {
     const p0 = pathPoints[i - 1];
     const p1 = pathPoints[i];
-
     const inside0 = pointInPolygon(p0, zoneFeature.geometry);
     const inside1 = pointInPolygon(p1, zoneFeature.geometry);
 
@@ -1125,44 +998,28 @@ function predictEarliestZoneEntry(pathPoints, airspaceGeojson) {
       alt: hit.alt
     };
 
-    if (!best || candidate.ttb_s < best.ttb_s) {
-      best = candidate;
-    }
+    if (!best || candidate.ttb_s < best.ttb_s) best = candidate;
   }
 
   return best;
 }
 
 function isWithinVerticalBand(predictedAlt, lowerM, upperM) {
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
-    return null;
-  }
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return false;
-  }
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return false;
-  }
+  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return null;
+  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return false;
+  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return false;
   return true;
 }
 
 function describeVerticalRelation(predictedAlt, lowerM, upperM) {
-  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) {
-    return "UNKNOWN";
-  }
-  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) {
-    return "BELOW FLOOR";
-  }
-  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) {
-    return "ABOVE CEILING";
-  }
+  if (predictedAlt === null || predictedAlt === undefined || Number.isNaN(predictedAlt)) return "UNKNOWN";
+  if (lowerM !== null && lowerM !== undefined && predictedAlt < Number(lowerM)) return "BELOW FLOOR";
+  if (upperM !== null && upperM !== undefined && predictedAlt > Number(upperM)) return "ABOVE CEILING";
   return "INSIDE BAND";
 }
 
 function predictVerticalConflictTtb(pathPoints, zoneFeature) {
-  if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) {
-    return null;
-  }
+  if (!zoneFeature?.properties || !Array.isArray(pathPoints) || !pathPoints.length) return null;
 
   const lowerM = zoneFeature?.properties?.lower_m ?? null;
   const upperM = zoneFeature?.properties?.upper_m ?? null;
@@ -1170,12 +1027,7 @@ function predictVerticalConflictTtb(pathPoints, zoneFeature) {
   for (const p of pathPoints) {
     const verticalOk = isWithinVerticalBand(p.alt, lowerM, upperM);
     if (verticalOk === true) {
-      return {
-        ttb_s: p.ttb_s,
-        alt: p.alt,
-        lower_m: lowerM,
-        upper_m: upperM
-      };
+      return { ttb_s: p.ttb_s, alt: p.alt, lower_m: lowerM, upper_m: upperM };
     }
   }
 
@@ -1213,13 +1065,9 @@ function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
     };
 
     if (isConflict) {
-      if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) {
-        bestConflict = candidate;
-      }
+      if (!bestConflict || candidate.ttb_s < bestConflict.ttb_s) bestConflict = candidate;
     } else {
-      if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) {
-        bestLateralOnly = candidate;
-      }
+      if (!bestLateralOnly || candidate.ttb_s < bestLateralOnly.ttb_s) bestLateralOnly = candidate;
     }
   }
 
@@ -1228,15 +1076,12 @@ function predictEarliest4DConflict(pathPoints, airspaceGeojson) {
 
 function smoothPrediction(newPrediction) {
   if (!newPrediction) return lastPrediction;
-
   if (!lastPrediction) {
     lastPrediction = newPrediction;
     return newPrediction;
   }
-
   const dt = Math.abs(newPrediction.ttb_s - lastPrediction.ttb_s);
   if (dt < 0.5) return lastPrediction;
-
   lastPrediction = newPrediction;
   return newPrediction;
 }
@@ -1381,36 +1226,23 @@ function zoneSeverityProfile(zoneType) {
 
 function getZoneActiveClass(activeText) {
   if (!activeText) return "";
-
-  const text = String(activeText).toUpperCase();
-
-  // Check INACTIVE first because it contains the substring ACTIVE
-  if (text.includes("INACTIVE")) return "hud-status-inactive";
-  if (text.includes("ACTIVE")) return "hud-status-active";
-
+  if (activeText.includes("ACTIVE")) return "hud-status-active";
+  if (activeText.includes("INACTIVE")) return "hud-status-inactive";
   return "";
 }
 
 function getZoneStatusClass(source) {
   if (!source) return "";
-
-  const text = String(source).toUpperCase();
-
-  if (text.includes("4D")) return "hud-status-warning";
-  if (text.includes("PREDICT")) return "hud-status-caution";
-
+  if (source.includes("4D")) return "hud-status-warning";
+  if (source.includes("PREDICT")) return "hud-status-caution";
   return "";
 }
 
 function getResultClass(breachText) {
   if (!breachText) return "";
-
-  const text = String(breachText).toUpperCase();
-
-  if (text.includes("BREACH")) return "hud-status-critical";
-  if (text.includes("CONFLICT")) return "hud-status-warning";
-  if (text.includes("CLEAR")) return "hud-status-ok";
-
+  if (breachText.includes("BREACH")) return "hud-status-critical";
+  if (breachText.includes("CONFLICT")) return "hud-status-warning";
+  if (breachText.includes("CLEAR")) return "hud-status-ok";
   return "";
 }
 
@@ -1433,34 +1265,24 @@ function computePilotRiskModel({
     null;
 
   const timeUrgency =
-    effectiveTtb == null
-      ? 0
-      : effectiveTtb <= 0
-        ? 1
-        : sigmoid(effectiveTtb, 40, 10);
+    effectiveTtb == null ? 0 :
+    effectiveTtb <= 0 ? 1 :
+    sigmoid(effectiveTtb, 40, 10);
 
   const nearTermUrgency =
-    effectiveTtb == null
-      ? 0
-      : effectiveTtb <= 0
-        ? 1
-        : sigmoid(effectiveTtb, 20, 5);
+    effectiveTtb == null ? 0 :
+    effectiveTtb <= 0 ? 1 :
+    sigmoid(effectiveTtb, 20, 5);
 
   let marginUrgency = 0;
   if (margin != null && Number.isFinite(margin)) {
-    if (margin < 0) {
-      marginUrgency = 1;
-    } else {
-      marginUrgency = sigmoid(margin, 35, 10);
-    }
+    if (margin < 0) marginUrgency = 1;
+    else marginUrgency = sigmoid(margin, 35, 10);
   }
 
   let geometryUrgency = 0;
-  if (conflict4D?.conflict) {
-    geometryUrgency = 1;
-  } else if (boundaryPrediction) {
-    geometryUrgency = 0.58;
-  }
+  if (conflict4D?.conflict) geometryUrgency = 1;
+  else if (boundaryPrediction) geometryUrgency = 0.58;
 
   let verticalUrgency = 0;
   if (verticalRelation === "INSIDE BAND") verticalUrgency = 1;
@@ -1475,21 +1297,20 @@ function computePilotRiskModel({
       ? clamp01(vz / 3.5)
       : 0;
 
-  // Continue function body here...
-}
-// --- HARD TIME DOMINANCE ZONE ---
+       // --- HARD TIME DOMINANCE ZONE ---
 let timeDominance = 0;
 if (effectiveTtb != null) {
   if (effectiveTtb <= 5) timeDominance = 1.0;
   else if (effectiveTtb <= 10) timeDominance = 0.85;
   else if (effectiveTtb <= 20) timeDominance = 0.65;
+  else timeDominance = 0;
 }
 
 // --- BASE WEIGHTS ---
 let weighted =
-  timeUrgency * (0.25 + 0.35 * timeDominance) + // up to 0.60
+  timeUrgency * (0.25 + 0.35 * timeDominance) +   // up to 0.60
   nearTermUrgency * 0.15 +
-  marginUrgency * (0.20 * (1 - timeDominance)) + // margin suppressed when urgent
+  marginUrgency * (0.20 * (1 - timeDominance)) +  // margin suppressed when urgent
   geometryUrgency * 0.18 +
   verticalUrgency * 0.10 +
   envelopeUrgency * 0.05 +
@@ -1497,7 +1318,19 @@ let weighted =
 
 weighted = clamp01(weighted);
 
-// --- GRADUATED IMMINENCE OVERRIDE ---
+// 🚨 HARD OVERRIDE — IMMINENT COLLISION
+if (effectiveTtb != null && effectiveTtb <= 5) {
+  return {
+    score: 100,
+    effectiveTtb,
+    severity: sev,
+    factors: {
+      override: "IMMINENT_TTB"
+    }
+  };
+}
+
+// GRADUATED IMMINENCE OVERRIDE
 if (effectiveTtb != null) {
   // 0–2 s: essentially unavoidable without immediate action
   if (effectiveTtb <= 2) {
@@ -1541,9 +1374,7 @@ if (effectiveTtb != null) {
   if (effectiveTtb <= 10) {
     const boostedScore = Math.max(
       88,
-      Math.round(
-        Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier)
-      )
+      Math.round(Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier))
     );
 
     return {
@@ -1567,9 +1398,7 @@ if (effectiveTtb != null) {
   if (effectiveTtb <= 20) {
     const boostedScore = Math.max(
       72,
-      Math.round(
-        Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier)
-      )
+      Math.round(Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier))
     );
 
     return {
@@ -1590,316 +1419,189 @@ if (effectiveTtb != null) {
   }
 }
 
-const riskScore = Math.round(
-  Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier)
-);
-
-return {
-  score: Math.min(100, riskScore),
-  effectiveTtb,
-  severity: sev,
-  factors: {
-    timeUrgency,
-    nearTermUrgency,
-    marginUrgency,
-    geometryUrgency,
-    verticalUrgency,
-    envelopeUrgency,
-    climbPenalty
-  }
-};
-  
-
-function computeOperationalRisk({
-  zoneType,
-  margin,
-  ttb,
-  conflict4D,
-  boundaryPrediction,
-  verticalRelation,
-  envelopeCount = 0,
-  vz
-}) {
-  return computePilotRiskModel({
-    zoneType,
-    margin,
-    ttb,
-    boundaryPrediction,
-    conflict4D,
-    verticalRelation,
-    envelopeCount,
-    vz
-  }).score;
+        // 🚨 HARD OVERRIDE — IMMINENT COLLISION
+if (effectiveTtb != null && effectiveTtb <= 5) {
+  return {
+    score: 100,
+    effectiveTtb,
+    severity: sev,
+    factors: {
+      override: "IMMINENT_TTB"
+    }
+  };
 }
 
-function choosePrimaryAction({
-  verticalRelation,
-  vz,
-  margin,
-  ttb,
-  turnBias
-}) {
-  const turnText =
-    turnBias?.turn === "LEFT"
-      ? "TURN LEFT"
-      : turnBias?.turn === "RIGHT"
-        ? "TURN RIGHT"
-        : "TURN";
-
-  const urgentVertical =
-    verticalRelation === "INSIDE BAND" &&
-    vz != null &&
-    vz > 0 &&
-    ttb != null &&
-    ttb <= 35;
-
-  const veryLowMargin =
-    margin != null &&
-    margin <= 15 &&
-    vz != null &&
-    vz > 0;
-
-  if (urgentVertical || veryLowMargin) {
-    return { primary: "DESCEND", secondary: turnText };
-  }
-
-  return { primary: turnText, secondary: "DESCEND" };
-}
-
-function computeAdvisoryPriority({
-  level,
-  ttb,
-  zoneType,
-  conflict4D,
-  boundaryPrediction,
-  verticalRelation,
-  margin,
-  vz
-}) {
-  const sev = zoneSeverityProfile(zoneType);
-
-  const levelBase =
-    level === "IMMEDIATE"
-      ? 100
-      : level === "WARNING"
-        ? 72
-        : level === "CAUTION"
-          ? 40
-          : 10;
-
-  let timeBoost = 0;
-  if (ttb != null) {
-    if (ttb <= sev.immediateTtb) timeBoost = 34;
-    else if (ttb <= sev.warningTtb) timeBoost = 24;
-    else if (ttb <= sev.cautionTtb) timeBoost = 10;
-  }
-
-  let geometryBoost = 0;
-  if (conflict4D?.conflict) geometryBoost += 22;
-  else if (boundaryPrediction) geometryBoost += 9;
-
-  let verticalBoost = 0;
-  if (verticalRelation === "INSIDE BAND") verticalBoost += 10;
-  if (margin != null && margin < 0) verticalBoost += 18;
-  else if (margin != null && margin <= 15) verticalBoost += 8;
-
-  let trendBoost = 0;
-  if (vz != null && vz > 0 && ttb != null && ttb <= 40) trendBoost += 6;
-
-  return (
-    levelBase +
-    timeBoost +
-    geometryBoost +
-    verticalBoost +
-    trendBoost +
-    sev.advisoryBias
-  ) * sev.riskMultiplier;
-}
-
-function selectHighestPriorityAdvisory(candidates) {
-  const valid = (candidates || []).filter(Boolean);
-
-  if (!valid.length) {
+        // GRADUATED IMMINENCE OVERRIDE
+if (effectiveTtb != null) {
+  // 0–2 s: essentially unavoidable without immediate action
+  if (effectiveTtb <= 2) {
     return {
-      level: "INFO",
-      text: "NO ACTION REQUIRED",
-      cls: "risk-ok",
-      actionChoice: null,
-      priorityScore: 0
+      score: 100,
+      effectiveTtb,
+      severity: sev,
+      factors: {
+        timeUrgency,
+        nearTermUrgency,
+        marginUrgency,
+        geometryUrgency,
+        verticalUrgency,
+        envelopeUrgency,
+        climbPenalty,
+        override: "TTB_LE_2"
+      }
     };
   }
 
-  return valid.reduce((best, candidate) =>
-    (candidate.priorityScore || 0) > (best.priorityScore || 0)
-      ? candidate
-      : best
-  );
+  // 2–5 s: critical, near-max urgency
+  if (effectiveTtb <= 5) {
+    return {
+      score: 96,
+      effectiveTtb,
+      severity: sev,
+      factors: {
+        timeUrgency,
+        nearTermUrgency,
+        marginUrgency,
+        geometryUrgency,
+        verticalUrgency,
+        envelopeUrgency,
+        climbPenalty,
+        override: "TTB_LE_5"
+      }
+    };
+  }
+
+  // 5–10 s: very high urgency, but not absolute max
+  if (effectiveTtb <= 10) {
+    const boostedScore = Math.max(
+      88,
+      Math.round(Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier))
+    );
+
+    return {
+      score: boostedScore,
+      effectiveTtb,
+      severity: sev,
+      factors: {
+        timeUrgency,
+        nearTermUrgency,
+        marginUrgency,
+        geometryUrgency,
+        verticalUrgency,
+        envelopeUrgency,
+        climbPenalty,
+        override: "TTB_LE_10"
+      }
+    };
+  }
+
+  // 10–20 s: strong warning floor
+  if (effectiveTtb <= 20) {
+    const boostedScore = Math.max(
+      72,
+      Math.round(Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier))
+    );
+
+    return {
+      score: boostedScore,
+      effectiveTtb,
+      severity: sev,
+      factors: {
+        timeUrgency,
+        nearTermUrgency,
+        marginUrgency,
+        geometryUrgency,
+        verticalUrgency,
+        envelopeUrgency,
+        climbPenalty,
+        override: "TTB_LE_20"
+      }
+    };
+  }
 }
 
-function computeAdvisory({
-  margin,
-  vz,
-  ttb,
-  conflict4D,
-  boundaryPrediction,
-  verticalRelation,
-  zoneName,
-  zoneType,
-  groundspeed,
-  turnBias
-}) {
-  const candidates = [];
-  const sev = zoneSeverityProfile(zoneType);
-  const effectiveTtb = conflict4D?.ttb_s ?? boundaryPrediction?.ttb_s ?? ttb ?? null;
+        const riskScore = Math.round(
+          Math.min(100, (weighted * 100 + sev.advisoryBias) * sev.riskMultiplier)
+        );
 
-  if (margin != null && margin < 0) {
-    const actionChoice = choosePrimaryAction({
-      verticalRelation,
-      vz,
-      margin,
-      ttb,
-      turnBias
-    });
+        return {
+          score: Math.min(100, riskScore),
+          effectiveTtb,
+          severity: sev,
+          factors: {
+            timeUrgency,
+            nearTermUrgency,
+            marginUrgency,
+            geometryUrgency,
+            verticalUrgency,
+            envelopeUrgency,
+            climbPenalty
+          }
+        };
+      }
 
-    const advisory = {
-      level: "IMMEDIATE",
-      text:
-        vz != null && vz > 0
-          ? `DESCEND IMMEDIATELY — AIRSPACE BREACH (${zoneName || "ACTIVE ZONE"})`
-          : `EXIT AIRSPACE IMMEDIATELY (${zoneName || "ACTIVE ZONE"})`,
-      cls: "risk-breach",
-      actionChoice
-    };
-
-    advisory.priorityScore = computeAdvisoryPriority({
-      level: advisory.level,
-      ttb: 0,
-      zoneType,
-      conflict4D,
-      boundaryPrediction,
-      verticalRelation,
-      margin,
-      vz
-    });
-
-    candidates.push(advisory);
-  }
-
-  if (conflict4D?.conflict) {
-    const zoneLabel = conflict4D.zoneName || zoneName || "ZONE";
-    const effectiveZoneType = conflict4D.zoneType || zoneType;
-
-    const actionChoice = choosePrimaryAction({
-      verticalRelation,
-      vz,
-      margin,
-      ttb,
-      turnBias
-    });
-
-    let level = "CAUTION";
-    if (effectiveTtb != null && effectiveTtb <= sev.warningTtb) level = "WARNING";
-    if (effectiveTtb != null && effectiveTtb <= sev.immediateTtb) level = "IMMEDIATE";
-
-    const advisory = {
-      level,
-      text:
-        level === "IMMEDIATE"
-          ? `${actionChoice.primary} NOW — CONFLICT WITH ${zoneLabel}`
-          : level === "WARNING"
-            ? `${actionChoice.primary} TO AVOID ${zoneLabel}`
-            : `PLAN ${actionChoice.primary} — ${zoneLabel} AHEAD`,
-      cls:
-        level === "IMMEDIATE"
-          ? "risk-breach"
-          : level === "WARNING"
-            ? "risk-warning"
-            : "risk-caution",
-      actionChoice
-    };
-
-    advisory.priorityScore = computeAdvisoryPriority({
-      level: advisory.level,
-      ttb: conflict4D.ttb_s ?? ttb,
-      zoneType: effectiveZoneType,
-      conflict4D,
-      boundaryPrediction,
-      verticalRelation,
-      margin,
-      vz
-    });
-
-    candidates.push(advisory);
-  }
-
-  if (boundaryPrediction && boundaryPrediction.ttb_s != null) {
-    const zoneLabel = boundaryPrediction.zoneName || zoneName || "ZONE";
-    const effectiveZoneType = boundaryPrediction.zoneType || zoneType;
-
-    const actionChoice = choosePrimaryAction({
-      verticalRelation,
-      vz,
-      margin,
-      ttb,
-      turnBias
-    });
-
-    let level = null;
-    if (boundaryPrediction.ttb_s <= sev.warningTtb) level = "WARNING";
-    else if (boundaryPrediction.ttb_s <= sev.cautionTtb) level = "CAUTION";
-
-    if (level) {
-      const advisory = {
-        level,
-        text:
-          level === "WARNING"
-            ? `${actionChoice.primary} — BOUNDARY AHEAD (${zoneLabel})`
-            : `PREPARE TO ${actionChoice.primary} (${zoneLabel})`,
-        cls: level === "WARNING" ? "risk-warning" : "risk-caution",
-        actionChoice
-      };
-
-      advisory.priorityScore = computeAdvisoryPriority({
-        level: advisory.level,
-        ttb: boundaryPrediction.ttb_s,
-        zoneType: effectiveZoneType,
+      function computeOperationalRisk({
+        zoneType,
+        margin,
+        ttb,
         conflict4D,
         boundaryPrediction,
         verticalRelation,
-        margin,
+        envelopeCount = 0,
         vz
-      });
+      }) {
+        return computePilotRiskModel({
+          zoneType,
+          margin,
+          ttb,
+          boundaryPrediction,
+          conflict4D,
+          verticalRelation,
+          envelopeCount,
+          vz
+        }).score;
+      }
 
-      candidates.push(advisory);
-    }
-  }
-
-  if (ttb != null && verticalRelation === "INSIDE BAND") {
-    let level = null;
-    if (ttb <= 20) level = "WARNING";
-    else if (ttb <= 45) level = "CAUTION";
-
-    if (level) {
-      const actionChoice = choosePrimaryAction({
+      function choosePrimaryAction({
+        conflict4D,
+        boundaryPrediction,
         verticalRelation,
         vz,
         margin,
         ttb,
         turnBias
-      });
+      }) {
+        const turnText =
+          turnBias?.turn === "LEFT" ? "TURN LEFT" :
+          turnBias?.turn === "RIGHT" ? "TURN RIGHT" :
+          "TURN";
 
-      const advisory = {
+        const urgentVertical =
+          verticalRelation === "INSIDE BAND" &&
+          vz != null &&
+          vz > 0 &&
+          ttb != null &&
+          ttb <= 35;
+
+        const veryLowMargin =
+          margin != null &&
+          margin <= 15 &&
+          vz != null &&
+          vz > 0;
+
+        if (urgentVertical || veryLowMargin) {
+          return { primary: "DESCEND", secondary: turnText };
+        }
+
+        if (conflict4D?.conflict || boundaryPrediction) {
+          return { primary: turnText, secondary: "DESCEND" };
+        }
+
+        return { primary: turnText, secondary: "DESCEND" };
+      }
+
+      function computeAdvisoryPriority({
         level,
-        text:
-          level === "WARNING"
-            ? "DESCEND SOON — VERTICAL LIMIT APPROACHING"
-            : "MONITOR VERTICAL MARGIN",
-        cls: level === "WARNING" ? "risk-warning" : "risk-caution",
-        actionChoice
-      };
-
-      advisory.priorityScore = computeAdvisoryPriority({
-        level: advisory.level,
         ttb,
         zoneType,
         conflict4D,
@@ -1907,193 +1609,399 @@ function computeAdvisory({
         verticalRelation,
         margin,
         vz
-      });
+      }) {
+        const sev = zoneSeverityProfile(zoneType);
 
-      candidates.push(advisory);
-    }
-  }
+        const levelBase =
+          level === "IMMEDIATE" ? 100 :
+          level === "WARNING" ? 72 :
+          level === "CAUTION" ? 40 :
+          10;
 
-  if (margin != null && margin <= 20 && margin >= 0 && !candidates.length) {
-    const actionChoice = choosePrimaryAction({
-      verticalRelation,
-      vz,
-      margin,
-      ttb,
-      turnBias
-    });
+        let timeBoost = 0;
+        if (ttb != null) {
+          if (ttb <= sev.immediateTtb) timeBoost = 34;
+          else if (ttb <= sev.warningTtb) timeBoost = 24;
+          else if (ttb <= sev.cautionTtb) timeBoost = 10;
+        }
 
-    const advisory = {
-      level: "CAUTION",
-      text: "LOW VERTICAL MARGIN — HOLD PROFILE CAREFULLY",
-      cls: "risk-caution",
-      actionChoice
-    };
+        let geometryBoost = 0;
+        if (conflict4D?.conflict) geometryBoost += 22;
+        else if (boundaryPrediction) geometryBoost += 9;
 
-    advisory.priorityScore = computeAdvisoryPriority({
-      level: advisory.level,
-      ttb,
-      zoneType,
-      conflict4D,
-      boundaryPrediction,
-      verticalRelation,
-      margin,
-      vz
-    });
+        let verticalBoost = 0;
+        if (verticalRelation === "INSIDE BAND") verticalBoost += 10;
+        if (margin != null && margin < 0) verticalBoost += 18;
+        else if (margin != null && margin <= 15) verticalBoost += 8;
 
-    candidates.push(advisory);
-  }
+        let trendBoost = 0;
+        if (vz != null && vz > 0 && ttb != null && ttb <= 40) trendBoost += 6;
 
-  if (!candidates.length && groundspeed != null && groundspeed > 0) {
-    candidates.push({
-      level: "INFO",
-      text: "TRACK STABLE — CONTINUE MONITORING",
-      cls: "risk-ok",
-      actionChoice: null,
-      priorityScore: 1
-    });
-  }
+        return (levelBase + timeBoost + geometryBoost + verticalBoost + trendBoost + sev.advisoryBias) * sev.riskMultiplier;
+      }
 
-  if (!candidates.length) {
-    candidates.push({
-      level: "INFO",
-      text: "NO ACTION REQUIRED",
-      cls: "risk-ok",
-      actionChoice: null,
-      priorityScore: 0
-    });
-  }
+      function selectHighestPriorityAdvisory(candidates) {
+        const valid = (candidates || []).filter(Boolean);
 
-  return selectHighestPriorityAdvisory(candidates);
-}
+        if (!valid.length) {
+          return {
+            level: "INFO",
+            text: "NO ACTION REQUIRED",
+            cls: "risk-ok",
+            actionChoice: null,
+            priorityScore: 0
+          };
+        }
 
-function advisoryLevelRank(level) {
-  if (level === "IMMEDIATE") return 4;
-  if (level === "WARNING") return 3;
-  if (level === "CAUTION") return 2;
-  return 1;
-}
+        return valid.reduce((best, candidate) =>
+          (candidate.priorityScore || 0) > (best.priorityScore || 0) ? candidate : best
+        );
+      }
 
-function advisoryKey(advisory) {
-  if (!advisory) return "INFO|NO ACTION REQUIRED";
-  return `${advisory.level || "INFO"}|${advisory.text || "NO ACTION REQUIRED"}`;
-}
+      function computeAdvisory({
+        margin,
+        vz,
+        ttb,
+        conflict4D,
+        boundaryPrediction,
+        verticalRelation,
+        zoneName,
+        zoneType,
+        groundspeed,
+        turnBias
+      }) {
+        const candidates = [];
+        const sev = zoneSeverityProfile(zoneType);
+        const effectiveTtb = conflict4D?.ttb_s ?? boundaryPrediction?.ttb_s ?? ttb ?? null;
 
-function getRiskBarClass(score) {
-  if (score >= 82) return "risk-fill-critical";
-  if (score >= 58) return "risk-fill-warning";
-  if (score >= 28) return "risk-fill-caution";
-  return "risk-fill-safe";
-}
+        if (margin != null && margin < 0) {
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
 
-function smoothValue(previous, next, alpha = 0.2) {
-  if (previous === null || previous === undefined || Number.isNaN(Number(previous))) {
-    return Number(next) || 0;
-  }
-  if (next === null || next === undefined || Number.isNaN(Number(next))) {
-    return Number(previous) || 0;
-  }
-  return previous + alpha * (next - previous);
-}
+          const advisory = {
+            level: "IMMEDIATE",
+            text:
+              vz != null && vz > 0
+                ? `DESCEND IMMEDIATELY — AIRSPACE BREACH (${zoneName || "ACTIVE ZONE"})`
+                : `EXIT AIRSPACE IMMEDIATELY (${zoneName || "ACTIVE ZONE"})`,
+            cls: "risk-breach",
+            actionChoice
+          };
 
-function getRiskTrend(previousScore, currentScore, deadband = 2) {
-  const prev = Number(previousScore) || 0;
-  const curr = Number(currentScore) || 0;
-  const delta = curr - prev;
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb: 0,
+            zoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            margin,
+            vz
+          });
 
-  if (Math.abs(delta) < deadband) return { label: "STEADY", arrow: "→", delta };
-  if (delta > 0) return { label: "RISING", arrow: "↑", delta };
-  return { label: "FALLING", arrow: "↓", delta };
-}
+          candidates.push(advisory);
+        }
 
-function getRiskReasonSummary({
-  margin,
-  ttb,
-  conflict4D,
-  boundaryPrediction,
-  envelopeCount = 0
-}) {
-  const reasons = [];
+        if (conflict4D?.conflict) {
+          const zoneLabel = conflict4D.zoneName || zoneName || "ZONE";
+          const effectiveZoneType = conflict4D.zoneType || zoneType;
 
-  if (margin !== null && margin !== undefined && !Number.isNaN(Number(margin))) {
-    const m = Number(margin);
-    if (m < 10) reasons.push("Very low margin");
-    else if (m < 20) reasons.push("Low margin");
-    else if (m < 50) reasons.push("Reduced margin");
-  }
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
 
-  if (ttb !== null && ttb !== undefined && !Number.isNaN(Number(ttb))) {
-    const t = Number(ttb);
-    if (t < 30) reasons.push("Immediate boundary risk");
-    else if (t < 60) reasons.push("Near-term boundary risk");
-    else if (t < 120) reasons.push("Emerging boundary risk");
-  }
+          let level = "CAUTION";
+          if (effectiveTtb != null && effectiveTtb <= sev.warningTtb) level = "WARNING";
+          if (effectiveTtb != null && effectiveTtb <= sev.immediateTtb) level = "IMMEDIATE";
 
-  if (conflict4D?.conflict) reasons.push("4D conflict predicted");
-  else if (boundaryPrediction) reasons.push("Boundary prediction active");
+          const advisory = {
+            level,
+            text:
+              level === "IMMEDIATE"
+                ? `${actionChoice.primary} NOW — CONFLICT WITH ${zoneLabel}`
+                : level === "WARNING"
+                ? `${actionChoice.primary} TO AVOID ${zoneLabel}`
+                : `PLAN ${actionChoice.primary} — ${zoneLabel} AHEAD`,
+            cls:
+              level === "IMMEDIATE" ? "risk-breach" :
+              level === "WARNING" ? "risk-warning" :
+              "risk-caution",
+            actionChoice
+          };
 
-  if (Number(envelopeCount) > 0) {
-    reasons.push(`Envelope conflicts: ${Number(envelopeCount)}`);
-  }
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb: conflict4D.ttb_s ?? ttb,
+            zoneType: effectiveZoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            margin,
+            vz
+          });
 
-  return reasons.length ? reasons.join(" • ") : "Nominal conditions";
-}
+          candidates.push(advisory);
+        }
 
-function logRiskTransition({
-  replayTime,
-  previousRiskLabel,
-  currentRiskLabel,
-  riskScore,
-  details,
-  minGapMs = 2000
-}) {
-  const now = Date.now();
+        if (boundaryPrediction && boundaryPrediction.ttb_s != null) {
+          const zoneLabel = boundaryPrediction.zoneName || zoneName || "ZONE";
+          const effectiveZoneType = boundaryPrediction.zoneType || zoneType;
 
-  if (!currentRiskLabel || previousRiskLabel === currentRiskLabel) {
-    return previousRiskLabel;
-  }
-  if (lastRiskTransitionTs && now - lastRiskTransitionTs < minGapMs) {
-    return previousRiskLabel;
-  }
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
 
-  console.log(
-    `[RISK TRANSITION] t=${replayTime ?? "n/a"} ${previousRiskLabel || "NONE"} -> ${currentRiskLabel} | score=${riskScore} | ${details}`
-  );
+          let level = null;
+          if (boundaryPrediction.ttb_s <= sev.warningTtb) level = "WARNING";
+          else if (boundaryPrediction.ttb_s <= sev.cautionTtb) level = "CAUTION";
 
-  lastRiskTransitionTs = now;
-  return currentRiskLabel;
-}
+          if (level) {
+            const advisory = {
+              level,
+              text:
+                level === "WARNING"
+                  ? `${actionChoice.primary} — BOUNDARY AHEAD (${zoneLabel})`
+                  : `PREPARE TO ${actionChoice.primary} (${zoneLabel})`,
+              cls: level === "WARNING" ? "risk-warning" : "risk-caution",
+              actionChoice
+            };
 
-function computeAdvisoryConfidence({
-  conflict4D,
-  boundaryPrediction,
-  turnBias,
-  ttb,
-  verticalRelation,
-  zoneType
-}) {
-  const sev = zoneSeverityProfile(zoneType);
-  let score = 0;
+            advisory.priorityScore = computeAdvisoryPriority({
+              level: advisory.level,
+              ttb: boundaryPrediction.ttb_s,
+              zoneType: effectiveZoneType,
+              conflict4D,
+              boundaryPrediction,
+              verticalRelation,
+              margin,
+              vz
+            });
 
-  if (conflict4D?.conflict) score += 38;
-  if (boundaryPrediction?.ttb_s != null && boundaryPrediction.ttb_s <= sev.warningTtb) score += 22;
-  if (turnBias?.turn && turnBias.turn !== "NONE") score += 16;
-  if (ttb != null && ttb <= 25) score += 12;
-  if (verticalRelation === "INSIDE BAND") score += 8;
+            candidates.push(advisory);
+          }
+        }
 
-  if (score >= 65) return "HIGH";
-  if (score >= 38) return "MEDIUM";
-  return "LOW";
-}
+        if (ttb != null && verticalRelation === "INSIDE BAND") {
+          let level = null;
+          if (ttb <= 20) level = "WARNING";
+          else if (ttb <= 45) level = "CAUTION";
 
-function stabilizeAdvisoryDisplay(
-  newAdvisory,
-  nowTs,
-  { holdMs = 1500, candidateDwellMs = 700 } = {}
-) {
-  const incoming =
-    newAdvisory && newAdvisory.text
-      ? newAdvisory
-      : {
+          if (level) {
+            const actionChoice = choosePrimaryAction({
+              conflict4D,
+              boundaryPrediction,
+              verticalRelation,
+              vz,
+              margin,
+              ttb,
+              turnBias
+            });
+
+            const advisory = {
+              level,
+              text:
+                level === "WARNING"
+                  ? "DESCEND SOON — VERTICAL LIMIT APPROACHING"
+                  : "MONITOR VERTICAL MARGIN",
+              cls: level === "WARNING" ? "risk-warning" : "risk-caution",
+              actionChoice
+            };
+
+            advisory.priorityScore = computeAdvisoryPriority({
+              level: advisory.level,
+              ttb,
+              zoneType,
+              conflict4D,
+              boundaryPrediction,
+              verticalRelation,
+              margin,
+              vz
+            });
+
+            candidates.push(advisory);
+          }
+        }
+
+        if (margin != null && margin <= 20 && margin >= 0 && !candidates.length) {
+          const actionChoice = choosePrimaryAction({
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            vz,
+            margin,
+            ttb,
+            turnBias
+          });
+
+          const advisory = {
+            level: "CAUTION",
+            text: "LOW VERTICAL MARGIN — HOLD PROFILE CAREFULLY",
+            cls: "risk-caution",
+            actionChoice
+          };
+
+          advisory.priorityScore = computeAdvisoryPriority({
+            level: advisory.level,
+            ttb,
+            zoneType,
+            conflict4D,
+            boundaryPrediction,
+            verticalRelation,
+            margin,
+            vz
+          });
+
+          candidates.push(advisory);
+        }
+
+        if (!candidates.length && groundspeed != null && groundspeed > 0) {
+          candidates.push({
+            level: "INFO",
+            text: "TRACK STABLE — CONTINUE MONITORING",
+            cls: "risk-ok",
+            actionChoice: null,
+            priorityScore: 1
+          });
+        }
+
+        if (!candidates.length) {
+          candidates.push({
+            level: "INFO",
+            text: "NO ACTION REQUIRED",
+            cls: "risk-ok",
+            actionChoice: null,
+            priorityScore: 0
+          });
+        }
+
+        return selectHighestPriorityAdvisory(candidates);
+      }
+
+      function advisoryLevelRank(level) {
+        if (level === "IMMEDIATE") return 4;
+        if (level === "WARNING") return 3;
+        if (level === "CAUTION") return 2;
+        return 1;
+      }
+
+      function advisoryKey(advisory) {
+        if (!advisory) return "INFO|NO ACTION REQUIRED";
+        return `${advisory.level || "INFO"}|${advisory.text || "NO ACTION REQUIRED"}`;
+      }
+
+      function getRiskBarClass(score) {
+        if (score >= 82) return "risk-fill-critical";
+        if (score >= 58) return "risk-fill-warning";
+        if (score >= 28) return "risk-fill-caution";
+        return "risk-fill-safe";
+      }
+
+      function smoothValue(previous, next, alpha = 0.2) {
+        if (previous === null || previous === undefined || Number.isNaN(Number(previous))) {
+          return Number(next) || 0;
+        }
+        if (next === null || next === undefined || Number.isNaN(Number(next))) {
+          return Number(previous) || 0;
+        }
+        return previous + alpha * (next - previous);
+      }
+
+      function getRiskTrend(previousScore, currentScore, deadband = 2) {
+        const prev = Number(previousScore) || 0;
+        const curr = Number(currentScore) || 0;
+        const delta = curr - prev;
+
+        if (Math.abs(delta) < deadband) return { label: "STEADY", arrow: "→", delta };
+        if (delta > 0) return { label: "RISING", arrow: "↑", delta };
+        return { label: "FALLING", arrow: "↓", delta };
+      }
+
+      function getRiskReasonSummary({ margin, ttb, conflict4D, boundaryPrediction, envelopeCount = 0 }) {
+        const reasons = [];
+
+        if (margin !== null && margin !== undefined && !Number.isNaN(Number(margin))) {
+          const m = Number(margin);
+          if (m < 10) reasons.push("Very low margin");
+          else if (m < 20) reasons.push("Low margin");
+          else if (m < 50) reasons.push("Reduced margin");
+        }
+
+        if (ttb !== null && ttb !== undefined && !Number.isNaN(Number(ttb))) {
+          const t = Number(ttb);
+          if (t < 30) reasons.push("Immediate boundary risk");
+          else if (t < 60) reasons.push("Near-term boundary risk");
+          else if (t < 120) reasons.push("Emerging boundary risk");
+        }
+
+        if (conflict4D?.conflict) reasons.push("4D conflict predicted");
+        else if (boundaryPrediction) reasons.push("Boundary prediction active");
+
+        if (Number(envelopeCount) > 0) reasons.push(`Envelope conflicts: ${Number(envelopeCount)}`);
+
+        return reasons.length ? reasons.join(" • ") : "Nominal conditions";
+      }
+
+      function logRiskTransition({ replayTime, previousRiskLabel, currentRiskLabel, riskScore, details, minGapMs = 2000 }) {
+        const now = Date.now();
+
+        if (!currentRiskLabel || previousRiskLabel === currentRiskLabel) return previousRiskLabel;
+        if (lastRiskTransitionTs && now - lastRiskTransitionTs < minGapMs) return previousRiskLabel;
+
+        console.log(
+          `[RISK TRANSITION] t=${replayTime ?? "n/a"} ${previousRiskLabel || "NONE"} -> ${currentRiskLabel} | score=${riskScore} | ${details}`
+        );
+
+        lastRiskTransitionTs = now;
+        return currentRiskLabel;
+      }
+
+      function computeAdvisoryConfidence({
+        conflict4D,
+        boundaryPrediction,
+        turnBias,
+        ttb,
+        verticalRelation,
+        zoneType
+      }) {
+        const sev = zoneSeverityProfile(zoneType);
+        let score = 0;
+
+        if (conflict4D?.conflict) score += 38;
+        if (boundaryPrediction?.ttb_s != null && boundaryPrediction.ttb_s <= sev.warningTtb) score += 22;
+        if (turnBias?.turn && turnBias.turn !== "NONE") score += 16;
+        if (ttb != null && ttb <= 25) score += 12;
+        if (verticalRelation === "INSIDE BAND") score += 8;
+
+        if (score >= 65) return "HIGH";
+        if (score >= 38) return "MEDIUM";
+        return "LOW";
+      }
+
+      function stabilizeAdvisoryDisplay(newAdvisory, nowTs, { holdMs = 1500, candidateDwellMs = 700 } = {}) {
+        const incoming = newAdvisory && newAdvisory.text
+          ? newAdvisory
+          : { level: "INFO", text: "NO ACTION REQUIRED", cls: "risk-ok", actionChoice: null, priorityScore: 0 };
+
+        const current = lastStableAdvisory || {
           level: "INFO",
           text: "NO ACTION REQUIRED",
           cls: "risk-ok",
@@ -2101,269 +2009,316 @@ function stabilizeAdvisoryDisplay(
           priorityScore: 0
         };
 
-  const current = lastStableAdvisory || {
-    level: "INFO",
-    text: "NO ACTION REQUIRED",
-    cls: "risk-ok",
-    actionChoice: null,
-    priorityScore: 0
-  };
+        const incomingRank = advisoryLevelRank(incoming.level);
+        const currentRank = advisoryLevelRank(current.level);
 
-  const incomingRank = advisoryLevelRank(incoming.level);
-  const currentRank = advisoryLevelRank(current.level);
+        const incomingKey = advisoryKey(incoming);
+        const currentKey = advisoryKey(current);
 
-  const incomingKey = advisoryKey(incoming);
-  const currentKey = advisoryKey(current);
+        if (incomingKey === currentKey) {
+          pendingAdvisory = null;
+          pendingAdvisoryTs = 0;
+          lastStableAdvisoryTs = nowTs;
+          return current;
+        }
 
-  if (incomingKey === currentKey) {
-    pendingAdvisory = null;
-    pendingAdvisoryTs = 0;
-    lastStableAdvisoryTs = nowTs;
-    return current;
-  }
+        if (incomingRank > currentRank) {
+          lastStableAdvisory = incoming;
+          lastStableAdvisoryTs = nowTs;
+          pendingAdvisory = null;
+          pendingAdvisoryTs = 0;
+          return lastStableAdvisory;
+        }
 
-  if (incomingRank > currentRank) {
-    lastStableAdvisory = incoming;
-    lastStableAdvisoryTs = nowTs;
-    pendingAdvisory = null;
-    pendingAdvisoryTs = 0;
-    return lastStableAdvisory;
-  }
+        const withinHold = (nowTs - lastStableAdvisoryTs) < holdMs;
+        if (withinHold) {
+          return current;
+        }
 
-  const withinHold = nowTs - lastStableAdvisoryTs < holdMs;
-  if (withinHold) {
-    return current;
-  }
+        const pendingKey = advisoryKey(pendingAdvisory);
+        if (pendingKey !== incomingKey) {
+          pendingAdvisory = incoming;
+          pendingAdvisoryTs = nowTs;
+          return current;
+        }
 
-  const pendingKey = advisoryKey(pendingAdvisory);
-  if (pendingKey !== incomingKey) {
-    pendingAdvisory = incoming;
-    pendingAdvisoryTs = nowTs;
-    return current;
-  }
+        const pendingReady = (nowTs - pendingAdvisoryTs) >= candidateDwellMs;
+        if (!pendingReady) {
+          return current;
+        }
 
-  const pendingReady = nowTs - pendingAdvisoryTs >= candidateDwellMs;
-  if (!pendingReady) {
-    return current;
-  }
-
-  lastStableAdvisory = incoming;
-  lastStableAdvisoryTs = nowTs;
-  pendingAdvisory = null;
-  pendingAdvisoryTs = 0;
-  return lastStableAdvisory;
-}
-
-function computeGeojsonBounds(fc) {
-  const b = new maplibregl.LngLatBounds();
-
-  for (const f of fc.features || []) {
-    const g = f.geometry;
-    if (!g) continue;
-
-    if (g.type === "Polygon") {
-      for (const ring of g.coordinates) {
-        for (const coord of ring) b.extend(coord);
+        lastStableAdvisory = incoming;
+        lastStableAdvisoryTs = nowTs;
+        pendingAdvisory = null;
+        pendingAdvisoryTs = 0;
+        return lastStableAdvisory;
       }
-    } else if (g.type === "MultiPolygon") {
-      for (const poly of g.coordinates) {
-        for (const ring of poly) {
-          for (const coord of ring) b.extend(coord);
+
+      function computeGeojsonBounds(fc) {
+        const b = new maplibregl.LngLatBounds();
+        for (const f of (fc.features || [])) {
+          const g = f.geometry;
+          if (!g) continue;
+          if (g.type === "Polygon") {
+            for (const ring of g.coordinates) for (const coord of ring) b.extend(coord);
+          } else if (g.type === "MultiPolygon") {
+            for (const poly of g.coordinates) for (const ring of poly) for (const coord of ring) b.extend(coord);
+          }
+        }
+        return b;
+      }
+
+      function zoomTo(map, bounds) {
+        if (!bounds) return;
+        map.fitBounds(bounds, { padding: 80, duration: 800 });
+      }
+
+      function unionBounds(a, b) {
+        if (!a && !b) return null;
+        if (a && !b) return a;
+        if (!a && b) return b;
+        const u = new maplibregl.LngLatBounds(a.getSouthWest(), a.getNorthEast());
+        u.extend(b.getSouthWest());
+        u.extend(b.getNorthEast());
+        return u;
+      }
+
+      function ensureTrendLayer(map) {
+        if (map.getSource("trend")) return;
+
+        map.addSource("trend", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [[0, 0], [0, 0]]
+            }
+          }
+        });
+
+        map.addLayer({
+          id: "trend-line",
+          type: "line",
+          source: "trend",
+          paint: {
+            "line-color": "#ffffff",
+            "line-opacity": 0.70,
+            "line-width": 2,
+            "line-dasharray": [2, 2]
+          }
+        });
+      }
+
+      function ensureVectorLayers(map) {
+        if (!map.getSource("heading-vector")) {
+          map.addSource("heading-vector", {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: [[0, 0], [0, 0]]
+              }
+            }
+          });
+
+          map.addLayer({
+            id: "heading-vector-line",
+            type: "line",
+            source: "heading-vector",
+            layout: {
+              "line-cap": "round",
+              "line-join": "round",
+              "visibility": "none"
+            },
+            paint: {
+              "line-color": "#00e5ff",
+              "line-width": 3,
+              "line-opacity": 0.95
+            }
+          });
+        }
+
+        if (!map.getSource("flight-vector-arrow")) {
+          map.addSource("flight-vector-arrow", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          });
+
+          map.addLayer({
+            id: "flight-vector-arrow-fill",
+            type: "fill",
+            source: "flight-vector-arrow",
+            layout: { "visibility": "none" },
+            paint: {
+              "fill-color": "#00e5ff",
+              "fill-opacity": 0.95
+            }
+          });
         }
       }
-    }
-  }
 
-  return b;
-}
+      function ensurePredictiveEnvelopeLayers(map) {
+        if (!map.getSource("predictive-envelope")) {
+          map.addSource("predictive-envelope", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          });
+        }
 
-function zoomTo(map, bounds) {
-  if (!bounds) return;
-  map.fitBounds(bounds, { padding: 80, duration: 800 });
-}
+        if (!map.getLayer("predictive-envelope-fill")) {
+          map.addLayer({
+            id: "predictive-envelope-fill",
+            type: "fill",
+            source: "predictive-envelope",
+            paint: {
+              "fill-color": "#ffbf00",
+              "fill-opacity": 0.16
+            }
+          });
+        }
 
-function unionBounds(a, b) {
-  if (!a && !b) return null;
-  if (a && !b) return a;
-  if (!a && b) return b;
+        if (!map.getLayer("predictive-envelope-outline")) {
+          map.addLayer({
+            id: "predictive-envelope-outline",
+            type: "line",
+            source: "predictive-envelope",
+            paint: {
+              "line-color": "#ffbf00",
+              "line-width": 2,
+              "line-opacity": 0.7
+            }
+          });
+        }
 
-  const u = new maplibregl.LngLatBounds(a.getSouthWest(), a.getNorthEast());
-  u.extend(b.getSouthWest());
-  u.extend(b.getNorthEast());
-  return u;
-}
+        if (!map.getSource("predictive-envelope-conflicts")) {
+          map.addSource("predictive-envelope-conflicts", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          });
+        }
 
-function ensureTrendLayer(map) {
-  if (map.getSource("trend")) return;
+        if (!map.getLayer("predictive-envelope-conflicts-fill")) {
+          map.addLayer({
+            id: "predictive-envelope-conflicts-fill",
+            type: "fill",
+            source: "predictive-envelope-conflicts",
+            paint: {
+              "fill-color": "#ff0000",
+              "fill-opacity": 0.22
+            }
+          });
+        }
 
-  map.addSource("trend", {
-    type: "geojson",
-    data: {
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: [[0, 0], [0, 0]]
-      }
-    }
-  });
-
-  map.addLayer({
-    id: "trend-line",
-    type: "line",
-    source: "trend",
-    paint: {
-      "line-color": "#ffffff",
-      "line-opacity": 0.7,
-      "line-width": 2,
-      "line-dasharray": [2, 2]
-    }
-  });
-}
-
-function ensureVectorLayers(map) {
-  if (!map.getSource("heading-vector")) {
-    map.addSource("heading-vector", {
-      type: "geojson",
-      data: {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [[0, 0], [0, 0]]
+        if (!map.getLayer("predictive-envelope-conflicts-outline")) {
+          map.addLayer({
+            id: "predictive-envelope-conflicts-outline",
+            type: "line",
+            source: "predictive-envelope-conflicts",
+            paint: {
+              "line-color": "#ff0000",
+              "line-width": 2,
+              "line-opacity": 0.9
+            }
+          });
         }
       }
-    });
 
-    map.addLayer({
-      id: "heading-vector-line",
-      type: "line",
-      source: "heading-vector",
-      layout: {
-        "line-cap": "round",
-        "line-join": "round",
-        visibility: "none"
-      },
-      paint: {
-        "line-color": "#00e5ff",
-        "line-width": 3,
-        "line-opacity": 0.95
+function renderEventLog() {
+  const el = document.getElementById("event-log");
+  if (!el) return;
+
+  const currentEvent = findCurrentPlaybackEvent();
+  currentPlaybackEventId = currentEvent?.id ?? null;
+
+  
+
+  const items = flightEventLog
+  .filter(e => e.event_type !== "INIT")
+  .slice(-12)
+  .reverse();
+
+  el.innerHTML = `
+      ${items.map(e => {
+      const tSecRaw = (e.sim_time_ms || 0) / 1000;
+      const tSec = Math.round(tSecRaw);
+      const timeLabel = tSecRaw < 0.5 ? "INIT" : "T+" + tSec + "s";
+
+      const selectedCls = selectedEventId === e.id ? " event-item-selected" : "";
+      const currentCls = currentPlaybackEventId === e.id ? " event-item-current" : "";
+
+      let text = "";
+
+      if (e.event_type === "risk_transition") {
+        text = `${e.value?.from || "NONE"} → ${e.value?.to || "UNKNOWN"} (${e.value?.score ?? "—"})`;
+      } else if (e.event_type === "advisory_transition") {
+        text = `${e.value?.to?.split("|")[1] || e.value?.to || "UNKNOWN"}`;
+      } else if (e.event_type === "prediction_threshold_crossed") {
+        text = `TTB ${String(e.value?.threshold || "").replace("le", "≤")} (${Number(e.value?.ttb_s || 0).toFixed(1)}s)`;
+      } else if (e.event_type === "boundary_prediction_started") {
+        text = `${e.value?.zone_name || "Zone"} boundary ahead`;
+      } else if (e.event_type === "conflict_4d_started") {
+        text = `${e.value?.zone_name || "Zone"} 4D conflict`;
+      } else if (e.event_type === "envelope_conflict_started") {
+        text = `Envelope conflicts: ${e.value?.count ?? 0}`;
+      } else {
+        text = eventTypeLabel(e.event_type);
       }
-    });
-  }
 
-  if (!map.getSource("flight-vector-arrow")) {
-    map.addSource("flight-vector-arrow", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-
-    map.addLayer({
-      id: "flight-vector-arrow-fill",
-      type: "fill",
-      source: "flight-vector-arrow",
-      layout: { visibility: "none" },
-      paint: {
-        "fill-color": "#00e5ff",
-        "fill-opacity": 0.95
-      }
-    });
-  }
+      return `
+        <div class="event-item${selectedCls}${currentCls}" onclick="jumpToSimTime(${e.sim_time_ms || 0}, '${e.id}')">
+          <div class="event-time">${timeLabel}</div>
+          <div class="event-type ${eventSeverityClass(e.severity)}">${eventTypeLabel(e.event_type)}</div>
+          <div class="event-text">${text}</div>
+        </div>
+      `;
+    }).join("")}
+  `;
 }
 
-function ensurePredictiveEnvelopeLayers(map) {
-  if (!map.getSource("predictive-envelope")) {
-    map.addSource("predictive-envelope", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
+ 
+
+
+  if (e.event_type === "advisory_transition") {
+    return `${e.value.to}`;
   }
 
-  if (!map.getLayer("predictive-envelope-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-fill",
-      type: "fill",
-      source: "predictive-envelope",
-      paint: {
-        "fill-color": "#ffbf00",
-        "fill-opacity": 0.16
-      }
-    });
+  if (e.event_type === "prediction_threshold_crossed") {
+    return `TTB ${e.value.threshold.replace("le", "≤")} (${e.value.ttb_s?.toFixed(1)}s)`;
   }
 
-  if (!map.getLayer("predictive-envelope-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-outline",
-      type: "line",
-      source: "predictive-envelope",
-      paint: {
-        "line-color": "#ffbf00",
-        "line-width": 2,
-        "line-opacity": 0.7
-      }
-    });
+  if (e.event_type.includes("conflict")) {
+    return e.value.zone_name || "conflict detected";
   }
 
-  if (!map.getSource("predictive-envelope-conflicts")) {
-    map.addSource("predictive-envelope-conflicts", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-fill",
-      type: "fill",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "fill-color": "#ff0000",
-        "fill-opacity": 0.22
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-outline",
-      type: "line",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "line-color": "#ff0000",
-        "line-width": 2,
-        "line-opacity": 0.9
-      }
-    });
-  }
+  return JSON.stringify(e.value);
 }
 
-function updateZoneFilter(map) {
-  if (!map.getLayer("airspace-fill")) return;
+      function updateZoneFilter(map) {
+        if (!map.getLayer("airspace-fill")) return;
 
-  const checked = Array.from(
-    document.querySelectorAll(".zone-filter:checked")
-  ).map((cb) => cb.value);
+        const checked = Array.from(document.querySelectorAll(".zone-filter:checked")).map((cb) => cb.value);
 
-  if (!checked.length) {
-    map.setFilter("airspace-fill", ["==", 1, 0]);
-    map.setFilter("airspace-outline", ["==", 1, 0]);
-    if (map.getLayer("airspace-3d")) {
-      map.setFilter("airspace-3d", ["==", 1, 0]);
-    }
-    return;
-  }
+        if (!checked.length) {
+          map.setFilter("airspace-fill", ["==", 1, 0]);
+          map.setFilter("airspace-outline", ["==", 1, 0]);
+          if (map.getLayer("airspace-3d")) map.setFilter("airspace-3d", ["==", 1, 0]);
+          return;
+        }
 
-  const filter = [
-    "in",
-    ["downcase", ["to-string", ["coalesce", ["get", "zone_type"], ""]]],
-    ["literal", checked]
-  ];
+        const filter = [
+          "in",
+          ["downcase", ["to-string", ["coalesce", ["get", "zone_type"], ""]]],
+          ["literal", checked]
+        ];
 
-  map.setFilter("airspace-fill", filter);
-  map.setFilter("airspace-outline", filter);
-  if (map.getLayer("airspace-3d")) {
-    map.setFilter("airspace-3d", filter);
-  }
-}
-      let data;
+        map.setFilter("airspace-fill", filter);
+        map.setFilter("airspace-outline", filter);
+        if (map.getLayer("airspace-3d")) map.setFilter("airspace-3d", filter);
+      }
+
+    let data;
       try {
         const r = await fetch(API_URL);
         if (!r.ok) throw new Error("Replay fetch failed");
@@ -2643,6 +2598,84 @@ function logFlightEvents({
     }
     lastEventState.ttbBands[key] = bands[key];
   }
+}
+
+function eventTypeLabel(eventType) {
+  return String(eventType || "").replace(/_/g, " ");
+}
+
+function eventSeverityClass(severity) {
+  const s = String(severity || "").toUpperCase();
+  if (s === "CRITICAL" || s === "IMMEDIATE") return "event-sev-critical";
+  if (s === "WARNING") return "event-sev-warning";
+  if (s === "CAUTION") return "event-sev-caution";
+  return "event-sev-info";
+}
+
+function jumpToSimTime(ms, eventId = null) {
+  simElapsed = Math.max(0, Math.min(ms, duration));
+  lastFrame = null;
+  playing = false;
+  playBtn.textContent = "Play";
+  selectedEventId = eventId;
+}
+
+function findCurrentPlaybackEvent() {
+  if (!flightEventLog.length) return null;
+
+  let best = null;
+  for (const e of flightEventLog) {
+    if ((e.sim_time_ms ?? 0) <= simElapsed) best = e;
+    else break;
+  }
+  return best;
+}
+
+function formatEventText(e) {
+  if (!e) return "—";
+
+  if (e.event_type === "RISK_CHANGE") {
+    const from = e.value?.from || "—";
+    const to = e.value?.to || "—";
+
+    if (from === to) return `Risk ${to}`;
+
+    return `${to} (${e.value?.score ?? ""})`;
+  }
+
+  if (e.event_type === "ADVISORY_CHANGE") {
+    return e.value?.to?.split("|")[1] || "Action updated";
+  }
+
+  if (e.event_type === "TTB_THRESHOLD") {
+    const ttb = e.value?.ttb_s != null
+      ? `${Number(e.value.ttb_s).toFixed(1)} s`
+      : "—";
+
+    if (e.value?.threshold === "le5") return `Immediate risk (${ttb})`;
+    if (e.value?.threshold === "le10") return `High risk (${ttb})`;
+    if (e.value?.threshold === "le20") return `Approaching limit (${ttb})`;
+
+    return `Threshold crossed (${ttb})`;
+  }
+
+  if (e.event_type === "BOUNDARY_CONFLICT_START") {
+    return `${e.value?.zone_name || "Zone"} ahead`;
+  }
+
+  if (e.event_type === "CONFLICT4D_START") {
+    return `Conflict with ${e.value?.zone_name || "zone"}`;
+  }
+
+  if (e.event_type === "VERTICAL_CONFLICT_START") {
+    return "Vertical conflict";
+  }
+
+  if (e.event_type === "ENVELOPE_CONFLICT_START") {
+    return `Multiple conflicts (${e.value?.count ?? 0})`;
+  }
+
+  return "";
 }
 
       const map = new maplibregl.Map({
@@ -3377,28 +3410,18 @@ if (warnRoot) {
 
 
         if (slider) slider.value = duration > 0 ? simElapsed / duration : 0;
+        renderEventLog();
         requestAnimationFrame(loop);
       }
 
-      zoomFlightBtn.onclick = () => {
-        zoomTo(map, flightBounds);
-      };
-
-      zoomAirspaceBtn.onclick = () => {
-        zoomTo(map, airspaceBounds);
-      };
-
-      zoomBothBtn.onclick = () => {
-        zoomTo(map, unionBounds(flightBounds, airspaceBounds));
-      };
+      zoomFlightBtn.onclick = () => zoomTo(map, flightBounds);
+      zoomAirspaceBtn.onclick = () => zoomTo(map, airspaceBounds);
+      zoomBothBtn.onclick = () => zoomTo(map, unionBounds(flightBounds, airspaceBounds));
 
       playBtn.onclick = () => {
         playing = !playing;
         playBtn.textContent = playing ? "Pause" : "Play";
-
-        if (playing) {
-          lastFrame = null;
-        }
+        if (playing) lastFrame = null;
       };
 
       slider.oninput = (e) => {
@@ -3406,7 +3429,6 @@ if (warnRoot) {
         currentIndex = 0;
         lastSmoothedPos = null;
         lastPrediction = null;
-        selectedEventId = null;
       };
 
       speedSel.onchange = () => {
@@ -3417,9 +3439,7 @@ if (warnRoot) {
       if (featureToggleBtn) {
         featureToggleBtn.onclick = () => {
           const panel = document.getElementById("feature-panel");
-          if (panel) {
-            panel.style.display = panel.style.display === "block" ? "none" : "block";
-          }
+          if (panel) panel.style.display = panel.style.display === "block" ? "none" : "block";
         };
       }
     })();
