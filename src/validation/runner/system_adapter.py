@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -111,4 +112,101 @@ class ValidationSystemAdapter:
             "ttb_s": ttb_s,
             "breach_time_ms": breach_time_ms,
             "classification": prediction,
+        }
+    
+    def set_intruder_track(self, intruder_points):
+        self.intruder_track = intruder_points
+
+    def _distance_xy_m(self, p1, p2):
+        # simple local approximation, good enough for controlled validation
+        lat_scale = 111_320.0
+        lon_scale = 111_320.0 * math.cos(math.radians((p1["lat"] + p2["lat"]) / 2.0))
+
+        dlat = (p2["lat"] - p1["lat"]) * lat_scale
+        dlon = (p2["lon"] - p1["lon"]) * lon_scale
+
+        return math.sqrt(dlat * dlat + dlon * dlon)
+
+    def get_four_d_truth_for_index(self, index: int):
+        if not hasattr(self, "intruder_track"):
+            return None
+
+        own = self.replay[index]
+        intr = self.intruder_track[index]
+
+        horizontal_m = self._distance_xy_m(own, intr)
+        vertical_m = abs(own["altitude_m"] - intr["altitude_m"])
+
+        conflict = horizontal_m < 60.0 and vertical_m < 20.0
+
+        return {
+            "horizontal_m": horizontal_m,
+            "vertical_m": vertical_m,
+            "conflict": conflict,
+        }
+
+    def get_four_d_prediction_for_index(self, index: int):
+        if not hasattr(self, "intruder_track"):
+            return None
+
+        truth = self.get_four_d_truth_for_index(index)
+        if truth is None:
+            return None
+
+        if truth["conflict"]:
+            state = "CONFLICT"
+        elif truth["horizontal_m"] < 120.0 and truth["vertical_m"] < 30.0:
+            state = "WARNING"
+        elif truth["horizontal_m"] < 200.0:
+            state = "CAUTION"
+        else:
+            state = "SAFE"
+
+        return {
+            "state": state,
+            "horizontal_m": truth["horizontal_m"],
+            "vertical_m": truth["vertical_m"],
+        }
+    
+    def get_envelope_truth_for_index(self, index: int):
+        point = self.replay[index]
+        prev_point = self.replay[index - 1] if index > 0 else None
+
+        vertical_speed_mps = self.compute_vertical_speed(prev_point, point)
+        max_climb_rate_mps = 6.0
+
+        violated = (
+            vertical_speed_mps is not None and
+            vertical_speed_mps > max_climb_rate_mps
+        )
+
+        return {
+            "vertical_speed_mps": vertical_speed_mps,
+            "max_climb_rate_mps": max_climb_rate_mps,
+            "violated": violated,
+        }
+
+    def get_envelope_prediction_for_index(self, index: int):
+        truth = self.get_envelope_truth_for_index(index)
+        if truth is None:
+            return None
+
+        vs = truth["vertical_speed_mps"]
+        limit = truth["max_climb_rate_mps"]
+
+        if vs is None:
+            state = "SAFE"
+        elif vs > limit:
+            state = "BREACH"
+        elif vs >= 0.90 * limit:
+            state = "WARNING"
+        elif vs >= 0.75 * limit:
+            state = "CAUTION"
+        else:
+            state = "SAFE"
+
+        return {
+            "state": state,
+            "vertical_speed_mps": vs,
+            "limit_mps": limit,
         }

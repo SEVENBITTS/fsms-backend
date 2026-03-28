@@ -1,0 +1,62 @@
+[
+  {
+    "scenario": "baseline",
+    "first_alert": 1,
+    "first_warning": 1,
+    "first_truth_event": null,
+    "lead_steps": null,
+    "lead_seconds": null,
+    "score": "REVIEW",
+    "classification": "NO-BREACH"
+  },
+  {
+    "scenario": "borderline_ceiling",
+    "first_alert": 1,
+    "first_warning": 1,
+    "first_truth_event": null,
+    "lead_steps": null,
+    "lead_seconds": null,
+    "score": "REVIEW",
+    "classification": "NO-BREACH"
+  },
+  {
+    "scenario": "vertical_breach",
+    "first_alert": 1,
+    "first_warning": 1,
+    "first_truth_event": 3,
+    "lead_steps": 2,
+    "lead_seconds": 10.0,
+    "score": "PASS",
+    "classification": "EARLY"
+  },
+  {
+    "scenario": "faster_climb_breach",
+    "first_alert": 1,
+    "first_warning": 1,
+    "first_truth_event": 2,
+    "lead_steps": 1,
+    "lead_seconds": 5.0,
+    "score": "PASS",
+    "classification": "EDGE"
+  },
+  {
+    "scenario": "envelope_conflict",
+    "first_alert": 1,
+    "first_warning": 2,
+    "first_truth_event": 3,
+    "lead_steps": 1,
+    "lead_seconds": 5.0,
+    "score": "PASS",
+    "classification": "EDGE"
+  },
+  {
+    "scenario": "four_d_conflict",
+    "first_alert": 0,
+    "first_warning": 0,
+    "first_truth_event": 3,
+    "lead_steps": 3,
+    "lead_seconds": 15.0,
+    "score": "PASS",
+    "classification": "EARLY"
+  }
+]

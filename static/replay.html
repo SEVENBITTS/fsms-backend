@@ -394,6 +394,169 @@
     .event-sev-caution { color: #facc15; }
     .event-sev-warning { color: #fb923c; }
     .event-sev-critical { color: #f87171; font-weight: 700; }
+
+.summary-panel {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+
+  width: min(1200px, calc(100% - 40px));
+}
+
+.summary-card {
+  background: rgba(15, 18, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.summary-card {
+  min-width: 0; /* IMPORTANT for grid overflow fix */
+}
+
+.summary-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #b8bfd3;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.summary-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.4rem;
+}
+
+.summary-subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #b8bfd3;
+  margin-bottom: 0.25rem;
+}
+
+.summary-subtitle.copyable {
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+
+.summary-subtitle.copyable:hover {
+  color: #cbd5e1;
+  text-shadow: 0 0 10px rgba(148, 163, 184, 0.18);
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.status-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+}
+
+.status-label {
+  font-size: 12px;
+  color: #b8bfd3;
+}
+
+.status-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: #f8fafc;
+}
+
+#summary-latest-run {
+  font-size: 16px;        /* smaller than default 24px */
+  line-height: 1.3;
+  word-break: break-word; /* allow wrapping */
+}
+
+#summary-breach-covered {
+  font-weight: 600;
+  color: #60a5fa;
+  margin-bottom: 0.6rem;
+}
+
+.summary-panel {
+  animation: fadeIn 0.4s ease;
+}
+.summary-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.summary-action-btn {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.85);
+  color: #e5e7eb;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.summary-action-btn {
+  backdrop-filter: blur(4px);
+}
+
+.summary-action-btn:active {
+  transform: translateY(0);
+  opacity: 0.9;
+}
+
+.summary-action-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  transform: translateY(-1px);
+}
+
+.summary-action-btn:hover {
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.3);
+}
+
+#summary-flight,
+#summary-version {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 1000px) {
+  .summary-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .summary-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
   </style>
 </head>
 
@@ -434,6 +597,53 @@
     </div>
     <div id="event-log"></div>
   </div>
+
+  <div id="summary-panel" class="summary-panel">
+  <div class="summary-card">
+    <div class="summary-title">Scenarios</div>
+    <div class="summary-value" id="summary-total">0</div>
+
+    <div class="summary-subtitle" id="summary-breach-covered">0 breach scenarios covered</div>
+    <div class="summary-subtitle">Validation report snapshot</div>
+    <div class="summary-subtitle" id="summary-flight">Flight: Unknown</div>
+    <div class="summary-subtitle" id="summary-version">Report version: Unknown</div>
+
+    <div class="summary-actions">
+      <button id="export-summary-json" class="summary-action-btn">Export JSON</button>
+      <button id="export-summary-csv" class="summary-action-btn">Export CSV</button>
+    </div>
+  </div>
+</div>
+
+  <div class="summary-card">
+    <div class="summary-title">Status</div>
+    <div class="status-grid">
+      <div class="status-pill">
+        <div class="status-label">PASS</div>
+        <div class="status-value" id="summary-pass">0</div>
+      </div>
+      <div class="status-pill">
+        <div class="status-label">REVIEW</div>
+        <div class="status-value" id="summary-review">0</div>
+      </div>
+      <div class="status-pill">
+        <div class="status-label">FAIL</div>
+        <div class="status-value" id="summary-fail">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary-card">
+    <div class="summary-title">Latest Run</div>
+    <div class="summary-value" id="summary-latest-run">Unknown</div>
+  </div>
+
+  <div class="summary-card">
+    <div class="summary-title">Avg Lead Time</div>
+    <div class="summary-value" id="summary-avg-lead">N/A</div>
+    <div class="summary-subtitle">PASS breach scenarios only</div>
+  </div>
+</div>
 
   <div id="feature-menu">
     <button id="feature-toggle">⚙ Features</button>
@@ -2632,6 +2842,7 @@
 
         throw lastError || new Error(errorLabel);
       }
+      
 
       let replayData;
       try {
@@ -2677,6 +2888,34 @@
       } catch (err) {
         console.warn("Compliance fetch error:", err.message);
       }
+
+      let validationJson = null;
+
+try {
+  try {
+  validationJson = await fetchJson("/api/fsms/validation/latest", "Validation report failed");
+
+  console.log("FULL validationJson:", validationJson);
+  console.log("FIRST result:", validationJson?.results?.[0]);
+
+ const summary = {
+  ...computeSummary(
+    validationJson?.results || [],
+    validationJson?.generated_at || null
+  ),
+  flightId: validationJson?.flight_id || null,
+  reportVersion: validationJson?.report_version || null,
+  reportFile: validationJson?.report_file || null
+};
+
+  renderSummary(summary);
+} catch (err) {
+  console.error(err);
+}
+
+} catch (err) {
+  console.warn("Validation report error:", err.message);
+}
 
       function getComplianceForReplayTime(ts, fallbackIndex = 0) {
         if (!pointStatus.length) return null;
@@ -2736,6 +2975,132 @@
           source_t: a.t
         };
       }
+
+       
+  function computeSummary(reportRows, generatedAt = null) {
+    const rows = Array.isArray(reportRows) ? reportRows : [];
+
+    let passCount = 0;
+    let reviewCount = 0;
+    let failCount = 0;
+    let breachScenariosCovered = 0;
+    let passingLeadSum = 0;
+    let passingLeadCount = 0;
+
+    for (const row of rows) {
+      const score = row?.score;
+
+      if (score === "PASS") passCount += 1;
+      else if (score === "REVIEW") reviewCount += 1;
+      else if (score === "FAIL") failCount += 1;
+
+      const hasTruthBreachEvent =
+        row?.first_truth_event !== null &&
+        row?.first_truth_event !== undefined;
+
+      if (hasTruthBreachEvent) {
+        breachScenariosCovered += 1;
+      }
+
+      const isBaseline = row?.scenario === "baseline";
+      const isBorderlineCeiling = row?.scenario === "borderline_ceiling";
+      const lead = row?.lead_seconds;
+
+      const eligibleForAvgLeadTime =
+        hasTruthBreachEvent &&
+        score === "PASS" &&
+        !isBaseline &&
+        !isBorderlineCeiling &&
+        isFiniteNumber(lead);
+
+      if (eligibleForAvgLeadTime) {
+        passingLeadSum += Number(lead);
+        passingLeadCount += 1;
+      }
+    }
+
+    return {
+      totalScenarios: rows.length,
+      passCount,
+      reviewCount,
+      failCount,
+      latestRunTimestamp: generatedAt,
+      avgPassLeadSeconds:
+        passingLeadCount > 0 ? passingLeadSum / passingLeadCount : null,
+      breachScenariosCovered,
+    };
+  }
+
+    function formatTimestamp(ts) {
+    if (!ts) return "Unknown";
+    const d = new Date(ts);
+    return d.toLocaleString();  // clean readable format
+  }
+
+  function formatLeadTime(seconds) {
+    if (seconds == null || Number.isNaN(seconds)) return "N/A";
+    return `${seconds.toFixed(1)}s`;
+  }
+
+  function renderSummary(summary) {
+  document.getElementById("summary-total").textContent = String(summary.totalScenarios);
+  document.getElementById("summary-pass").textContent = String(summary.passCount);
+  document.getElementById("summary-review").textContent = String(summary.reviewCount);
+  document.getElementById("summary-fail").textContent = String(summary.failCount);
+  document.getElementById("summary-latest-run").textContent = formatTimestamp(summary.latestRunTimestamp);
+  document.getElementById("summary-avg-lead").textContent = formatLeadTime(summary.avgPassLeadSeconds);
+
+  document.getElementById("summary-breach-covered").textContent =
+    `${summary.breachScenariosCovered} breach scenarios covered`;
+
+  document.getElementById("summary-flight").textContent =
+    summary.flightId ? `Flight: ${summary.flightId}` : "Flight: —";
+
+  document.getElementById("summary-version").textContent =
+    summary.reportVersion
+      ? `Report version: ${summary.reportVersion}`
+      : summary.reportFile
+        ? `Report file: ${summary.reportFile.replace(".json", "")}`
+        : "Report: —";
+
+  const flightEl = document.getElementById("summary-flight");
+  if (summary.flightId && flightEl) {
+    flightEl.classList.add("copyable");
+    flightEl.style.cursor = "pointer";
+  
+
+    flightEl.onclick = () => {
+      navigator.clipboard.writeText(summary.flightId);
+      flightEl.textContent = "Copied flight ID ✓";
+
+      setTimeout(() => {
+        flightEl.textContent = `Flight: ${summary.flightId}`;
+      }, 1200);
+    };
+  }
+
+  if (flightEl) {
+  flightEl.onclick = null;
+  flightEl.classList.remove("copyable");
+  flightEl.style.cursor = "default";
+}
+
+  const versionEl = document.getElementById("summary-version");
+  if (summary.reportFile && versionEl) {
+    versionEl.classList.add("copyable");
+    versionEl.style.cursor = "pointer";
+    versionEl.onclick = () => {
+      navigator.clipboard.writeText(summary.reportFile);
+      versionEl.textContent = "Copied report name ✓";
+
+      setTimeout(() => {
+        versionEl.textContent = `Report file: ${summary.reportFile.replace(".json", "")}`;
+      }, 1200);
+    };
+  }
+}
+
+      
 
       // =========================
       // MAP INIT
@@ -3436,10 +3801,8 @@
         `;
 
         if (warnRoot) {
-          warnRoot.innerHTML = warnShow
-            ? `<div class="warnstrip show ${warnClass}">${escapeHtml(warnText)}</div>`
-            : "";
-        }
+  warnRoot.innerHTML = "";
+}
 
         window._fsmsDebug = {
           simElapsed,
