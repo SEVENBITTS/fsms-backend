@@ -15,9 +15,82 @@ function getChangedFiles(baseRef) {
     .filter(Boolean);
 }
 
+function readCurrentSavePoint() {
+  try {
+    return JSON.parse(fs.readFileSync("fsms-save-point.json", "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function normalize(value) {
+  return String(value ?? "").trim();
+}
+
+function assessNextBuildStep(step) {
+  const value = normalize(step);
+
+  if (!value) {
+    return {
+      pass: false,
+      reason: "current `nextBuildStep` is empty",
+    };
+  }
+
+  if (value === "TBD") {
+    return {
+      pass: false,
+      reason: "`nextBuildStep` cannot be `TBD`",
+    };
+  }
+
+  if (value.includes("\n")) {
+    return {
+      pass: false,
+      reason: "`nextBuildStep` must be a single action, not multiple lines",
+    };
+  }
+
+  if (/[;•]/.test(value)) {
+    return {
+      pass: false,
+      reason: "`nextBuildStep` must describe one action, not a list",
+    };
+  }
+
+  if (/^(improve|fix things|misc|cleanup|refactor|work on|continue|stuff)$/i.test(value)) {
+    return {
+      pass: false,
+      reason: "`nextBuildStep` is too vague",
+    };
+  }
+
+  if (/^(investigate|consider|think about|look into|review)\b/i.test(value)) {
+    return {
+      pass: false,
+      reason: "`nextBuildStep` is exploratory, not directly executable",
+    };
+  }
+
+  if (
+    !/^(add|create|implement|wire|split|enforce|build|migrate|connect|write|define|validate|generate|deploy|test|document|remove|replace|introduce|extract|verify|update)\b/i.test(
+      value
+    )
+  ) {
+    return {
+      pass: false,
+      reason: "`nextBuildStep` should start with a concrete action verb",
+    };
+  }
+
+  return {
+    pass: true,
+    reason: "current `nextBuildStep` looks actionable",
+  };
+}
+
 const changedFiles = getChangedFiles(BASE_REF);
 const suggestions = [];
-
 const has = (pattern) => changedFiles.some((f) => pattern.test(f));
 
 if (has(/^src\/missions\//)) {
@@ -52,8 +125,31 @@ if (suggestions.length === 0) {
   suggestions.push("Define the next executable system change based on the current diff");
 }
 
+const savePoint = readCurrentSavePoint();
+const currentNextBuildStep = normalize(savePoint?.nextBuildStep);
+const assessment = assessNextBuildStep(currentNextBuildStep);
+const suggestedReplacement = suggestions[0];
+
+const statusLine = assessment.pass
+  ? `✅ Pass — ${assessment.reason}.`
+  : `❌ Fail — ${assessment.reason}.`;
+
 const body = [
-  "### Suggested `nextBuildStep`",
+  "### Suggested `nextBuildStep` review",
+  "",
+  "**Current `nextBuildStep`**",
+  "",
+  currentNextBuildStep ? `> ${currentNextBuildStep}` : "> _(missing)_",
+  "",
+  "**Assessment**",
+  "",
+  statusLine,
+  "",
+  "**Suggested replacement**",
+  "",
+  `> ${suggestedReplacement}`,
+  "",
+  "**Other candidate suggestions**",
   "",
   ...suggestions.map((s) => `- ${s}`),
 ].join("\n");
