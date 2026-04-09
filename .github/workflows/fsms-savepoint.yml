@@ -21,3 +21,4 @@ jobs:
       - run: npm ci
       - run: npm run validate:savepoint
       - run: bash scripts/check-savepoint-required.sh origin/main
+      - run: node scripts/check-savepoint-semantic.mjs origin/main
