@@ -7,6 +7,7 @@ function getChangedFiles(baseRef) {
   const output = execSync(`git diff --name-only ${baseRef}...HEAD`, {
     encoding: "utf8",
   });
+
   return output
     .split("\n")
     .map((s) => s.trim())
@@ -29,8 +30,8 @@ function readWorkingTreeJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
-function stableString(value) {
-  return JSON.stringify(value ?? null);
+function normalizeString(value) {
+  return String(value ?? "").trim();
 }
 
 const changedFiles = getChangedFiles(BASE_REF);
@@ -40,7 +41,7 @@ const coreChanged = changedFiles.some((file) =>
 );
 
 if (!coreChanged) {
-  console.log("No core FSMS files changed. Semantic save-point rule not required.");
+  console.log("No core FSMS files changed. nextBuildStep rule not required.");
   process.exit(0);
 }
 
@@ -55,46 +56,24 @@ const previous = readJsonAtRef(BASE_REF, "fsms-save-point.json");
 const current = readWorkingTreeJson("fsms-save-point.json");
 
 if (!previous) {
-  console.log("No prior fsms-save-point.json found on base ref. Semantic rule skipped.");
+  console.log("No prior fsms-save-point.json found on base ref. nextBuildStep rule skipped.");
   process.exit(0);
 }
 
-const checks = [
-  {
-    name: "nextBuildStep",
-    before: previous.nextBuildStep,
-    after: current.nextBuildStep,
-  },
-  {
-    name: "decisionsMade.architectural",
-    before: previous.decisionsMade?.architectural,
-    after: current.decisionsMade?.architectural,
-  },
-  {
-    name: "decisionsMade.tradeoffsAccepted",
-    before: previous.decisionsMade?.tradeoffsAccepted,
-    after: current.decisionsMade?.tradeoffsAccepted,
-  },
-  {
-    name: "decisionsMade.deferredDecisions",
-    before: previous.decisionsMade?.deferredDecisions,
-    after: current.decisionsMade?.deferredDecisions,
-  },
-];
+const previousNextBuildStep = normalizeString(previous.nextBuildStep);
+const currentNextBuildStep = normalizeString(current.nextBuildStep);
 
-const changedSemanticFields = checks
-  .filter((item) => stableString(item.before) !== stableString(item.after))
-  .map((item) => item.name);
-
-if (changedSemanticFields.length === 0) {
-  console.error("Core FSMS files changed, but no required semantic save-point fields changed.");
-  console.error("Update at least one of:");
-  console.error("- nextBuildStep");
-  console.error("- decisionsMade.architectural");
-  console.error("- decisionsMade.tradeoffsAccepted");
-  console.error("- decisionsMade.deferredDecisions");
+if (previousNextBuildStep === currentNextBuildStep) {
+  console.error("Core FSMS files changed, but nextBuildStep did not change.");
+  console.error("Update fsms-save-point.json with a new immediate next development action.");
   process.exit(1);
 }
 
-console.log("Semantic save-point rule passed.");
-console.log(`Changed semantic fields: ${changedSemanticFields.join(", ")}`);
+if (currentNextBuildStep.length === 0 || currentNextBuildStep === "TBD") {
+  console.error("nextBuildStep must be a real, non-empty action and cannot be 'TBD'.");
+  process.exit(1);
+}
+
+console.log("nextBuildStep enforcement passed.");
+console.log(`Previous: ${previousNextBuildStep}`);
+console.log(`Current: ${currentNextBuildStep}`);
