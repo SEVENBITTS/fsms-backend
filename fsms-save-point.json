@@ -56,22 +56,22 @@
     "technicalDebt": [],
     "performanceConcerns": []
   },
-  "validationDone": {
-    "nominalFlight": false,
-    "lowMargin": false,
-    "boundaryCrossing": false,
-    "verticalBreach": false,
-    "fourDConflict": false,
-    "envelopeConflict": false,
-    "notes": []
-  },
-  "nextBuildStep": "Create separate CI workflow for integration tests with Postgres service",
-  "doNotChangeRules": {
-    "criticalInvariants": [],
-    "orderingRules": [
-      "Replay -> Compliance -> Prediction -> Risk -> Advisory -> HUD"
-    ],
-    "structuralConstraints": [],
-    "compatibilityRule": "Do not break existing replay, compliance, or airspace logic without a defined migration path"
-  }
+"validationDone": {
+  "nominalFlight": false,
+  "lowMargin": false,
+  "boundaryCrossing": false,
+  "verticalBreach": false,
+  "fourDConflict": false,
+  "envelopeConflict": false,
+  "notes": []
+},
+"nextBuildStep": "Validate mission error handling through integration tests after syntax fix",
+"doNotChangeRules": {
+  "criticalInvariants": [],
+  "orderingRules": [
+    "Replay -> Compliance -> Prediction -> Risk -> Advisory -> HUD"
+  ],
+  "structuralConstraints": [],
+  "compatibilityRule": "Do not break existing replay, compliance, or airspace logic without a defined migration path"
+}
 }
