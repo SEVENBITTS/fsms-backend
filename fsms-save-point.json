@@ -1,6 +1,5 @@
-
 {
-  "$schema": "../../fsms-save-point.schema.json",
+  "$schema": "./fsms-save-point.schema.json",
   "module": "Risk Engine",
   "date": "2026-03-19",
   "buildId": "v0.3-risk",
@@ -66,7 +65,7 @@
     "envelopeConflict": false,
     "notes": []
   },
-  "nextBuildStep": "TBD",
+  "nextBuildStep": "Create separate CI workflow for integration tests with Postgres service",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
