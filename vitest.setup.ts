@@ -5,7 +5,7 @@ const envPath = path.resolve(process.cwd(), ".env.test");
 
 dotenv.config({
   path: envPath,
-  override: true,
+  override: false,
 });
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
