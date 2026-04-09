@@ -34,21 +34,21 @@ jobs:
       - run: npm ci
 
       - name: Run migrations
-  run: npm run migrate:test
-  env:
-    DATABASE_URL: postgres://postgres:postgres@localhost:5432/fsms_test
-    PGHOST: localhost
-    PGPORT: 5432
-    PGUSER: postgres
-    PGPASSWORD: postgres
-    PGDATABASE: fsms_test
+        run: npm run migrate:test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/fsms_test
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fsms_test
 
-- name: Run tests
-  run: npm test
-  env:
-    DATABASE_URL: postgres://postgres:postgres@localhost:5432/fsms_test
-    PGHOST: localhost
-    PGPORT: 5432
-    PGUSER: postgres
-    PGPASSWORD: postgres
-    PGDATABASE: fsms_test
+      - name: Run tests
+        run: npm test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/fsms_test
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fsms_test
