@@ -65,7 +65,7 @@
   "envelopeConflict": false,
   "notes": []
 },
-"nextBuildStep": "Validate mission error handling through integration tests after syntax fix",
+"nextBuildStep": "Verify integration test execution after mission error import cleanup",
 "doNotChangeRules": {
   "criticalInvariants": [],
   "orderingRules": [
