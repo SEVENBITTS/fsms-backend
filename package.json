@@ -4,7 +4,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "validate:savepoint": "node scripts/validate-save-point.mjs"
+    "validate:savepoint": "node scripts/validate-save-point.mjs",
+    "migrate:test": "tsx src/migrations/runMigrations.ts",
+    "suggest:nextstep": "node scripts/suggest-next-build-step.mjs origin/main"
   },
   "dependencies": {
     "ajv": "^8.18.0",
