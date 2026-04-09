@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FSMS Save Point",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "module",
+    "date",
+    "systemLayerMap",
+    "systemState",
+    "changesThisSession",
+    "decisionsMade",
+    "dataModels",
+    "apisServices",
+    "uiHudChanges",
+    "complianceImplications",
+    "risksLimitations",
+    "validationDone",
+    "nextBuildStep",
+    "doNotChangeRules"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "module": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "buildId": {
+      "type": "string"
+    },
+    "systemLayerMap": {
+      "type": "array",
+      "const": [
+        "Replay",
+        "Compliance",
+        "Prediction",
+        "Risk",
+        "Advisory",
+        "HUD"
+      ]
+    },
+    "systemState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workingEndToEndFlows",
+        "visibleUiHudElements",
+        "confirmedInputOutputChains"
+      ],
+      "properties": {
+        "workingEndToEndFlows": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "visibleUiHudElements": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "confirmedInputOutputChains": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "changesThisSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["added", "modified", "removed", "fixed"],
+      "properties": {
+        "added": { "type": "array", "items": { "type": "string" } },
+        "modified": { "type": "array", "items": { "type": "string" } },
+        "removed": { "type": "array", "items": { "type": "string" } },
+        "fixed": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "decisionsMade": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["architectural", "tradeoffsAccepted", "deferredDecisions"],
+      "properties": {
+        "architectural": { "type": "array", "items": { "type": "string" } },
+        "tradeoffsAccepted": { "type": "array", "items": { "type": "string" } },
+        "deferredDecisions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "dataModels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["newRuntimeVariables", "updatedStructures", "assumptions"],
+      "properties": {
+        "newRuntimeVariables": { "type": "array", "items": { "type": "string" } },
+        "updatedStructures": { "type": "array", "items": { "type": "string" } },
+        "assumptions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "apisServices": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpointsUsed", "changes", "externalDependencies", "failureHandling"],
+      "properties": {
+        "endpointsUsed": { "type": "array", "items": { "type": "string" } },
+        "changes": { "type": "array", "items": { "type": "string" } },
+        "externalDependencies": { "type": "array", "items": { "type": "string" } },
+        "failureHandling": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "uiHudChanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["newFields", "changedMeaning", "removedElements", "userVisibleBehaviorChanges"],
+      "properties": {
+        "newFields": { "type": "array", "items": { "type": "string" } },
+        "changedMeaning": { "type": "array", "items": { "type": "string" } },
+        "removedElements": { "type": "array", "items": { "type": "string" } },
+        "userVisibleBehaviorChanges": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "complianceImplications": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["truth", "prediction", "advisory", "auditTraceabilityImpact"],
+      "properties": {
+        "truth": { "type": "array", "items": { "type": "string" } },
+        "prediction": { "type": "array", "items": { "type": "string" } },
+        "advisory": { "type": "array", "items": { "type": "string" } },
+        "auditTraceabilityImpact": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "risksLimitations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["knownBugs", "edgeCases", "technicalDebt", "performanceConcerns"],
+      "properties": {
+        "knownBugs": { "type": "array", "items": { "type": "string" } },
+        "edgeCases": { "type": "array", "items": { "type": "string" } },
+        "technicalDebt": { "type": "array", "items": { "type": "string" } },
+        "performanceConcerns": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "validationDone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nominalFlight",
+        "lowMargin",
+        "boundaryCrossing",
+        "verticalBreach",
+        "fourDConflict",
+        "envelopeConflict",
+        "notes"
+      ],
+      "properties": {
+        "nominalFlight": { "type": "boolean" },
+        "lowMargin": { "type": "boolean" },
+        "boundaryCrossing": { "type": "boolean" },
+        "verticalBreach": { "type": "boolean" },
+        "fourDConflict": { "type": "boolean" },
+        "envelopeConflict": { "type": "boolean" },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "nextBuildStep": {
+      "type": "string",
+      "minLength": 1
+    },
+    "doNotChangeRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criticalInvariants",
+        "orderingRules",
+        "structuralConstraints",
+        "compatibilityRule"
+      ],
+      "properties": {
+        "criticalInvariants": { "type": "array", "items": { "type": "string" } },
+        "orderingRules": { "type": "array", "items": { "type": "string" } },
+        "structuralConstraints": { "type": "array", "items": { "type": "string" } },
+        "compatibilityRule": {
+          "type": "string",
+          "const": "Do not break existing replay, compliance, or airspace logic without a defined migration path"
+        }
+      }
+    },
+    "notes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ideasForLater": { "type": "array", "items": { "type": "string" } },
+        "observations": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,78 @@
+
+{
+  "$schema": "../../fsms-save-point.schema.json",
+  "module": "Risk Engine",
+  "date": "2026-03-19",
+  "buildId": "v0.3-risk",
+  "systemLayerMap": [
+    "Replay",
+    "Compliance",
+    "Prediction",
+    "Risk",
+    "Advisory",
+    "HUD"
+  ],
+  "systemState": {
+    "workingEndToEndFlows": [],
+    "visibleUiHudElements": [],
+    "confirmedInputOutputChains": []
+  },
+  "changesThisSession": {
+    "added": [],
+    "modified": [],
+    "removed": [],
+    "fixed": []
+  },
+  "decisionsMade": {
+    "architectural": [],
+    "tradeoffsAccepted": [],
+    "deferredDecisions": []
+  },
+  "dataModels": {
+    "newRuntimeVariables": [],
+    "updatedStructures": [],
+    "assumptions": []
+  },
+  "apisServices": {
+    "endpointsUsed": [],
+    "changes": [],
+    "externalDependencies": [],
+    "failureHandling": []
+  },
+  "uiHudChanges": {
+    "newFields": [],
+    "changedMeaning": [],
+    "removedElements": [],
+    "userVisibleBehaviorChanges": []
+  },
+  "complianceImplications": {
+    "truth": [],
+    "prediction": [],
+    "advisory": [],
+    "auditTraceabilityImpact": []
+  },
+  "risksLimitations": {
+    "knownBugs": [],
+    "edgeCases": [],
+    "technicalDebt": [],
+    "performanceConcerns": []
+  },
+  "validationDone": {
+    "nominalFlight": false,
+    "lowMargin": false,
+    "boundaryCrossing": false,
+    "verticalBreach": false,
+    "fourDConflict": false,
+    "envelopeConflict": false,
+    "notes": []
+  },
+  "nextBuildStep": "TBD",
+  "doNotChangeRules": {
+    "criticalInvariants": [],
+    "orderingRules": [
+      "Replay -> Compliance -> Prediction -> Risk -> Advisory -> HUD"
+    ],
+    "structuralConstraints": [],
+    "compatibilityRule": "Do not break existing replay, compliance, or airspace logic without a defined migration path"
+  }
+}

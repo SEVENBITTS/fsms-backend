@@ -395,137 +395,43 @@
     .event-sev-warning { color: #fb923c; }
     .event-sev-critical { color: #f87171; font-weight: 700; }
 
-     #slider-container {
-  bottom: 20px;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-}
-
-#slider-wrap {
-  position: relative;
-  width: 320px;
-}
-
-#slider {
-  width: 100%;
-  position: relative;
-  z-index: 2;
-}
-
-/* THIS is the key fix */
-.slider-event-markers {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 20px;
-  z-index: 3; /* 👈 ensure above slider */
-  pointer-events: none;
-}
-
-.slider-event-marker {
-  position: absolute;
-  width: 2px;
-  height: 18px;
-  border-radius: 2px;
-  transform: translateX(-50%);
-  opacity: 1;
-  box-shadow: 0 0 4px rgba(255,255,255,0.6);
-}
-
-.slider-event-marker.info { background: #7dd3fc; }
-.slider-event-marker.caution { background: #facc15; }
-.slider-event-marker.warning { background: #fb923c; }
-.slider-event-marker.critical { background: #ef4444; }
-
 .summary-panel {
   position: absolute;
   top: 20px;
-  left: 560px; /* pushes it away from HUD */
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 9999;
 
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 
-  width: 560px;
-  max-width: calc(100% - 580px);
-
-  animation: fadeIn 0.4s ease;
+  width: min(1200px, calc(100% - 40px));
 }
 
 .summary-card {
-  min-width: 0;
-  width: 100%;
-  height: auto;
-  min-height: 0;
-
   background: rgba(15, 18, 28, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
+  padding: 16px;
   color: #fff;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
 }
 
-.summary-card__header {
-  display: flex;
-  align-items: stretch;
+.summary-card {
+  min-width: 0; /* IMPORTANT for grid overflow fix */
 }
 
-.summary-card__toggle {
-  width: 100%;
-  min-height: 42px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-
-  background: transparent;
-  border: 0;
-  color: #fff;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-
-.summary-card__title {
-  font-size: 11px;
+.summary-title {
+  font-size: 12px;
   text-transform: uppercase;
-  color: #94a3b8;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.summary-card__icon {
-  color: #e5e7eb;
-  font-size: 18px;
-  line-height: 1;
-  flex: 0 0 auto;
-}
-
-.summary-card__body {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.summary-card__content {
-  padding: 12px 14px;
-}
-
-.summary-card.is-collapsed .summary-card__body {
-  display: none;
-}
-
-.summary-card.is-expanded .summary-card__body {
-  display: block;
+  color: #b8bfd3;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
 }
 
 .summary-value {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: #fff;
   margin-bottom: 0.4rem;
@@ -536,12 +442,6 @@
   font-size: 13px;
   color: #b8bfd3;
   margin-bottom: 0.25rem;
-  opacity: 0.9;
-}
-
-.summary-subtitle:has(:contains("Unknown")) {
-  opacity: 0.6;
-  font-style: italic;
 }
 
 .summary-subtitle.copyable {
@@ -579,9 +479,9 @@
 }
 
 #summary-latest-run {
-  font-size: 16px;
+  font-size: 16px;        /* smaller than default 24px */
   line-height: 1.3;
-  word-break: break-word;
+  word-break: break-word; /* allow wrapping */
 }
 
 #summary-breach-covered {
@@ -590,6 +490,9 @@
   margin-bottom: 0.6rem;
 }
 
+.summary-panel {
+  animation: fadeIn 0.4s ease;
+}
 .summary-actions {
   display: flex;
   gap: 0.5rem;
@@ -606,6 +509,9 @@
   font-size: 0.85rem;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.summary-action-btn {
   backdrop-filter: blur(4px);
 }
 
@@ -614,27 +520,55 @@
   opacity: 0.9;
 }
 
-.scenario-list {
-  margin-top: 12px;
+.summary-card-body {
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.summary-card.collapsed .summary-card-body {
+  max-height: 0;
+  opacity: 0;
+}
+
+.summary-card:not(.collapsed) .summary-card-body {
+  max-height: 500px; /* big enough */
+  opacity: 1;
+}
+
+.summary-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.summary-toggle-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
 }
 
 /* === Scenario Side Panel === */
 .side-panel {
-  position: absolute;
-  top: 20px;
-  left: 1140px; /* 560 panel left + 560 panel width + ~20 gap */
-  width: 320px;
-  max-width: calc(100vw - 1160px);
-  max-height: 420px;
+  position: fixed;
+  top: 140px;
+  right: 24px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 140px);
   overflow-y: auto;
-  padding: 16px;
-  border-radius: 16px;
+  padding: 20px;
+  border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(15, 18, 28, 0.97);
+  background: rgba(15, 18, 28, 0.94);
   color: #e5e7eb;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(10px);
-  z-index: 10000;
+  z-index: 99999;
 }
 
 .side-panel-header {
@@ -652,6 +586,11 @@
   cursor: pointer;
 }
 
+.detail-grid {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 10px 16px;
+}
 
 .detail-label {
   color: rgba(255, 255, 255, 0.72);   /* softer label */
@@ -690,135 +629,24 @@
 }
 
 #summary-flight,
-#summary-flight-date,
-#summary-flight-time,
-#summary-report-created,
-#summary-last-event-time,
 #summary-version {
   color: #94a3b8;
   font-size: 0.85rem;
-  word-break: break-word;
+  word-break: break-all;
 }
 
 .scenario-row {
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+    cursor: pointer;
+  }
 
-  padding: 6px 10px;
-  border-radius: 8px;
-  margin-bottom: 6px;
-
-  background: rgba(255, 255, 255, 0.035);
-  transition: background 0.15s ease, transform 0.1s ease;
-}
-
-.scenario-row:hover {
-  background: rgba(255,255,255,0.08);
-  transform: translateX(2px);
-}
+  .scenario-row:hover {
+    background: #f8fafc;
+  }
 
 .scenario-row.active {
-  outline: 1px solid rgba(96, 165, 250, 0.45);
-  background: rgba(255,255,255,0.10) !important;
-}
+    background: #eef2ff;
+  }
 
-.scenario-name {
-  color: #e5e7eb;
-}
-
-.scenario-status {
-  font-weight: 700;
-}
-
-.tone-pass {
-  color: #86efac;
-}
-
-.tone-review {
-  color: #fcd34d;
-}
-
-.tone-fail {
-  color: #fca5a5;
-}
-
-.tone-neutral {
-  color: #cbd5e1;
-}
-
-/* Scenario row color states */
-.scenario-row.pass-row {
-  border-left: 4px solid #22c55e;
-}
-
-.scenario-row.review-row {
-  border-left: 4px solid #f59e0b;
-}
-
-.scenario-row.fail-row {
-  border-left: 4px solid #ef4444;
-}
-
-#card-scenarios .summary-card__body {
-  max-height: none;
-  overflow: visible;
-}
-
-#card-scenarios .summary-card__content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-#scenario-list {
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 6px;
-}
-
-/* Classification badge colors */
-.badge {
-  display: inline-block;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.badge.PASS {
-  background: rgba(34, 197, 94, 0.18);
-  color: #86efac;
-}
-
-.badge.REVIEW {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fcd34d;
-}
-
-.badge.FAIL {
-  background: rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
-}
-
-/* Optional: lead-time style labels if you want those too */
-.badge.EARLY {
-  background: rgba(34, 197, 94, 0.18);
-  color: #86efac;
-}
-
-.badge.EDGE {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fcd34d;
-}
-
-.badge.NO-BREACH {
-  background: rgba(148, 163, 184, 0.18);
-  color: #cbd5e1;
-}
 
 
   .detail-grid {
@@ -826,6 +654,13 @@
     grid-template-columns: 180px 1fr;
     gap: 8px 12px;
   }
+
+
+
+#app {
+  position: relative;
+  z-index: 1;
+}
 
 body {
   position: relative;
@@ -836,11 +671,15 @@ body {
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
+@media (max-width: 1000px) {
+  .summary-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .summary-panel {
-    width: calc(100% - 24px);
-    left: 12px;
-    top: 12px;
+    grid-template-columns: 1fr;
   }
 
   .status-grid {
@@ -875,13 +714,9 @@ body {
     <button id="play">Play</button>
   </div>
 
- 
- <div id="slider-container" class="panel">
-  <div id="slider-wrap">
+  <div id="slider-container" class="panel">
     <input id="slider" type="range" min="0" max="1" step="0.0001" value="0" />
-    <div id="slider-event-markers" class="slider-event-markers"></div>
   </div>
-</div>
 
   <div id="warn-strip-root"></div>
 
@@ -894,174 +729,68 @@ body {
   </div>
 
  <div id="summary-panel" class="summary-panel">
-  <!-- Scenarios -->
- <article class="summary-card is-expanded" id="card-scenarios" data-card-id="card-scenarios">
-  <header class="summary-card__header">
+  <div class="summary-card" id="card-scenarios">
+
+  <!-- HEADER -->
+  <div class="summary-card-header">
+    <div class="summary-title">Scenarios</div>
     <button
-      class="summary-card__toggle"
-      type="button"
+      class="summary-toggle-btn"
       onclick="toggleSummaryCard('card-scenarios')"
-      aria-expanded="true"
-      aria-controls="summary-card-body-card-scenarios"
-    >
-      <span class="summary-card__title">Scenarios</span>
-      <span class="summary-card__icon" aria-hidden="true">–</span>
-    </button>
-  </header>
-
-  <div id="summary-card-body-card-scenarios" class="summary-card__body">
-    <div class="summary-card__content">
-      <div class="summary-value" id="summary-total">0</div>
-
-      <div class="summary-subtitle" id="summary-breach-covered">
-        0 breach scenarios covered
-      </div>
-      <div class="summary-subtitle">Validation report snapshot</div>
-      <div class="summary-subtitle" id="summary-flight">Flight: Unknown</div>
-      <div class="summary-subtitle" id="summary-flight-date">Flight date: Unknown</div>
-      <div class="summary-subtitle" id="summary-flight-time">Flight time: Unknown</div>
-      <div class="summary-subtitle" id="summary-report-created">Report created: Unknown</div>
-      <div class="summary-subtitle" id="summary-last-event-time">Last event time: Unknown</div>
-      <div class="summary-subtitle" id="summary-version">Report version: Unknown</div>
-
-      <div class="summary-actions">
-        <button id="export-summary-json" class="summary-action-btn">Export JSON</button>
-        <button id="export-summary-csv" class="summary-action-btn">Export CSV</button>
-      </div>
-
-      <div id="scenario-list" class="scenario-list"></div>
-    </div>
+    >–</button>
   </div>
-</article>
 
-        <button
-          class="summary-card__toggle"
-          type="button"
-          onclick="toggleSummaryCard('card-scenarios')"
-          aria-expanded="true"
-          aria-controls="summary-card-body-card-scenarios"
-        >
+  <!-- BODY -->
+  <div class="summary-card-body">
 
-        <button
-          class="summary-card__toggle"
-          type="button"
-          onclick="toggleSummaryCard('card-status')"
-          aria-expanded="false"
-          aria-controls="summary-card-body-card-status"
-        >
+    <div class="summary-value" id="summary-total">0</div>
 
-        <button
-          class="summary-card__toggle"
-          type="button"
-          onclick="toggleSummaryCard('card-latest-run')"
-          aria-expanded="false"
-          aria-controls="summary-card-body-card-latest-run"
-        >
-
-        <button
-          class="summary-card__toggle"
-          type="button"
-          onclick="toggleSummaryCard('card-avg-lead')"
-          aria-expanded="false"
-          aria-controls="summary-card-body-card-avg-lead"
-        >
-
-
-        <div id="scenario-list" class="scenario-list"></div>
-      </div>
+    <div class="summary-subtitle" id="summary-breach-covered">
+      0 breach scenarios covered
     </div>
-  </article>
+    <div class="summary-subtitle">Validation report snapshot</div>
+    <div class="summary-subtitle" id="summary-flight">Flight: Unknown</div>
+    <div class="summary-subtitle" id="summary-version">Report version: Unknown</div>
 
-  <!-- Status -->
-  <article class="summary-card is-collapsed" id="card-status" data-card-id="card-status">
-    <header class="summary-card__header">
-      <button
-        class="summary-card__toggle"
-        type="button"
-        aria-expanded="false"
-        aria-controls="summary-card-body-card-status"
-      >
-        <span class="summary-card__title">Status</span>
-        <span class="summary-card__icon" aria-hidden="true">+</span>
-      </button>
-    </header>
-
-    <div
-      id="summary-card-body-card-status"
-      class="summary-card__body"
-      hidden
-    >
-      <div class="summary-card__content">
-        <div class="status-grid">
-          <div class="status-pill">
-            <div class="status-label">PASS</div>
-            <div class="status-value" id="summary-pass">0</div>
-          </div>
-          <div class="status-pill">
-            <div class="status-label">REVIEW</div>
-            <div class="status-value" id="summary-review">0</div>
-          </div>
-          <div class="status-pill">
-            <div class="status-label">FAIL</div>
-            <div class="status-value" id="summary-fail">0</div>
-          </div>
-        </div>
-      </div>
+    <div class="summary-actions">
+      <button id="export-summary-json" class="summary-action-btn">Export JSON</button>
+      <button id="export-summary-csv" class="summary-action-btn">Export CSV</button>
     </div>
-  </article>
 
-  <!-- Latest Run -->
-  <article class="summary-card is-collapsed" id="card-latest-run" data-card-id="card-latest-run">
-    <header class="summary-card__header">
-      <button
-        class="summary-card__toggle"
-        type="button"
-        aria-expanded="false"
-        aria-controls="summary-card-body-card-latest-run"
-      >
-        <span class="summary-card__title">Latest Run</span>
-        <span class="summary-card__icon" aria-hidden="true">+</span>
-      </button>
-    </header>
+    <div id="scenario-list" style="margin-top: 12px;"></div>
 
-    <div
-      id="summary-card-body-card-latest-run"
-      class="summary-card__body"
-      hidden
-    >
-      <div class="summary-card__content">
-        <div class="summary-value" id="summary-latest-run">Unknown</div>
-      </div>
-    </div>
-  </article>
-
-  <!-- Avg Lead Time -->
-  <article class="summary-card is-collapsed" id="card-avg-lead" data-card-id="card-avg-lead">
-    <header class="summary-card__header">
-      <button
-        class="summary-card__toggle"
-        type="button"
-        aria-expanded="false"
-        aria-controls="summary-card-body-card-avg-lead"
-      >
-        <span class="summary-card__title">Avg Lead Time</span>
-        <span class="summary-card__icon" aria-hidden="true">+</span>
-      </button>
-    </header>
-
-    <div
-      id="summary-card-body-card-avg-lead"
-      class="summary-card__body"
-      hidden
-    >
-      <div class="summary-card__content">
-        <div class="summary-value" id="summary-avg-lead">N/A</div>
-        <div class="summary-subtitle">PASS breach scenarios only</div>
-      </div>
-    </div>
-  </article>
+  </div>
 </div>
 
+  <div class="summary-card">
+    <div class="summary-title">Status</div>
+    <div class="status-grid">
+      <div class="status-pill">
+        <div class="status-label">PASS</div>
+        <div class="status-value" id="summary-pass">0</div>
+      </div>
+      <div class="status-pill">
+        <div class="status-label">REVIEW</div>
+        <div class="status-value" id="summary-review">0</div>
+      </div>
+      <div class="status-pill">
+        <div class="status-label">FAIL</div>
+        <div class="status-value" id="summary-fail">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary-card">
+    <div class="summary-title">Latest Run</div>
+    <div class="summary-value" id="summary-latest-run">Unknown</div>
+  </div>
+
+  <div class="summary-card">
+    <div class="summary-title">Avg Lead Time</div>
+    <div class="summary-value" id="summary-avg-lead">N/A</div>
+    <div class="summary-subtitle">PASS breach scenarios only</div>
+  </div>
+</div>
 
   <div id="feature-menu">
     <button id="feature-toggle">⚙ Features</button>
@@ -1104,7 +833,6 @@ body {
       const MAX_PREDICT_DIST = 500;
       const MAX_PREDICT_SECONDS = 60;
       const STARTUP_MUTED_UNTIL_MS = 2000;
-      const MAX_INTERPOLATION_GAP_MS = 15000;
 
       const MAX_EVENT_LOG_ITEMS = 100;
       const MAX_EVENT_LOG_STORE = 1000;
@@ -1235,119 +963,18 @@ function toggleSummaryCard(cardId) {
   const card = document.getElementById(cardId);
   if (!card) return;
 
-  const toggle = card.querySelector(".summary-card__toggle");
-  const body = card.querySelector(".summary-card__body");
-  const icon = card.querySelector(".summary-card__icon");
+  const btn = card.querySelector(".summary-toggle-btn");
 
-  if (!toggle || !body) return;
+  const isCollapsed = card.classList.toggle("collapsed");
 
-  const isExpanded = card.classList.contains("is-expanded");
-
-  if (isExpanded) {
-    card.classList.remove("is-expanded");
-    card.classList.add("is-collapsed");
-    toggle.setAttribute("aria-expanded", "false");
-    body.hidden = true;
-    if (icon) icon.textContent = "+";
-  } else {
-    card.classList.remove("is-collapsed");
-    card.classList.add("is-expanded");
-    toggle.setAttribute("aria-expanded", "true");
-    body.hidden = false;
-    if (icon) icon.textContent = "–";
+  if (btn) {
+    btn.textContent = isCollapsed ? "+" : "–";
   }
 }
 
 window.selectScenario = selectScenario;
 window.closeScenarioPanel = closeScenarioPanel;
 window.toggleSummaryCard = toggleSummaryCard;
-
-
-function positionScenarioPanel() {
-  const panel = document.getElementById("detailPanel");
-  const summaryCard = document.getElementById("card-scenarios");
-  if (!panel || !summaryCard) return;
-
-  const rect = summaryCard.getBoundingClientRect();
-  const gap = 16;
-
-  panel.style.position = "fixed";
-  panel.style.top = `${rect.top}px`;
-  panel.style.left = `${rect.right + gap}px`;
-  panel.style.width = "320px";
-  panel.style.maxHeight = `${rect.height}px`;
-
-  const viewportRight = window.innerWidth - 20;
-  const panelWidth = 320;
-
-  if (rect.right + gap + panelWidth > viewportRight) {
-    panel.style.left = `${window.innerWidth - panelWidth - 20}px`;
-  }
-}
-
-function formatDateOnly(value) {
-  if (!value) return "Unknown";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString();
-}
-
-function formatTimeOnly(value) {
-  if (!value) return "Unknown";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-}
-
-function formatDateTime(value) {
-  if (!value) return "Unknown";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString();
-}
-
-function updateScenarioSummaryMeta({
-  flightId,
-  flightTimestamp,
-  reportCreatedAt,
-  lastEventTime,
-  version
-} = {}) {
-  const flightEl = document.getElementById("summary-flight");
-  const flightDateEl = document.getElementById("summary-flight-date");
-  const flightTimeEl = document.getElementById("summary-flight-time");
-  const reportCreatedEl = document.getElementById("summary-report-created");
-  const lastEventTimeEl = document.getElementById("summary-last-event-time");
-  const versionEl = document.getElementById("summary-version");
-
-  if (flightEl) {
-    flightEl.textContent = `Flight: ${flightId || "Unknown"}`;
-  }
-
-  if (flightDateEl) {
-    flightDateEl.textContent = `Flight date: ${formatDateOnly(flightTimestamp)}`;
-  }
-
-  if (flightTimeEl) {
-    flightTimeEl.textContent = `Flight time: ${formatTimeOnly(flightTimestamp)}`;
-  }
-
-  if (reportCreatedEl) {
-    reportCreatedEl.textContent = `Report created: ${formatDateTime(reportCreatedAt)}`;
-  }
-
-  if (lastEventTimeEl) {
-    lastEventTimeEl.textContent = `Last event time: ${formatDateTime(lastEventTime)}`;
-  }
-
-  if (versionEl) {
-    versionEl.textContent = `Report version: ${version || "Unknown"}`;
-  }
-}
 
 function renderScenarioPanel() {
   const existing = document.getElementById("detailPanel");
@@ -1361,10 +988,7 @@ function renderScenarioPanel() {
   if (!activeScenario) return;
 
   document.body.insertAdjacentHTML("beforeend", renderScenarioDetailPanel(activeScenario));
-  positionScenarioPanel();
 }
-
-window.addEventListener("resize", positionScenarioPanel);
 
       // =========================
       // DOM
@@ -1536,8 +1160,6 @@ window.addEventListener("resize", positionScenarioPanel);
       let simElapsed = 0;
       let lastFrame = null;
       let currentIndex = 0;
-      let lastDisplayPos = null;
-      let lastCameraUpdate = 0;
 
       let flightBounds = null;
       let airspaceBounds = null;
@@ -1684,21 +1306,12 @@ window.addEventListener("resize", positionScenarioPanel);
         return current;
       }
 
-     function jumpToSimTime(ms, duration) {
-  simElapsed = Math.max(0, Math.min(toNumber(ms, 0), duration));
-  lastFrame = null;
-  playing = false;
-  playBtn.textContent = "Play";
-
-  const replayTime = t0 + simElapsed;
-  currentIndex = 0;
-  while (currentIndex < pts.length - 2 && pts[currentIndex + 1].t <= replayTime) {
-    currentIndex++;
-  }
-
-  resetReplayDerivedState({ preserveLogs: false });
-  renderEventLog(flightEventLog, simElapsed, duration, true);
-}
+      function jumpToSimTime(ms, duration) {
+        simElapsed = Math.max(0, Math.min(toNumber(ms, 0), duration));
+        lastFrame = null;
+        playing = false;
+        playBtn.textContent = "Play";
+      }
 
       function bindEventLogClicks(duration) {
         if (!eventLogRoot) return;
@@ -1719,30 +1332,6 @@ window.addEventListener("resize", positionScenarioPanel);
         const lastId = total ? events[total - 1]?.id : "";
         return `${total}|${lastId}|${selectedEventId || ""}|${current?.id || ""}`;
       }
-
-      function renderSliderEventMarkers(events, duration) {
-  const root = document.getElementById("slider-event-markers");
-  if (!root) return;
-
-  if (!duration || duration <= 0) {
-    root.innerHTML = "";
-    return;
-  }
-
-  const visible = toArray(events).filter((evt) => evt.event_type !== "INIT");
-
-  root.innerHTML = visible.map((evt) => {
-    const leftPct = clamp((toNumber(evt.sim_time_ms, 0) / duration) * 100, 0, 100);
-    const sev = String(evt.severity || "info").toLowerCase();
-    const cls =
-      sev === "critical" || sev === "immediate" ? "critical" :
-      sev === "warning" ? "warning" :
-      sev === "caution" ? "caution" :
-      "info";
-
-    return `<div class="slider-event-marker ${cls}" style="left:${leftPct}%"></div>`;
-  }).join("");
-}
 
       function renderEventLog(events, simTimeMs, duration, force = false) {
         if (!eventLogRoot || !eventLogStatus) return;
@@ -1790,8 +1379,7 @@ window.addEventListener("resize", positionScenarioPanel);
         }).join("");
 
         bindEventLogClicks(duration);
-        renderSliderEventMarkers(safeEvents, duration);
-}
+      }
 
       function scrollCurrentEventIntoView() {
         if (!eventLogRoot || !currentPlaybackEventId) return;
@@ -2606,19 +2194,6 @@ window.addEventListener("resize", positionScenarioPanel);
         return (levelBase + timeBoost + geometryBoost + verticalBoost + trendBoost + sev.advisoryBias) * sev.riskMultiplier;
       }
 
-      // ===== HELPERS =====
-
-      function toDisplayedLimitMeters(m) {
-        return Math.floor(m / 10) * 10;
-      }
-
-      function computeDisplayMargin(upper_m, alt) {
-        const upperDisplayM = toDisplayedLimitMeters(toNumber(upperM));
-        const altDisplayM = toNumber(altAgl); // if HUD shows 70.0 already
-        const marginDisplay = upperDisplayM - altDisplayM;
-        return upperDisplay - altDisplay;
-      }
-
       function selectHighestPriorityAdvisory(candidates) {
         const valid = toArray(candidates).filter(Boolean);
         if (!valid.length) {
@@ -3272,70 +2847,70 @@ window.addEventListener("resize", positionScenarioPanel);
       }
 
       function ensurePredictiveEnvelopeLayers(map) {
-  if (!map.getSource("predictive-envelope")) {
-    map.addSource("predictive-envelope", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-  }
+        if (!map.getSource("predictive-envelope")) {
+          map.addSource("predictive-envelope", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          });
+        }
 
-  if (!map.getLayer("predictive-envelope-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-fill",
-      type: "fill",
-      source: "predictive-envelope",
-      paint: {
-        "fill-color": "#ffd54a",
-        "fill-opacity": 0.34
+        if (!map.getLayer("predictive-envelope-fill")) {
+          map.addLayer({
+            id: "predictive-envelope-fill",
+            type: "fill",
+            source: "predictive-envelope",
+            paint: {
+              "fill-color": "#ffbf00",
+              "fill-opacity": 0.16
+            }
+          });
+        }
+
+        if (!map.getLayer("predictive-envelope-outline")) {
+          map.addLayer({
+            id: "predictive-envelope-outline",
+            type: "line",
+            source: "predictive-envelope",
+            paint: {
+              "line-color": "#ffbf00",
+              "line-width": 2,
+              "line-opacity": 0.7
+            }
+          });
+        }
+
+        if (!map.getSource("predictive-envelope-conflicts")) {
+          map.addSource("predictive-envelope-conflicts", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          });
+        }
+
+        if (!map.getLayer("predictive-envelope-conflicts-fill")) {
+          map.addLayer({
+            id: "predictive-envelope-conflicts-fill",
+            type: "fill",
+            source: "predictive-envelope-conflicts",
+            paint: {
+              "fill-color": "#ff0000",
+              "fill-opacity": 0.22
+            }
+          });
+        }
+
+        if (!map.getLayer("predictive-envelope-conflicts-outline")) {
+          map.addLayer({
+            id: "predictive-envelope-conflicts-outline",
+            type: "line",
+            source: "predictive-envelope-conflicts",
+            paint: {
+              "line-color": "#ff0000",
+              "line-width": 2,
+              "line-opacity": 0.9
+            }
+          });
+        }
       }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-outline",
-      type: "line",
-      source: "predictive-envelope",
-      paint: {
-        "line-color": "#ffbf00",
-        "line-width": 3,
-        "line-opacity": 1
-      }
-    });
-  }
-
-  if (!map.getSource("predictive-envelope-conflicts")) {
-    map.addSource("predictive-envelope-conflicts", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-fill")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-fill",
-      type: "fill",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "fill-color": "#ff3b30",
-        "fill-opacity": 0.42
-      }
-    });
-  }
-
-  if (!map.getLayer("predictive-envelope-conflicts-outline")) {
-    map.addLayer({
-      id: "predictive-envelope-conflicts-outline",
-      type: "line",
-      source: "predictive-envelope-conflicts",
-      paint: {
-        "line-color": "#ff0000",
-        "line-width": 3.5,
-        "line-opacity": 1
-      }
-    });
-  }
-}
 
       function updateZoneFilter(map) {
         const checked = Array.from(
@@ -3416,8 +2991,6 @@ window.addEventListener("resize", positionScenarioPanel);
       function resetReplayDerivedState({ preserveLogs = false } = {}) {
         if (!preserveLogs) {
           flightEventLog.length = 0;
-          lastDisplayPos = null;
-          lastCameraUpdate = 0; 
         }
 
         cachedPredictionResult = {
@@ -3472,32 +3045,6 @@ window.addEventListener("resize", positionScenarioPanel);
         };
       }
 
-      function getLastEventTimestamp(events) {
-  if (!Array.isArray(events) || events.length === 0) return null;
-
-  let latest = null;
-
-  for (const event of events) {
-    const candidate =
-      event?.timestamp ||
-      event?.created_at ||
-      event?.event_time ||
-      event?.time ||
-      null;
-
-    if (!candidate) continue;
-
-    const ms = new Date(candidate).getTime();
-    if (Number.isNaN(ms)) continue;
-
-    if (latest === null || ms > latest) {
-      latest = ms;
-    }
-  }
-
-  return latest ? new Date(latest).toISOString() : null;
-}
-
       // =========================
       // DATA LOAD
       // =========================
@@ -3540,35 +3087,12 @@ window.addEventListener("resize", positionScenarioPanel);
       
 
       let replayData;
-try {
-  replayData = await fetchJson(API_URL, "Replay fetch failed");
-} catch (err) {
-  alert(`Replay failed: ${err.message}`);
-  return;
-}
-window.replayDataDebug = replayData; 
-console.log("replayData:", replayData);
-
-updateScenarioSummaryMeta({
-  flightId: replayData?.flight_id || flight_id,
-
-  flightTimestamp: replayData?.flight_start_time,
-
-  reportCreatedAt:
-    replayData?.created_at ||
-    replayData?.flight_start_time,   // fallback
-
-  lastEventTime:
-    replayData?.last_event_time ||
-    replayData?.latest_event_at ||
-    getLastEventTimestamp(replayData?.events || []) ||
-    getLastReplayTimestamp(replayData?.replay || []),  // fallback
-
-  version:
-    replayData?.report_version ||
-    replayData?.version ||
-    "v0.3"
-});
+      try {
+        replayData = await fetchJson(API_URL, "Replay fetch failed");
+      } catch (err) {
+        alert(`Replay failed: ${err.message}`);
+        return;
+      }
 
       const replayItems = toArray(replayData?.replay);
       if (!replayItems.length) {
@@ -3662,45 +3186,34 @@ updateScenarioSummaryMeta({
         return exact || best || safeFallback;
       }
 
-     function interpolate(time) {
-  if (!pts.length) {
-    return { lng: 0, lat: 0, alt: 0, t: time, source_t: time };
-  }
+      function interpolate(time) {
+        if (!pts.length) {
+          return { lng: 0, lat: 0, alt: 0, t: time, source_t: time };
+        }
 
-  const clampedTime = clamp(time, pts[0].t, pts[pts.length - 1].t);
+        const clampedTime = clamp(time, pts[0].t, pts[pts.length - 1].t);
 
-  while (currentIndex < pts.length - 2 && pts[currentIndex + 1].t <= clampedTime) {
-    currentIndex++;
-  }
+        while (currentIndex < pts.length - 2 && pts[currentIndex + 1].t <= clampedTime) {
+          currentIndex++;
+        }
 
-  while (currentIndex > 0 && pts[currentIndex].t > clampedTime) {
-    currentIndex--;
-  }
+        while (currentIndex > 0 && pts[currentIndex].t > clampedTime) {
+          currentIndex--;
+        }
 
-  const a = pts[currentIndex] || pts[0];
-  const b = pts[currentIndex + 1] || a;
-  const span = b.t - a.t;
+        const a = pts[currentIndex] || pts[0];
+        const b = pts[currentIndex + 1] || a;
+        const span = b.t - a.t;
+        const f = span === 0 ? 0 : clamp((clampedTime - a.t) / span, 0, 1);
 
-  if (span <= 0 || span > MAX_INTERPOLATION_GAP_MS) {
-    return {
-      lng: a.lng,
-      lat: a.lat,
-      alt: a.alt,
-      t: clampedTime,
-      source_t: a.t
-    };
-  }
-
-  const f = clamp((clampedTime - a.t) / span, 0, 1);
-
-  return {
-    lng: a.lng + (b.lng - a.lng) * f,
-    lat: a.lat + (b.lat - a.lat) * f,
-    alt: a.alt + (b.alt - a.alt) * f,
-    t: clampedTime,
-    source_t: a.t
-  };
-}
+        return {
+          lng: a.lng + (b.lng - a.lng) * f,
+          lat: a.lat + (b.lat - a.lat) * f,
+          alt: a.alt + (b.alt - a.alt) * f,
+          t: clampedTime,
+          source_t: a.t
+        };
+      }
 
        
   function computeSummary(reportRows, generatedAt = null) {
@@ -3763,37 +3276,12 @@ updateScenarioSummaryMeta({
     return d.toLocaleString();  // clean readable format
   }
 
-    function getLastReplayTimestamp(replay = []) {
-    if (!replay.length) return null;
-    return replay[replay.length - 1]?.timestamp || null;
-  }
-
   function formatLeadTime(seconds) {
     if (seconds == null || Number.isNaN(seconds)) return "N/A";
     return `${seconds.toFixed(1)}s`;
   }
 
-  function getScenarioRowClass(classification) {
-  const cls = String(classification || "").toUpperCase();
-
-  if (cls === "PASS") return "pass-row";
-  if (cls === "REVIEW") return "review-row";
-  if (cls === "FAIL") return "fail-row";
-  return "";
-}
-
- function getScenarioToneClass(value) {
-  const v = String(value || "").toUpperCase();
-
-  if (v === "PASS" || v === "EARLY") return "tone-pass";
-  if (v === "REVIEW" || v === "EDGE") return "tone-review";
-  if (v === "FAIL") return "tone-fail";
-  if (v === "NO-BREACH") return "tone-neutral";
-
-  return "tone-neutral";
-}
-
-function renderScenarioList() {
+ function renderScenarioList() {
   const root = document.getElementById("scenario-list");
   if (!root) return;
 
@@ -3802,20 +3290,15 @@ function renderScenarioList() {
     return;
   }
 
-  root.innerHTML = latestScenarios.map((row) => {
-    const toneClass = getScenarioToneClass(row.classification);
-
-    return `
-      <div
-        class="scenario-row ${row.scenario_id === activeScenarioId ? "active" : ""}"
-        style="padding: 8px 10px; border-radius: 8px; margin-top: 6px; background: rgba(255,255,255,0.04);"
-        onclick="selectScenario('${row.scenario_id}')"
-      >
-        <span class="scenario-name">${row.name ?? "-"}</span>
-        <span class="scenario-status ${toneClass}">${row.classification ?? "-"}</span>
-      </div>
-    `;
-  }).join("");
+  root.innerHTML = latestScenarios.map((row) => `
+    <div
+      class="summary-subtitle scenario-row ${row.scenario_id === activeScenarioId ? "active" : ""}"
+      style="padding: 8px 10px; border-radius: 8px; margin-top: 6px; background: rgba(255,255,255,0.04);"
+      onclick="selectScenario('${row.scenario_id}')"
+    >
+      ${row.name ?? "-"} — ${row.classification ?? "-"}
+    </div>
+  `).join("");
 }
 
   function renderSummary(summary) {
@@ -3829,55 +3312,51 @@ function renderScenarioList() {
   document.getElementById("summary-breach-covered").textContent =
     `${summary.breachScenariosCovered} breach scenarios covered`;
 
- const flightEl = document.getElementById("summary-flight");
-  if (flightEl) {
+  document.getElementById("summary-flight").textContent =
+    summary.flightId ? `Flight: ${summary.flightId}` : "Flight: —";
+
+  document.getElementById("summary-version").textContent =
+    summary.reportVersion
+      ? `Report version: ${summary.reportVersion}`
+      : summary.reportFile
+        ? `Report file: ${summary.reportFile.replace(".json", "")}`
+        : "Report: —";
+  
+  const flightEl = document.getElementById("summary-flight");
+  if (summary.flightId && flightEl) {
     flightEl.classList.add("copyable");
     flightEl.style.cursor = "pointer";
 
     flightEl.onclick = () => {
-      const flightText =
-        flightEl.textContent?.replace(/^Flight:\s*/, "") || "";
-
-      if (!flightText || flightText === "Unknown" || flightText === "—") return;
-
-      navigator.clipboard.writeText(flightText);
-
-      const prev = flightEl.textContent;
+      navigator.clipboard.writeText(summary.flightId);
       flightEl.textContent = "Copied flight ID ✓";
 
       setTimeout(() => {
-        flightEl.textContent = prev;
+        flightEl.textContent = `Flight: ${summary.flightId}`;
       }, 1200);
     };
   }
 
-const versionEl = document.getElementById("summary-version");
-if (versionEl) {
-  versionEl.classList.add("copyable");
-  versionEl.style.cursor = "pointer";
+ 
+  const versionEl = document.getElementById("summary-version");
+  if (summary.reportFile && versionEl) {
+    versionEl.classList.add("copyable");
+    versionEl.style.cursor = "pointer";
 
-  versionEl.onclick = () => {
-    const versionText =
-      versionEl.textContent
-        ?.replace(/^Report version:\s*/, "")
-        .replace(/^Report file:\s*/, "") || "";
+    versionEl.onclick = () => {
+      navigator.clipboard.writeText(summary.reportFile);
+      versionEl.textContent = "Copied report name ✓";
 
-    if (!versionText || versionText === "Unknown" || versionText === "—") return;
-
-    navigator.clipboard.writeText(versionText);
-
-    const prev = versionEl.textContent;
-    versionEl.textContent = "Copied report ✓";
-
-    setTimeout(() => {
-      versionEl.textContent = prev;
-    }, 1200);
-  };
-}
-
-  renderScenarioList();
+      setTimeout(() => {
+        versionEl.textContent = `Report file: ${summary.reportFile.replace(".json", "")}`;
+      }, 1200);
+    };
   }
 
+  renderScenarioList();
+}
+
+      
 
       // =========================
       // MAP INIT
@@ -4031,22 +3510,16 @@ if (versionEl) {
         }
 
         const simTimeMs = simElapsed;
-startupMuted = simTimeMs < STARTUP_MUTED_UNTIL_MS;
+        startupMuted = simTimeMs < STARTUP_MUTED_UNTIL_MS;
+        const t = t0 + simElapsed;
+        const replayTime = pts?.[currentIndex]?.t ?? t;
 
-if (simElapsed < (loop._lastSimElapsed ?? 0)) {
-  resetReplayDerivedState({ preserveLogs: false });
-  renderEventLog(flightEventLog, simElapsed, duration, true);
-}
+        let pos = interpolate(t);
 
-loop._lastSimElapsed = simElapsed;
-
-const replayTime = t0 + simElapsed;
-const state = interpolate(replayTime);
-
-if (!map || !mapReady) {
-  requestAnimationFrame(loop);
-  return;
-}
+        if (!map || !mapReady) {
+          requestAnimationFrame(loop);
+          return;
+        }
 
         const styleReady = map.isStyleLoaded?.() ?? true;
         if (!styleReady) {
@@ -4054,34 +3527,18 @@ if (!map || !mapReady) {
           return;
         }
 
-      let displayPos = state;
+        if (FEATURES.kalman) {
+          pos = kalmanLike(lastSmoothedPos || pos, pos);
+          lastSmoothedPos = pos;
+        } else {
+          lastSmoothedPos = null;
+        }
 
-if (lastDisplayPos && distanceM(lastDisplayPos, displayPos) < 0.5) {
-  displayPos = lastDisplayPos;
-}
+        aircraft.setLngLat([pos.lng, pos.lat]);
 
-lastDisplayPos = displayPos;
-
-if (FEATURES.kalman) {
-  displayPos = kalmanLike(lastSmoothedPos || state, state);
-  lastSmoothedPos = displayPos;
-} else {
-  lastSmoothedPos = null;
-}
-
-aircraft.setLngLat([displayPos.lng, displayPos.lat]);
-
-const nowMs = performance.now();
-
-if (playing && nowMs - lastCameraUpdate > 200) {
-  map.easeTo({
-    center: [displayPos.lng, displayPos.lat],
-    duration: 300,
-    easing: (x) => x
-  });
-
-  lastCameraUpdate = nowMs;
-}
+        if (playing) {
+          map.easeTo({ center: [pos.lng, pos.lat], duration: 250, easing: (x) => x });
+        }
 
         const progress = duration > 0 ? (simElapsed / duration) * 100 : 0;
 
@@ -4101,8 +3558,7 @@ if (playing && nowMs - lastCameraUpdate > 200) {
 
         const vz = ((next.alt ?? 0) - (curr.alt ?? 0)) / dtTrack;
 
-        const currentReplayTime = state.t;
-        const tFutureTrend = Math.min(t0 + duration, currentReplayTime + TREND_SECONDS * 1000);
+        const tFutureTrend = Math.min(t0 + duration, t + TREND_SECONDS * 1000);
         const posFuture = interpolate(tFutureTrend);
 
         ghostEl.style.display = (playing && FEATURES.trend) ? "block" : "none";
@@ -4114,7 +3570,7 @@ if (playing && nowMs - lastCameraUpdate > 200) {
             type: "Feature",
             geometry: {
               type: "LineString",
-              coordinates: [[state.lng, state.lat], [posFuture.lng, posFuture.lat]]
+              coordinates: [[pos.lng, pos.lat], [posFuture.lng, posFuture.lat]]
             }
           });
         }
@@ -4123,38 +3579,38 @@ if (playing && nowMs - lastCameraUpdate > 200) {
         safeSetLayerVisibility(map, "heading-vector-line", vectorVisible);
         safeSetLayerVisibility(map, "flight-vector-arrow-fill", vectorVisible);
 
-       if (vectorVisible) {
-  const headingEnd = movePoint({ lat: displayPos.lat, lng: displayPos.lng }, brg, 50);
-  const projectedEnd = movePoint(
-    { lat: displayPos.lat, lng: displayPos.lng },
-    brg,
-    groundspeed > 0 ? Math.max(70, Math.min(180, groundspeed * 4)) : 90
-  );
+        if (vectorVisible) {
+          const headingEnd = movePoint({ lat: pos.lat, lng: pos.lng }, brg, 50);
+          const projectedEnd = movePoint(
+            { lat: pos.lat, lng: pos.lng },
+            brg,
+            groundspeed > 0 ? Math.max(70, Math.min(180, groundspeed * 4)) : 90
+          );
 
-  safeSetGeojsonData(map, "heading-vector", {
-    type: "Feature",
-    geometry: {
-      type: "LineString",
-      coordinates: [[displayPos.lng, displayPos.lat], [headingEnd.lng, headingEnd.lat]]
-    }
-  });
+          safeSetGeojsonData(map, "heading-vector", {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [[pos.lng, pos.lat], [headingEnd.lng, headingEnd.lat]]
+            }
+          });
 
-  safeSetGeojsonData(map, "flight-vector-arrow", {
-    type: "FeatureCollection",
-    features: [makeArrowHead(projectedEnd, brg, 12, 24)]
-  });
-}
+          safeSetGeojsonData(map, "flight-vector-arrow", {
+            type: "FeatureCollection",
+            features: [makeArrowHead(projectedEnd, brg, 18, 28)]
+          });
+        }
 
-       if (FEATURES.vectors && vectorVisible) {
-  vectorLabelEl.style.display = "block";
-  vectorLabel.setLngLat([displayPos.lng, displayPos.lat]);
-  vectorLabelEl.innerHTML =
-    `HDG ${Number.isFinite(brg) ? brg.toFixed(0) : "—"}° | ` +
-    `GS ${isFiniteNumber(groundspeed) ? groundspeed.toFixed(1) : "—"} m/s | ` +
-    `VS ${isFiniteNumber(vz) ? vz.toFixed(1) : "—"} m/s`;
-} else {
-  vectorLabelEl.style.display = "none";
-}
+        if (FEATURES.vectors) {
+          vectorLabelEl.style.display = "block";
+          vectorLabel.setLngLat([pos.lng, pos.lat]);
+          vectorLabelEl.innerHTML =
+            `HDG ${Number.isFinite(brg) ? brg.toFixed(0) : "—"}° | ` +
+            `GS ${isFiniteNumber(groundspeed) ? groundspeed.toFixed(1) : "—"} m/s | ` +
+            `VS ${isFiniteNumber(vz) ? vz.toFixed(1) : "—"} m/s`;
+        } else {
+          vectorLabelEl.style.display = "none";
+        }
 
         const c = getComplianceForReplayTime(replayTime, currentIndex);
         const zone = c?.zone || null;
@@ -4172,33 +3628,16 @@ if (playing && nowMs - lastCameraUpdate > 200) {
             : null;
 
         let margin = null;
-let marginTruth = null;
-let basis = "—";
-
-if (upperM !== null && upperM !== undefined) {
-  if (toStringSafe(status).includes("_AGL") && altAgl !== null && altAgl !== undefined) {
-    const upperTruth = toNumber(upperM);
-    const altTruth = toNumber(altAgl);
-
-    marginTruth = upperTruth - altTruth;
-
-    const upperDisplay = Math.floor(upperTruth / 10) * 10;
-    margin = upperDisplay - altTruth;
-
-    basis = "AGL";
-
-  } else if (altAmsl !== null && altAmsl !== undefined) {
-    const upperTruth = toNumber(upperM);
-    const altTruth = toNumber(altAmsl);
-
-    marginTruth = upperTruth - altTruth;
-
-    const upperDisplay = Math.floor(upperTruth / 10) * 10;
-    margin = upperDisplay - altTruth;
-
-    basis = "AMSL";
-  }
-}
+        let basis = "—";
+        if (upperM !== null && upperM !== undefined) {
+          if (toStringSafe(status).includes("_AGL") && altAgl !== null && altAgl !== undefined) {
+            margin = toNumber(upperM) - toNumber(altAgl);
+            basis = "AGL";
+          } else {
+            margin = toNumber(upperM) - toNumber(altAmsl);
+            basis = "AMSL";
+          }
+        }
 
         const predictionAltNow = basis === "AGL" ? altAgl : altAmsl;
         const zoneSource =
@@ -4230,42 +3669,40 @@ if (upperM !== null && upperM !== undefined) {
         let verticalTtb = null;
 
         if (FEATURES.prediction && hasAirspace) {
-  const shouldCalc = shouldRecalculatePrediction({
-    nowMs: now,
-    pos: displayPos,
-    brg,
-    groundspeed
-  });
+          const shouldCalc = shouldRecalculatePrediction({
+            nowMs: now,
+            pos,
+            brg,
+            groundspeed
+          });
 
-  if (shouldCalc) {
-    cachedPredictionResult = computePredictionBundle({
-      pos: displayPos,
-      brg,
-      groundspeed,
-      vz,
-      predictSeconds,
-      predictionAltNow
-    });
+          if (shouldCalc) {
+            cachedPredictionResult = computePredictionBundle({
+              pos,
+              brg,
+              groundspeed,
+              vz,
+              predictSeconds,
+              predictionAltNow
+            });
 
-    lastPredictionCalcMs = now;
-    lastPredictionInputs = {
-      pos: { lat: displayPos.lat, lng: displayPos.lng },
-      brg,
-      groundspeed
-    };
-  }
+            lastPredictionCalcMs = now;
+            lastPredictionInputs = {
+              pos: { lat: pos.lat, lng: pos.lng },
+              brg,
+              groundspeed
+            };
+          }
 
-  ({
-    futurePath,
-    predictiveEnvelope,
-    predictiveEnvelopeConflicts,
-    boundaryPrediction,
-    conflict4D,
-    verticalTtb
-  } = cachedPredictionResult);
-}
-        
-        else {
+          ({
+            futurePath,
+            predictiveEnvelope,
+            predictiveEnvelopeConflicts,
+            boundaryPrediction,
+            conflict4D,
+            verticalTtb
+          } = cachedPredictionResult);
+        } else {
           cachedPredictionResult = {
             futurePath: [],
             predictiveEnvelope: null,
@@ -4328,7 +3765,7 @@ if (upperM !== null && upperM !== undefined) {
         });
 
         const hazardPos = conflict4D?.conflict ? conflict4D.pos : boundaryPrediction?.pos || null;
-        const zoneBearing = hazardPos ? bearingDeg(displayPos, hazardPos) : null;
+        const zoneBearing = hazardPos ? bearingDeg(pos, hazardPos) : null;
         const turnBias = computeTurnBias({ brg, zoneBearing });
 
         const advisory = computeAdvisory({
@@ -4352,7 +3789,7 @@ if (upperM !== null && upperM !== undefined) {
 
         if (!startupMuted) {
           logFlightEvents({
-            replayIso: new Date(state.t).toISOString(),
+            replayIso: new Date(t).toISOString(),
             simTimeMs: simElapsed,
             riskLabel: displayRiskInfo.label,
             riskScore: displayRiskScore,
@@ -4431,7 +3868,7 @@ if (upperM !== null && upperM !== undefined) {
         }
 
         if (!startupMuted && FEATURES.prediction && ttb !== null && ttb > 0 && ttb <= 120) {
-          const tBreach = Math.min(t0 + duration, state.t + ttb * 1000);
+          const tBreach = Math.min(t0 + duration, t + ttb * 1000);
           const breachPos = interpolate(tBreach);
 
           if (isValidLngLat(breachPos)) {
@@ -4544,18 +3981,18 @@ if (upperM !== null && upperM !== undefined) {
           </div>
 
           <div class="hud-grid">
-  <div class="hud-k">TIME</div><div class="hud-v">${new Date(state.t).toLocaleTimeString()}</div>
-  <div class="hud-k">LAT</div><div class="hud-v">${displayPos.lat.toFixed(5)}</div>
-  <div class="hud-k">LON</div><div class="hud-v">${displayPos.lng.toFixed(5)}</div>
-  <div class="hud-k">ALT AMSL</div><div class="hud-v">${fmtM(altAmsl)}</div>
-  <div class="hud-k">ALT AGL</div><div class="hud-v">${fmtM(altAgl)}</div>
-  <div class="hud-k">TERRAIN</div><div class="hud-v">${fmtM(terrainAmsl)}</div>
-  <div class="hud-k">V/S</div><div class="hud-v">${vsText}</div>
-  <div class="hud-k">HDG</div><div class="hud-v">${hdgText}</div>
-  <div class="hud-k">GS</div><div class="hud-v">${gsText}</div>
-  <div class="hud-k">SPEED</div><div class="hud-v">${speed}×</div>
-  <div class="hud-k">PROGRESS</div><div class="hud-v">${progress.toFixed(1)}%</div>
-</div>
+            <div class="hud-k">TIME</div><div class="hud-v">${new Date(t).toLocaleTimeString()}</div>
+            <div class="hud-k">LAT</div><div class="hud-v">${pos.lat.toFixed(5)}</div>
+            <div class="hud-k">LON</div><div class="hud-v">${pos.lng.toFixed(5)}</div>
+            <div class="hud-k">ALT AMSL</div><div class="hud-v">${fmtM(altAmsl)}</div>
+            <div class="hud-k">ALT AGL</div><div class="hud-v">${fmtM(altAgl)}</div>
+            <div class="hud-k">TERRAIN</div><div class="hud-v">${fmtM(terrainAmsl)}</div>
+            <div class="hud-k">V/S</div><div class="hud-v">${vsText}</div>
+            <div class="hud-k">HDG</div><div class="hud-v">${hdgText}</div>
+            <div class="hud-k">GS</div><div class="hud-v">${gsText}</div>
+            <div class="hud-k">SPEED</div><div class="hud-v">${speed}×</div>
+            <div class="hud-k">PROGRESS</div><div class="hud-v">${progress.toFixed(1)}%</div>
+          </div>
 
           <div class="hud-divider"></div>
 
@@ -4625,7 +4062,7 @@ if (upperM !== null && upperM !== undefined) {
 
         window._fsmsDebug = {
           simElapsed,
-          simTimeMs,
+          t,
           playing,
           currentIndex,
           risk: displayRiskInfo?.label ?? null,
@@ -4645,44 +4082,44 @@ if (upperM !== null && upperM !== undefined) {
       // CONTROLS
       // =========================
       zoomFlightBtn.onclick = () => zoomTo(map, flightBounds);
-zoomAirspaceBtn.onclick = () => zoomTo(map, airspaceBounds);
-zoomBothBtn.onclick = () => zoomTo(map, unionBounds(flightBounds, airspaceBounds));
+      zoomAirspaceBtn.onclick = () => zoomTo(map, airspaceBounds);
+      zoomBothBtn.onclick = () => zoomTo(map, unionBounds(flightBounds, airspaceBounds));
 
-playBtn.onclick = () => {
-  const atEnd = simElapsed >= duration - 1;
+      playBtn.onclick = () => {
+        if (simElapsed >= duration) {
+          simElapsed = 0;
+          currentIndex = 0;
+          resetReplayDerivedState();
+          renderEventLog(flightEventLog, simElapsed, duration, true);
+        }
 
-  if (atEnd) {
-    simElapsed = 0;
-    currentIndex = 0;
-    lastFrame = null;
-    resetReplayDerivedState({ preserveLogs: false });
-    renderEventLog(flightEventLog, simElapsed, duration, true);
-  }
+        playing = !playing;
+        playBtn.textContent = playing ? "Pause" : "Play";
+        if (playing) lastFrame = null;
+      };
 
-  playing = !playing;
-  playBtn.textContent = playing ? "Pause" : "Play";
-};
+      slider.oninput = (e) => {
+        simElapsed = toNumber(e.target.value, 0) * duration;
+        currentIndex = 0;
+        lastFrame = null;
+        resetReplayDerivedState({ preserveLogs: true });
+        renderEventLog(flightEventLog, simElapsed, duration, true);
+      };
 
-slider.oninput = (e) => {
-  const ratio = clamp(toNumber(e.target.value, 0), 0, 1);
-  const ms = duration > 0 ? ratio * duration : 0;
-  jumpToSimTime(ms, duration);
-};
+      speedSel.onchange = () => {
+        speed = toNumber(speedSel.value, 1);
+      };
 
-speedSel.onchange = () => {
-  speed = toNumber(speedSel.value, 1);
-};
-
-const featureToggleBtn = document.getElementById("feature-toggle");
-if (featureToggleBtn) {
-  featureToggleBtn.onclick = () => {
-    const panel = document.getElementById("feature-panel");
-    if (panel) {
-      panel.style.display = panel.style.display === "block" ? "none" : "block";
-    }
-  };
-}
-})();
-</script>
+      const featureToggleBtn = document.getElementById("feature-toggle");
+      if (featureToggleBtn) {
+        featureToggleBtn.onclick = () => {
+          const panel = document.getElementById("feature-panel");
+          if (panel) {
+            panel.style.display = panel.style.display === "block" ? "none" : "block";
+          }
+        };
+      }
+    })();
+  </script>
 </body>
 </html>

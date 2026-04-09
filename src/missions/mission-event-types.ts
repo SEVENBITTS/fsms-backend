@@ -1,0 +1,17 @@
+export type MissionEventType =
+  | "mission.created"
+  | "mission.submitted"
+  | "mission.approved"
+  | "mission.rejected"
+  | "mission.cancelled"
+  | "mission.launched"
+  | "mission.completed"
+  | "mission.aborted"
+  | "risk_assessment.updated"
+  | "airspace_check.completed"
+  | "weather_check.completed"
+  | "override.applied"
+  | "telemetry.link_lost"
+  | "telemetry.link_restored"
+  | "geofence.breach.detected"
+  | "incident.reported";
