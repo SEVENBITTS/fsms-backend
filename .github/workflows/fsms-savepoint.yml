@@ -11,6 +11,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -18,3 +20,4 @@ jobs:
 
       - run: npm ci
       - run: npm run validate:savepoint
+      - run: bash scripts/check-savepoint-required.sh origin/main
