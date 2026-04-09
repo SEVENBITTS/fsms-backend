@@ -11,7 +11,8 @@ savepoint_changed="false"
 while IFS= read -r file; do
   [[ -z "$file" ]] && continue
 
-  if [[ "$file" =~ ^(src/replay|src/compliance|src/prediction|src/risk|src/advisory|src/hud|replay|compliance|prediction|risk|advisory|hud)/ ]]; then
+  # 👇 THIS is your updated rule
+  if [[ "$file" =~ ^(src/missions|src/services|src/routes|src/validation|src/repositories)/ ]]; then
     core_changed="true"
   fi
 
@@ -21,9 +22,9 @@ while IFS= read -r file; do
 done <<< "$changed_files"
 
 if [[ "$core_changed" == "true" && "$savepoint_changed" != "true" ]]; then
-  echo "Core FSMS files changed, but fsms-save-point.json was not updated."
+  echo "❌ Core FSMS files changed, but fsms-save-point.json was not updated."
   echo "Update the save point before merging."
   exit 1
 fi
 
-echo "Save point update rule passed."
+echo "✅ Save point update rule passed."
