@@ -226,6 +226,147 @@ describe("mission integration", () => {
     eventType: "mission.aborted",
   });
 
+  it("POST /missions/:missionId/approve rejects approve before submit and does not append mission.approved", async () => {
+    const missionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "draft",
+    });
+
+    const approveResponse = await request(app)
+      .post(`/missions/${missionId}/approve`)
+      .send({
+        reviewerId: "reviewer-1",
+        notes: "should fail before submit",
+      });
+
+    expect(approveResponse.status).toBe(409);
+
+    expect(approveResponse.body).toMatchObject({
+      error: {
+        message: expect.stringContaining(
+          "Mission cannot be approved from status draft",
+        ),
+        type: "invalid_state_transition",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "draft",
+      last_event_sequence_no: 0,
+    });
+
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await countMissionEventsByType(missionId, "mission.approved")).toBe(0);
+  });
+
+  it("POST /missions/:missionId/complete rejects complete before launch and does not append mission.completed", async () => {
+    const missionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "approved",
+    });
+
+    const completeResponse = await request(app)
+      .post(`/missions/${missionId}/complete`)
+      .send({
+        operatorId: "operator-1",
+      });
+
+    expect(completeResponse.status).toBe(409);
+
+    expect(completeResponse.body).toMatchObject({
+      error: {
+        message: expect.stringContaining(
+          "Mission cannot be completed from status approved",
+        ),
+        type: "invalid_state_transition",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "approved",
+      last_event_sequence_no: 0,
+    });
+
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await countMissionEventsByType(missionId, "mission.completed")).toBe(0);
+  });
+
+  it("POST /missions/:missionId/approve rejects approve after launch and does not append mission.approved", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "active",
+  });
+
+  const approveResponse = await request(app)
+    .post(`/missions/${missionId}/approve`)
+    .send({
+      reviewerId: "reviewer-1",
+      notes: "should fail after launch",
+    });
+
+  expect(approveResponse.status).toBe(409);
+
+  expect(approveResponse.body).toMatchObject({
+    error: {
+      message: expect.stringContaining(
+        "Mission cannot be approved from status active",
+      ),
+      type: "invalid_state_transition",
+    },
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "active",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+  expect(await countMissionEventsByType(missionId, "mission.approved")).toBe(0);
+});
+
+  it("POST /missions/:missionId/launch rejects launch before approve and does not append mission.launched", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "submitted",
+  });
+
+  const launchResponse = await request(app)
+    .post(`/missions/${missionId}/launch`)
+    .send({
+      operatorId: "operator-1",
+      vehicleId: "vehicle-1",
+      lat: 51.5074,
+      lng: -0.1278,
+    });
+
+  expect(launchResponse.status).toBe(409);
+
+  expect(launchResponse.body).toMatchObject({
+    error: {
+      message: expect.stringContaining(
+        "Mission cannot be launched from status submitted",
+      ),
+      type: "invalid_state_transition",
+    },
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "submitted",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+  expect(await countMissionEventsByType(missionId, "mission.launched")).toBe(0);
+});
+
   it("POST /missions/:missionId/launch updates mission state and creates exactly one mission.launched event", async () => {
     const missionId = randomUUID();
 
@@ -348,6 +489,108 @@ it("POST /missions/:missionId/abort rejects abort from completed and does not ap
   );
 
   expect(abortedEventCountResult.rows[0].count).toBe(0);
+});
+
+it("POST /missions/:missionId/submit rejects submit after approval and does not append mission.submitted", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "approved",
+  });
+
+  const submitResponse = await request(app)
+    .post(`/missions/${missionId}/submit`)
+    .send({
+      userId: "user-1",
+    });
+
+  expect(submitResponse.status).toBe(409);
+
+  expect(submitResponse.body).toMatchObject({
+    error: {
+      message: expect.stringContaining(
+        "Mission cannot be submitted from status approved",
+      ),
+      type: "invalid_state_transition",
+    },
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "approved",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+  expect(await countMissionEventsByType(missionId, "mission.submitted")).toBe(0);
+});
+
+it("POST /missions/:missionId/submit rejects submit after completion and does not append mission.submitted", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "completed",
+  });
+
+  const submitResponse = await request(app)
+    .post(`/missions/${missionId}/submit`)
+    .send({
+      userId: "user-1",
+    });
+
+  expect(submitResponse.status).toBe(409);
+
+  expect(submitResponse.body).toMatchObject({
+    error: {
+      message: expect.stringContaining(
+        "Mission cannot be submitted from status completed",
+      ),
+      type: "invalid_state_transition",
+    },
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "completed",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+  expect(await countMissionEventsByType(missionId, "mission.submitted")).toBe(0);
+});
+
+it("POST /missions/:missionId/complete rejects complete after abort and does not append mission.completed", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "aborted",
+  });
+
+  const completeResponse = await request(app)
+    .post(`/missions/${missionId}/complete`)
+    .send({
+      operatorId: "operator-1",
+    });
+
+  expect(completeResponse.status).toBe(409);
+
+  expect(completeResponse.body).toMatchObject({
+    error: {
+      message: expect.stringContaining(
+        "Mission cannot be completed from status aborted",
+      ),
+      type: "invalid_state_transition",
+    },
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "aborted",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+  expect(await countMissionEventsByType(missionId, "mission.completed")).toBe(0);
 });
 
 it("POST mission lifecycle submit -> approve -> launch -> complete writes ordered events with monotonic sequence", async () => {
