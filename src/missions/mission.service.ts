@@ -1,7 +1,11 @@
 import { Pool } from "pg";
 import { MissionRepository } from "./mission.repository";
 import { MissionEventRepository } from "./mission-event.repository";
-import { assertMissionTransitionAllowed } from "./domain/missionLifecycle";
+import {
+  assertMissionActionAllowed,
+  checkMissionActionAllowed,
+  MissionLifecycleAction,
+} from "../modules/missions/domain/missionLifecycle";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
@@ -9,6 +13,7 @@ export interface GetMissionEventsFilters {
   severity?: "info" | "warning" | "critical";
   type?: string;
 }
+
 
 export class Db {
   constructor(private readonly pool: Pool) {}
@@ -30,6 +35,8 @@ export class Db {
   }
 }
 
+
+
 export class MissionService {
   constructor(
     private readonly db: Db,
@@ -37,7 +44,7 @@ export class MissionService {
     private readonly missionEventRepo: MissionEventRepository,
   ) {}
 
-   async submitMission(params: {
+  async submitMission(params: {
     missionId: string;
     userId: string;
     requestId?: string;
@@ -46,11 +53,7 @@ export class MissionService {
     await this.db.transaction(async (tx) => {
       const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
 
-      assertMissionTransitionAllowed(
-        mission.status,
-        "submitted",
-        "submitted",
-      );
+      assertMissionActionAllowed(mission.status, "submit");
 
       await this.missionRepo.updateStatus(tx, params.missionId, "submitted");
 
@@ -74,43 +77,38 @@ export class MissionService {
   }
 
   async approveMission(params: {
-    missionId: string;
-    reviewerId: string;
-    notes?: string;
-    requestId?: string;
-    correlationId?: string;
-  }): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
-      assertMissionTransitionAllowed(
-  mission.status,
-  "approved",
-  "approved",
-);
-      await this.missionRepo.updateStatus(tx, params.missionId, "approved");
+  missionId: string;
+  reviewerId: string;
+  notes?: string;
+  requestId?: string;
+  correlationId?: string;
+}): Promise<void> {
+  await this.db.transaction(async (tx) => {
+    const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
 
-      await this.missionEventRepo.append(tx, this.missionRepo, {
-        missionId: mission.id,
-        missionPlanId: mission.mission_plan_id,
-        eventType: "mission.approved",
-        actorType: "user",
-        actorId: params.reviewerId,
-        fromState: mission.status,
-        toState: "approved",
-        summary: "Mission approved",
-        details: {
-          decision: "approved",
-          notes: params.notes ?? null,
-        },
-        
-        source: "mission-review-service",
-        requestId: params.requestId ?? null,
-        correlationId: params.correlationId ?? null,
-      });
+    assertMissionActionAllowed(mission.status, "approve");
+
+    await this.missionRepo.updateStatus(tx, params.missionId, "approved");
+
+    await this.missionEventRepo.append(tx, this.missionRepo, {
+      missionId: mission.id,
+      missionPlanId: mission.mission_plan_id,
+      eventType: "mission.approved",
+      actorType: "user",
+      actorId: params.reviewerId,
+      fromState: mission.status,
+      toState: "approved",
+      summary: "Mission approved",
+      details: {
+        decision: "approved",
+        notes: params.notes ?? null,
+      },
+      source: "mission-review-service",
+      requestId: params.requestId ?? null,
+      correlationId: params.correlationId ?? null,
     });
-  }
-
-  
+  });
+} 
 
   async launchMission(params: {
     missionId: string;
@@ -123,11 +121,8 @@ export class MissionService {
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
       const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
-      assertMissionTransitionAllowed(
-  mission.status,
-  "active",
-  "launched",
-);
+      
+      assertMissionActionAllowed(mission.status, "launch");
 
       
       await this.missionRepo.updateStatus(tx, params.missionId, "active");
@@ -161,11 +156,8 @@ export class MissionService {
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
       const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
-      assertMissionTransitionAllowed(
-  mission.status,
-  "completed",
-  "completed",
-);
+      
+      assertMissionActionAllowed(mission.status, "complete");
       
       await this.missionRepo.updateStatus(tx, params.missionId, "completed");
 
@@ -191,11 +183,9 @@ export class MissionService {
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
       const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
-      assertMissionTransitionAllowed(
-  mission.status,
-  "aborted",
-  "aborted",
-);
+
+      assertMissionActionAllowed(mission.status, "abort");
+
       await this.missionRepo.updateStatus(tx, params.missionId, "aborted");
 
       await this.missionEventRepo.append(tx, this.missionRepo, {
@@ -214,6 +204,26 @@ export class MissionService {
       });
     });
   }
+
+  async checkMissionTransition(params: {
+  missionId: string;
+  action: MissionLifecycleAction;
+}) {
+  return this.db.transaction(async (tx) => {
+    const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
+
+    const result = checkMissionActionAllowed(mission.status, params.action);
+
+    return {
+      missionId: mission.id,
+      currentStatus: result.currentStatus,
+      action: result.action,
+      targetStatus: result.targetStatus,
+      allowed: result.allowed,
+      error: result.error,
+    };
+  });
+}
 
   async getMissionEvents(
     missionId: string,

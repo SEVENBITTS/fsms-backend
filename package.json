@@ -5,7 +5,8 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "validate:savepoint": "node scripts/validate-save-point.mjs",
-    "migrate:test": "tsx src/migrations/runMigrations.ts",
+    "migrate": "tsx src/scripts/run-migrations.ts",
+    "migrate:test": "dotenv -e .env.test -- tsx src/scripts/run-migrations.ts",
     "suggest:nextstep": "node scripts/suggest-next-build-step.mjs origin/main"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "@types/node": "^24.12.0",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
+    "dotenv-cli": "^11.0.0",
     "supertest": "^7.2.2",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0",

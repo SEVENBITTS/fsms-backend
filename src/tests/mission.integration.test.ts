@@ -593,6 +593,97 @@ it("POST /missions/:missionId/complete rejects complete after abort and does not
   expect(await countMissionEventsByType(missionId, "mission.completed")).toBe(0);
 });
 
+it("GET /missions/:missionId/transitions/:action/check returns allowed true for approve from submitted", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "submitted",
+  });
+
+  const response = await request(app).get(
+    `/missions/${missionId}/transitions/approve/check`,
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({
+    missionId,
+    currentStatus: "submitted",
+    action: "approve",
+    targetStatus: "approved",
+    allowed: true,
+    error: null,
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "submitted",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+});
+
+it("GET /missions/:missionId/transitions/:action/check returns allowed false for approve from draft without mutating state", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "draft",
+  });
+
+  const response = await request(app).get(
+    `/missions/${missionId}/transitions/approve/check`,
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({
+    missionId,
+    currentStatus: "draft",
+    action: "approve",
+    targetStatus: "approved",
+    allowed: false,
+    error: {
+      type: "invalid_state_transition",
+      message: "Mission cannot be approved from status draft",
+    },
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "draft",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+});
+
+it("GET /missions/:missionId/transitions/:action/check rejects unsupported action", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "draft",
+  });
+
+  const response = await request(app).get(
+    `/missions/${missionId}/transitions/fly/check`,
+  );
+
+  expect(response.status).toBe(400);
+  expect(response.body).toMatchObject({
+    error: {
+      type: "invalid_action",
+      message: expect.stringContaining("Unsupported lifecycle action fly"),
+    },
+  });
+
+  expect(await getMissionState(missionId)).toEqual({
+    status: "draft",
+    last_event_sequence_no: 0,
+  });
+
+  expect(await getMissionEvents(missionId)).toEqual([]);
+});
+
 it("POST mission lifecycle submit -> approve -> launch -> complete writes ordered events with monotonic sequence", async () => {
     const missionId = randomUUID();
 

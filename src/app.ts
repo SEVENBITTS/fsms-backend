@@ -12,8 +12,11 @@ import { createMissionRouter } from "./missions/mission.routes";
 import { createTimelineRouter } from "./routes/timeline";
 import { TimelineService } from "./services/timeline.service";
 import { HttpError } from "./utils/errors";
-import { runMigrations } from "./migrations/runMigrations";
-
+import { MissionLifecyclePolicy } from "./missions/mission-lifecycle.policy";
+import { MissionTelemetryRepository } from "./missions/mission-telemetry.repository";
+import { MissionTelemetryService } from "./missions/mission-telemetry.service";
+import { MissionTelemetryController } from "./missions/mission-telemetry.controller";
+import { createMissionTelemetryRouter } from "./missions/mission-telemetry.routes";
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
   quiet: true,
@@ -42,16 +45,7 @@ const pool = new Pool({
   database: process.env.PGDATABASE,
 });
 
-if (process.env.NODE_ENV !== "test") {
-  pool.connect()
-    .then(async (client) => {
-      client.release();
-      await runMigrations(pool);
-    })
-    .catch((error) => {
-      console.error("Failed to initialize database:", error);
-    });
-}
+
 
 const db = new Db(pool);
 const missionRepo = new MissionRepository();
@@ -59,12 +53,23 @@ const missionEventRepo = new MissionEventRepository();
 const missionService = new MissionService(db, missionRepo, missionEventRepo);
 const missionController = new MissionController(missionService);
 
+const missionLifecyclePolicy = new MissionLifecyclePolicy();
+const missionTelemetryRepo = new MissionTelemetryRepository();
+const missionTelemetryService = new MissionTelemetryService(
+  pool,
+  missionRepo,
+  missionTelemetryRepo,
+  missionLifecyclePolicy,
+);
+const missionTelemetryController = new MissionTelemetryController(
+  missionTelemetryService,
+);
+
 const timelineService = new TimelineService(pool);
 
 app.use("/missions", createMissionRouter(missionController));
+app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/timeline", createTimelineRouter(timelineService));
-
-
 app.get("/", (_req, res) => {
   res.status(200).send("FSMS backend is running");
 });

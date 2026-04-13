@@ -55,6 +55,23 @@ export class MissionRepository implements MissionSequenceAllocator {
     }
   }
 
+  async getById(tx: any, missionId: string) {
+  const result = await tx.query(
+    `
+    SELECT id, status, mission_plan_id, last_event_sequence_no
+    FROM missions
+    WHERE id = $1
+    `,
+    [missionId],
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error(`Mission ${missionId} not found`);
+  }
+
+  return result.rows[0];
+}
+
   async bumpLastEventSequence(tx: DbTx, missionId: string): Promise<number> {
     const result = await tx.query<{ last_event_sequence_no: number }>(
       `
