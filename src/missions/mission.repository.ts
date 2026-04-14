@@ -10,6 +10,22 @@ export interface MissionRow {
   last_event_sequence_no: number;
 }
 
+type AppError = Error & {
+  statusCode: number;
+  code: string;
+};
+
+const makeAppError = (
+  message: string,
+  statusCode: number,
+  code: string,
+): AppError => {
+  const error = new Error(message) as AppError;
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+};
+
 export class MissionRepository implements MissionSequenceAllocator {
   async getForUpdate(tx: DbTx, missionId: string): Promise<MissionRow> {
     const result = await tx.query<MissionRow>(
@@ -27,7 +43,11 @@ export class MissionRepository implements MissionSequenceAllocator {
     );
 
     if (result.rowCount !== 1) {
-      throw new Error(`Mission not found: ${missionId}`);
+      throw makeAppError(
+        `Mission not found: ${missionId}`,
+        404,
+        "MISSION_NOT_FOUND",
+      );
     }
 
     return {
@@ -51,26 +71,41 @@ export class MissionRepository implements MissionSequenceAllocator {
     );
 
     if (result.rowCount !== 1) {
-      throw new Error(`Failed to update mission status: ${missionId}`);
+      throw makeAppError(
+        `Failed to update mission status: ${missionId}`,
+        500,
+        "MISSION_STATUS_UPDATE_FAILED",
+      );
     }
   }
 
-  async getById(tx: any, missionId: string) {
-  const result = await tx.query(
-    `
-    SELECT id, status, mission_plan_id, last_event_sequence_no
-    FROM missions
-    WHERE id = $1
-    `,
-    [missionId],
-  );
+  async getById(tx: DbTx, missionId: string): Promise<MissionRow> {
+    const result = await tx.query<MissionRow>(
+      `
+      select
+        id,
+        status,
+        mission_plan_id,
+        last_event_sequence_no
+      from missions
+      where id = $1
+      `,
+      [missionId],
+    );
 
-  if (result.rows.length === 0) {
-    throw new Error(`Mission ${missionId} not found`);
+    if (result.rowCount !== 1) {
+      throw makeAppError(
+        `Mission ${missionId} not found`,
+        404,
+        "MISSION_NOT_FOUND",
+      );
+    }
+
+    return {
+      ...result.rows[0],
+      last_event_sequence_no: Number(result.rows[0].last_event_sequence_no),
+    };
   }
-
-  return result.rows[0];
-}
 
   async bumpLastEventSequence(tx: DbTx, missionId: string): Promise<number> {
     const result = await tx.query<{ last_event_sequence_no: number }>(
@@ -84,7 +119,11 @@ export class MissionRepository implements MissionSequenceAllocator {
     );
 
     if (result.rowCount !== 1) {
-      throw new Error(`Failed to bump event sequence for mission: ${missionId}`);
+      throw makeAppError(
+        `Failed to bump event sequence for mission: ${missionId}`,
+        500,
+        "MISSION_SEQUENCE_BUMP_FAILED",
+      );
     }
 
     return Number(result.rows[0].last_event_sequence_no);

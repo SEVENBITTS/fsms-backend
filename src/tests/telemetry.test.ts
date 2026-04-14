@@ -219,7 +219,7 @@ describe("telemetry integration", () => {
         ],
       });
 
-    expect([409, 500]).toContain(response.status);
+    expect(response.status).toBe(409);
 
     expect(await getMissionStatus(missionId)).toBe("completed");
     expect(await getTelemetryRows(missionId)).toEqual(rowsBefore);
@@ -246,7 +246,7 @@ describe("telemetry integration", () => {
         ],
       });
 
-    expect([400, 500]).toContain(response.status);
+    expect(response.status).toBe(400);
 
     expect(await getMissionStatus(missionId)).toBe("active");
     expect(await getTelemetryRows(missionId)).toEqual([]);
@@ -269,7 +269,7 @@ describe("telemetry integration", () => {
         ],
       });
 
-    expect([404, 500]).toContain(response.status);
+    expect(response.status).toBe(404);
     expect(await countTelemetryRows(missionId)).toBe(0);
   });
 
@@ -453,7 +453,7 @@ describe("telemetry integration", () => {
         to: "2026-04-13T10:20:00Z",
       });
 
-    expect([400, 500]).toContain(response.status);
+    expect(response.status).toBe(400);
     expect(await getTelemetryRows(missionId)).toEqual(rowsBefore);
   });
 

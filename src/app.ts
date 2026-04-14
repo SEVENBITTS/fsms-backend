@@ -17,6 +17,8 @@ import { MissionTelemetryRepository } from "./missions/mission-telemetry.reposit
 import { MissionTelemetryService } from "./missions/mission-telemetry.service";
 import { MissionTelemetryController } from "./missions/mission-telemetry.controller";
 import { createMissionTelemetryRouter } from "./missions/mission-telemetry.routes";
+import { normalizeError } from "./utils/error-response";
+
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
   quiet: true,
@@ -79,8 +81,27 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     return res.status(error.status).json({
       error: {
         message: error.message,
-        type: error.type
-      }
+        type: error.type,
+      },
+    });
+  }
+
+  if (
+    error instanceof Error &&
+    "statusCode" in error &&
+    typeof (error as { statusCode?: unknown }).statusCode === "number"
+  ) {
+    const appError = error as Error & {
+      statusCode: number;
+      code?: string;
+      type?: string;
+    };
+
+    return res.status(appError.statusCode).json({
+      error: {
+        message: appError.message,
+        type: appError.type ?? appError.code?.toLowerCase() ?? "application_error",
+      },
     });
   }
 
@@ -89,8 +110,8 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   return res.status(500).json({
     error: {
       message: error instanceof Error ? error.message : "Unknown error",
-      type: "internal_error"
-    }
+      type: "internal_error",
+    },
   });
 });
 
