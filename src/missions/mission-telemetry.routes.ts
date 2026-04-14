@@ -8,6 +8,7 @@ export function createMissionTelemetryRouter(
 
   router.post("/:id/telemetry", controller.recordTelemetry);
   router.get("/:id/telemetry/latest", controller.getLatestTelemetry);
+  router.get("/:id/telemetry", controller.getTelemetryHistory);
 
   return router;
 }
