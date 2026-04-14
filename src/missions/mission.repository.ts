@@ -1,11 +1,12 @@
 import { PoolClient } from "pg";
 import { MissionSequenceAllocator } from "./mission-event.repository";
+import type { MissionStatus } from "./mission-telemetry.types";
 
 export type DbTx = PoolClient;
 
 export interface MissionRow {
   id: string;
-  status: string;
+  status: MissionStatus;
   mission_plan_id: string | null;
   last_event_sequence_no: number;
 }
