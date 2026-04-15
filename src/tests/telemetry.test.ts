@@ -113,6 +113,33 @@ const getTelemetryRows = async (missionId: string) => {
   }>;
 };
 
+const getAlertsForMission = async (missionId: string) => {
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      mission_id,
+      alert_type,
+      status,
+      triggered_at,
+      resolved_at
+    FROM alerts
+    WHERE mission_id = $1
+    ORDER BY triggered_at ASC
+    `,
+    [missionId],
+  );
+
+  return result.rows as Array<{
+    id: string;
+    mission_id: string;
+    alert_type: string;
+    status: string;
+    triggered_at: string | Date;
+    resolved_at: string | Date | null;
+  }>;
+};
+
 const countTelemetryRows = async (missionId: string) => {
   const result = await pool.query(
     `
@@ -196,6 +223,96 @@ describe("telemetry integration", () => {
     expect(await getMissionStatus(missionId)).toBe("active");
   });
 
+it("POST /missions/:id/telemetry resolves ALTITUDE_HIGH alert when altitude normalizes", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "active",
+  });
+
+  // Step 1: trigger alert
+  await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:00:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 1200,
+        },
+      ],
+    });
+
+  // Step 2: normalize altitude
+  const response = await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:02:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 900, // below threshold
+        },
+      ],
+    });
+
+  expect(response.status).toBe(202);
+
+  const alerts = await getAlertsForMission(missionId);
+
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0].status).toBe("resolved");
+
+  expect(new Date(alerts[0].resolved_at!).toISOString()).toBe(
+    "2026-04-15T10:02:00.000Z",
+  );
+});
+
+it("POST /missions/:id/telemetry does not create duplicate ALTITUDE_HIGH alerts", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "active",
+  });
+
+  // First trigger
+  await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:00:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 1200,
+        },
+      ],
+    });
+
+  // Second trigger (still high)
+  await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:01:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 1300,
+        },
+      ],
+    });
+
+  const alerts = await getAlertsForMission(missionId);
+
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0].status).toBe("open");
+});
+
   it("POST /missions/:id/telemetry rejects inactive mission and does not persist telemetry", async () => {
     const missionId = randomUUID();
 
@@ -252,6 +369,31 @@ describe("telemetry integration", () => {
     expect(await getTelemetryRows(missionId)).toEqual([]);
     expect(await countTelemetryRows(missionId)).toBe(0);
   });
+
+it("creates SPEED_HIGH alert when speed exceeds threshold", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({ id: missionId, status: "active" });
+
+  await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:00:00Z",
+          lat: 0,
+          lng: 0,
+          speedMps: 60,
+        },
+      ],
+    });
+
+  const alerts = await getAlertsForMission(missionId);
+
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0].alert_type).toBe("SPEED_HIGH");
+});
+
 
   it("POST /missions/:id/telemetry rejects unknown mission and does not persist telemetry", async () => {
     const missionId = randomUUID();
@@ -381,13 +523,14 @@ describe("telemetry integration", () => {
     expect(response.body.missionId).toBe(missionId);
     expect(response.body.records).toHaveLength(2);
 
+    // 🔥 THIS is where it goes
     expect(
-      response.body.records.map((item: { timestamp: string }) =>
-        new Date(item.timestamp).toISOString(),
+      response.body.records.map((r: { timestamp: string }) =>
+        new Date(r.timestamp).toISOString(),
       ),
     ).toEqual([
-      "2026-04-13T10:15:00.000Z",
-      "2026-04-13T10:05:00.000Z",
+      "2026-04-13T10:15:00.000Z", // later first
+      "2026-04-13T10:05:00.000Z", // earlier second
     ]);
 
     expect(
