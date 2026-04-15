@@ -35,6 +35,20 @@ export class AlertService {
     private readonly thresholds: AlertThresholdConfig = DEFAULT_THRESHOLDS,
   ) {}
 
+  async listAlertsForMission(missionId: string): Promise<Alert[]> {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.alertRepository.list(client, {
+        missionId,
+        limit: 100,
+      });
+    } finally {
+      client.release();
+    }
+  }
+
+
   async evaluateTelemetry(
     missionId: string,
     telemetry: TelemetryAlertInput,
