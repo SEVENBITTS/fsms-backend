@@ -1,45 +1,42 @@
 # NEXT STEPS
 
 ## Current Status
-
-## Last Completed Step
-Telemetry system (including error handling + tests) ✅
-
 Telemetry system is complete and tested:
 - ✅ Integration tests (HTTP layer)
 - ✅ Service tests (business logic)
 - ✅ Validation + error handling
 - ✅ Latest + history endpoints
 
+Alerts system foundation is complete and tested:
+- ✅ Alerts table migration
+- ✅ Alert repository
+- ✅ Alert repository tests
+- ✅ Alert service
+- ✅ Alert service tests
+- ✅ Threshold creation / dedupe / resolution behavior
+
 ---
 
-## 🎯 Next Step (single focus)
+## Next Step
 
-### Build Alerts System
+### Wire Alerts into Telemetry Ingestion
 
 Goal:
-Trigger alerts based on telemetry data.
-
-Examples:
-- Altitude too high
-- Speed too high
-- Mission enters restricted zone
-- Mission inactive but telemetry received
+Evaluate alert conditions automatically when telemetry is recorded.
 
 ---
 
-## 🧠 Plan
+## Plan
 
-1. Create `alert.types.ts`
-2. Create `alert.service.ts`
-3. Create `alert.repository.ts`
-4. Add DB table `alerts`
-5. Write service tests
-6. Add integration endpoint (later)
+1. Decide integration point inside telemetry flow
+2. Call `AlertService` after telemetry persistence succeeds
+3. Keep telemetry write and alert evaluation behavior consistent
+4. Add integration tests covering telemetry → alert creation
+5. Add integration tests covering telemetry normalization → alert resolution
 
 ---
 
-## 🚫 Do NOT do yet
+## Do Not Do Yet
 - Replay system
 - UI/frontend
 - Auth
@@ -47,7 +44,7 @@ Examples:
 
 ---
 
-## ✅ Definition of Done
-- Alerts triggered correctly
-- Stored in DB
-- Covered by tests
+## Definition of Done
+- Recording telemetry automatically evaluates alerts
+- Alert lifecycle is triggered by real telemetry writes
+- Covered by integration tests
