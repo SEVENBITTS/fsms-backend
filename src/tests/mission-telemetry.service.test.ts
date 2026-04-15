@@ -6,14 +6,16 @@ import { MissionTelemetryService } from "../missions/mission-telemetry.service";
 import { MissionRepository } from "../missions/mission.repository";
 import { MissionTelemetryRepository } from "../missions/mission-telemetry.repository";
 import { MissionLifecyclePolicy } from "../missions/mission-lifecycle.policy";
-
+import { AlertRepository } from "../alerts/alert.repository";
+import { AlertService } from "../alerts/alert.service";
 const createService = () =>
   new MissionTelemetryService(
-    pool,
-    new MissionRepository(),
-    new MissionTelemetryRepository(),
-    new MissionLifecyclePolicy(),
-  );
+  pool,
+  new MissionRepository(),
+  new MissionTelemetryRepository(),
+  new MissionLifecyclePolicy(),
+  new AlertService(pool, new AlertRepository()),
+)
 
 const service = createService();
 
