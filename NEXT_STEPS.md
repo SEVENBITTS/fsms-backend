@@ -1,25 +1,33 @@
 # NEXT STEP
 
 ## Goal
-Expose alerts via API.
+Build replay on top of telemetry history.
 
 ---
 
 ## Build
 
-### GET /missions/:id/alerts
-- return alerts for mission
-- ordered by triggeredAt DESC
+### 1. Replay service
+- read telemetry history for mission
+- return ordered records for time-window replay
+
+### 2. Replay endpoint
+- `GET /missions/:id/replay?from=...&to=...`
+
+### 3. Tests
+- respects ordering
+- respects mission isolation
+- respects requested time range
 
 ---
 
 ## Do NOT do
-- No replay system yet
 - No UI
 - No auth
+- No performance optimization yet
 
 ---
 
 ## Done When
-- Alerts can be fetched via API
+- Replay data can be fetched for a mission and range
 - Covered by integration tests
