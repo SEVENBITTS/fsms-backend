@@ -719,6 +719,108 @@ it("creates SPEED_HIGH alert when speed exceeds threshold", async () => {
     expect(await countTelemetryRows(missionId)).toBe(2);
   });
 
+it("GET /missions/:id/alerts returns alerts for the requested mission ordered by triggeredAt descending", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "active",
+  });
+
+  await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:00:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 1200,
+        },
+      ],
+    });
+
+  await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:01:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          speedMps: 60,
+        },
+      ],
+    });
+
+  const response = await request(app).get(`/missions/${missionId}/alerts`);
+
+  expect(response.status).toBe(200);
+  expect(response.body.missionId).toBe(missionId);
+  expect(response.body.alerts).toHaveLength(2);
+
+  expect(
+    response.body.alerts.map((item: { alertType: string }) => item.alertType),
+  ).toEqual(["SPEED_HIGH", "ALTITUDE_HIGH"]);
+
+  expect(
+    response.body.alerts.map((item: { triggeredAt: string }) =>
+      new Date(item.triggeredAt).toISOString(),
+    ),
+  ).toEqual([
+    "2026-04-15T10:01:00.000Z",
+    "2026-04-15T10:00:00.000Z",
+  ]);
+});
+
+it("GET /missions/:id/alerts does not leak alerts from another mission", async () => {
+  const missionId = randomUUID();
+  const otherMissionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "active",
+  });
+
+  await insertMission({
+    id: otherMissionId,
+    status: "active",
+  });
+
+  await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:00:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 1200,
+        },
+      ],
+    });
+
+  await request(app)
+    .post(`/missions/${otherMissionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-15T10:01:00Z",
+          lat: 40.0,
+          lng: -70.0,
+          speedMps: 60,
+        },
+      ],
+    });
+
+  const response = await request(app).get(`/missions/${missionId}/alerts`);
+
+  expect(response.status).toBe(200);
+  expect(response.body.missionId).toBe(missionId);
+  expect(response.body.alerts).toHaveLength(1);
+  expect(response.body.alerts[0].alertType).toBe("ALTITUDE_HIGH");
+});
+
   it("GET /missions/:id/telemetry returns empty when range matches no records and does not mutate state", async () => {
     const missionId = randomUUID();
 
