@@ -1,50 +1,22 @@
-# NEXT STEPS
+# NEXT STEP
 
-## Current Status
-Telemetry system is complete and tested:
-- ✅ Integration tests (HTTP layer)
-- ✅ Service tests (business logic)
-- ✅ Validation + error handling
-- ✅ Latest + history endpoints
+## 🎯 Goal
+Wire Alerts into telemetry ingestion.
 
-Alerts system foundation is complete and tested:
-- ✅ Alerts table migration
-- ✅ Alert repository
-- ✅ Alert repository tests
-- ✅ Alert service
-- ✅ Alert service tests
-- ✅ Threshold creation / dedupe / resolution behavior
+When telemetry is recorded → alerts should be evaluated automatically.
 
 ---
 
-## Next Step
+## 🔧 Implementation
 
-### Wire Alerts into Telemetry Ingestion
-
-Goal:
-Evaluate alert conditions automatically when telemetry is recorded.
-
----
-
-## Plan
-
-1. Decide integration point inside telemetry flow
-2. Call `AlertService` after telemetry persistence succeeds
-3. Keep telemetry write and alert evaluation behavior consistent
-4. Add integration tests covering telemetry → alert creation
-5. Add integration tests covering telemetry normalization → alert resolution
+### 1. Locate integration point
+Inside:
+- `MissionTelemetryService.recordTelemetry`
 
 ---
 
-## Do Not Do Yet
-- Replay system
-- UI/frontend
-- Auth
-- Performance optimizations
+### 2. After successful DB commit
+Call:
 
----
-
-## Definition of Done
-- Recording telemetry automatically evaluates alerts
-- Alert lifecycle is triggered by real telemetry writes
-- Covered by integration tests
+```ts
+await alertService.evaluateTelemetry(missionId, record)
