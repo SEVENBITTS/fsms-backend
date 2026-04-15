@@ -421,7 +421,7 @@ it("POST /missions/:id/telemetry does not create duplicate ALTITUDE_HIGH alerts"
     expect(await countTelemetryRows(missionId)).toBe(0);
   });
 
-it("creates SPEED_HIGH alert when speed exceeds threshold", async () => {
+it("POST /missions/:id/telemetry creates SPEED_HIGH alert when speed exceeds threshold", async () => {
   const missionId = randomUUID();
 
   await insertMission({ id: missionId, status: "active" });
