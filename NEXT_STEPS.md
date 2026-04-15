@@ -1,22 +1,30 @@
 # NEXT STEP
 
-## 🎯 Goal
-Wire Alerts into telemetry ingestion.
-
-When telemetry is recorded → alerts should be evaluated automatically.
+## Goal
+Prove telemetry-to-alert behavior end-to-end.
 
 ---
 
-## 🔧 Implementation
+## Implementation
 
-### 1. Locate integration point
-Inside:
-- `MissionTelemetryService.recordTelemetry`
+### Add integration tests in `src/tests/telemetry.test.ts`
+
+1. POST telemetry with altitude above threshold
+   - assert ALTITUDE_HIGH alert created
+
+2. POST telemetry with normalized altitude
+   - assert ALTITUDE_HIGH alert resolved
 
 ---
 
-### 2. After successful DB commit
-Call:
+## Do NOT do
+- No new alert types
+- No alert endpoints yet
+- No replay system yet
 
-```ts
-await alertService.evaluateTelemetry(missionId, record)
+---
+
+## Done When
+- Real telemetry writes create alerts
+- Real telemetry normalization resolves alerts
+- Covered by integration tests
