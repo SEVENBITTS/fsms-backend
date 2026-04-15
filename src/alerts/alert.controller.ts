@@ -1,11 +1,15 @@
 import type { Request, Response, NextFunction } from "express";
 import { AlertService } from "./alert.service";
 
+type MissionIdParams = {
+  id: string;
+};
+
 export class AlertController {
   constructor(private readonly alertService: AlertService) {}
 
   getAlertsForMission = async (
-    req: Request,
+    req: Request<MissionIdParams>,
     res: Response,
     next: NextFunction,
   ) => {
