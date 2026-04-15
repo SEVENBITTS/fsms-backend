@@ -21,11 +21,15 @@ import { normalizeError } from "./utils/error-response";
 import { AlertRepository } from "./alerts/alert.repository";
 import { AlertService } from "./alerts/alert.service";
 
+import { AlertController } from "./alerts/alert.controller";
+import { createAlertRouter } from "./alerts/alert.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
   quiet: true,
 });
+
+
 
 if (process.env.NODE_ENV !== "test") {
   console.log("PG env check", {
@@ -62,6 +66,7 @@ const missionLifecyclePolicy = new MissionLifecyclePolicy();
 const missionTelemetryRepo = new MissionTelemetryRepository();
 const alertRepository = new AlertRepository();
 const alertService = new AlertService(pool, alertRepository);
+const alertController = new AlertController(alertService);
 
 const missionTelemetryService = new MissionTelemetryService(
   pool,
@@ -78,10 +83,12 @@ const timelineService = new TimelineService(pool);
 
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
+app.use("/missions", createAlertRouter(alertController));
 app.use("/timeline", createTimelineRouter(timelineService));
 app.get("/", (_req, res) => {
   res.status(200).send("FSMS backend is running");
 });
+
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof HttpError) {
