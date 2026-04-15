@@ -43,72 +43,79 @@ export class AlertService {
 
     try {
       await client.query("begin");
-
-      const created: Alert[] = [];
-      let resolvedCount = 0;
-
-      const altitudeTriggered =
-        telemetry.altitudeM != null &&
-        telemetry.altitudeM > this.thresholds.altitudeHighM;
-
-      const speedTriggered =
-        telemetry.speedMps != null &&
-        telemetry.speedMps > this.thresholds.speedHighMps;
-
-      const altitudeResult = await this.syncThresholdAlert(
-        client,
-        missionId,
-        "ALTITUDE_HIGH",
-        altitudeTriggered,
-        telemetry,
-        {
-          severity: "warning",
-          message: "Altitude exceeded configured threshold",
-          metadata: {
-            threshold: this.thresholds.altitudeHighM,
-            actual: telemetry.altitudeM ?? null,
-            unit: "m",
-            telemetryTimestamp: telemetry.timestamp,
-          },
-        },
-      );
-
-      created.push(...altitudeResult.created);
-      resolvedCount += altitudeResult.resolvedCount;
-
-      const speedResult = await this.syncThresholdAlert(
-        client,
-        missionId,
-        "SPEED_HIGH",
-        speedTriggered,
-        telemetry,
-        {
-          severity: "critical",
-          message: "Speed exceeded configured threshold",
-          metadata: {
-            threshold: this.thresholds.speedHighMps,
-            actual: telemetry.speedMps ?? null,
-            unit: "mps",
-            telemetryTimestamp: telemetry.timestamp,
-          },
-        },
-      );
-
-      created.push(...speedResult.created);
-      resolvedCount += speedResult.resolvedCount;
-
+      const result = await this.evaluateTelemetryInTx(client, missionId, telemetry);
       await client.query("commit");
-
-      return {
-        created,
-        resolvedCount,
-      };
+      return result;
     } catch (error) {
       await client.query("rollback");
       throw error;
     } finally {
       client.release();
     }
+  }
+
+  async evaluateTelemetryInTx(
+    client: PoolClient,
+    missionId: string,
+    telemetry: TelemetryAlertInput,
+  ): Promise<EvaluateTelemetryAlertsResult> {
+    const created: Alert[] = [];
+    let resolvedCount = 0;
+
+    const altitudeTriggered =
+      telemetry.altitudeM != null &&
+      telemetry.altitudeM > this.thresholds.altitudeHighM;
+
+    const speedTriggered =
+      telemetry.speedMps != null &&
+      telemetry.speedMps > this.thresholds.speedHighMps;
+
+    const altitudeResult = await this.syncThresholdAlert(
+      client,
+      missionId,
+      "ALTITUDE_HIGH",
+      altitudeTriggered,
+      telemetry,
+      {
+        severity: "warning",
+        message: "Altitude exceeded configured threshold",
+        metadata: {
+          threshold: this.thresholds.altitudeHighM,
+          actual: telemetry.altitudeM ?? null,
+          unit: "m",
+          telemetryTimestamp: telemetry.timestamp,
+        },
+      },
+    );
+
+    created.push(...altitudeResult.created);
+    resolvedCount += altitudeResult.resolvedCount;
+
+    const speedResult = await this.syncThresholdAlert(
+      client,
+      missionId,
+      "SPEED_HIGH",
+      speedTriggered,
+      telemetry,
+      {
+        severity: "critical",
+        message: "Speed exceeded configured threshold",
+        metadata: {
+          threshold: this.thresholds.speedHighMps,
+          actual: telemetry.speedMps ?? null,
+          unit: "mps",
+          telemetryTimestamp: telemetry.timestamp,
+        },
+      },
+    );
+
+    created.push(...speedResult.created);
+    resolvedCount += speedResult.resolvedCount;
+
+    return {
+      created,
+      resolvedCount,
+    };
   }
 
   private async syncThresholdAlert(
