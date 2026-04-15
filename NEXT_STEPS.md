@@ -1,30 +1,25 @@
 # NEXT STEP
 
 ## Goal
-Prove telemetry-to-alert behavior end-to-end.
+Expose alerts via API.
 
 ---
 
-## Implementation
+## Build
 
-### Add integration tests in `src/tests/telemetry.test.ts`
-
-1. POST telemetry with altitude above threshold
-   - assert ALTITUDE_HIGH alert created
-
-2. POST telemetry with normalized altitude
-   - assert ALTITUDE_HIGH alert resolved
+### GET /missions/:id/alerts
+- return alerts for mission
+- ordered by triggeredAt DESC
 
 ---
 
 ## Do NOT do
-- No new alert types
-- No alert endpoints yet
 - No replay system yet
+- No UI
+- No auth
 
 ---
 
 ## Done When
-- Real telemetry writes create alerts
-- Real telemetry normalization resolves alerts
+- Alerts can be fetched via API
 - Covered by integration tests

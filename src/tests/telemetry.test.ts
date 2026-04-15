@@ -223,6 +223,57 @@ describe("telemetry integration", () => {
     expect(await getMissionStatus(missionId)).toBe("active");
   });
 
+it("POST /missions/:id/telemetry processes multiple records and resolves alerts within a single batch", async () => {
+  const missionId = randomUUID();
+
+  await insertMission({
+    id: missionId,
+    status: "active",
+  });
+
+  const response = await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        // First record triggers alert
+        {
+          timestamp: "2026-04-15T10:00:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 1200,
+        },
+        // Second record resolves it
+        {
+          timestamp: "2026-04-15T10:01:00Z",
+          lat: 51.5,
+          lng: -0.1,
+          altitudeM: 900,
+        },
+      ],
+    });
+
+  expect(response.status).toBe(202);
+
+  // ✅ telemetry persisted
+  const telemetryRows = await getTelemetryRows(missionId);
+  expect(telemetryRows).toHaveLength(2);
+
+  // ✅ alert created then resolved within same batch
+  const alerts = await getAlertsForMission(missionId);
+
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0].alert_type).toBe("ALTITUDE_HIGH");
+  expect(alerts[0].status).toBe("resolved");
+
+  expect(new Date(alerts[0].triggered_at).toISOString()).toBe(
+    "2026-04-15T10:00:00.000Z",
+  );
+
+  expect(new Date(alerts[0].resolved_at!).toISOString()).toBe(
+    "2026-04-15T10:01:00.000Z",
+  );
+});
+
 it("POST /missions/:id/telemetry resolves ALTITUDE_HIGH alert when altitude normalizes", async () => {
   const missionId = randomUUID();
 
