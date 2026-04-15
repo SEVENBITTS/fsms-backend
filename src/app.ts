@@ -18,6 +18,9 @@ import { MissionTelemetryService } from "./missions/mission-telemetry.service";
 import { MissionTelemetryController } from "./missions/mission-telemetry.controller";
 import { createMissionTelemetryRouter } from "./missions/mission-telemetry.routes";
 import { normalizeError } from "./utils/error-response";
+import { AlertRepository } from "./alerts/alert.repository";
+import { AlertService } from "./alerts/alert.service";
+
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -57,11 +60,15 @@ const missionController = new MissionController(missionService);
 
 const missionLifecyclePolicy = new MissionLifecyclePolicy();
 const missionTelemetryRepo = new MissionTelemetryRepository();
+const alertRepository = new AlertRepository();
+const alertService = new AlertService(pool, alertRepository);
+
 const missionTelemetryService = new MissionTelemetryService(
   pool,
   missionRepo,
   missionTelemetryRepo,
   missionLifecyclePolicy,
+  alertService,
 );
 const missionTelemetryController = new MissionTelemetryController(
   missionTelemetryService,
