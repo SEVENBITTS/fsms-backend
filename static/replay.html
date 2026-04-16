@@ -34,7 +34,12 @@
       --radius-md: 10px;
       --radius-lg: 12px;
       --radius-xl: 14px;
-    }
+    
+      --overlay-gap: 16px;
+      --hud-width: 420px;
+      --summary-width: 420px;
+      --eventlog-width: 340px;
+}
 
     * {
       box-sizing: border-box;
@@ -95,21 +100,27 @@
       cursor: not-allowed;
     }
 
-    #hud {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      z-index: 30;
-      min-width: 420px;
-      max-width: 520px;
-      padding: 14px;
-      border: 1px solid var(--border-soft);
-      border-radius: var(--radius-lg);
-      background: var(--bg-dark-soft);
-      color: var(--text-light);
-      box-shadow: var(--shadow-heavy);
-      font-size: 12px;
-    }
+   #hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 30;
+
+  /* ✅ responsive width system */
+  width: min(var(--hud-width), calc(100vw - 32px));
+  min-width: 320px;
+  max-width: 520px;
+
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-dark-soft);
+  color: var(--text-light);
+  box-shadow: var(--shadow-heavy);
+  font-size: 12px;
+
+  backdrop-filter: blur(6px);
+}
 
     .hud-header {
       display: flex;
@@ -185,12 +196,12 @@
     .risk-fill-critical { background: var(--critical); }
 
     #warn-strip-root {
-      position: absolute;
-      right: 20px;
-      bottom: 60px;
-      left: 20px;
-      z-index: 7;
-    }
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 70px;
+  z-index: 20;
+}
 
     .warnstrip {
       display: none;
@@ -291,20 +302,28 @@
       border-top: 1px solid #ddd;
     }
 
-    #event-log-panel {
-      position: absolute;
-      right: 20px;
-      bottom: 120px;
-      z-index: 50;
-      width: 360px;
-      overflow: hidden;
-      border: 1px solid var(--border-soft);
-      border-radius: var(--radius-xl);
-      background: var(--bg-dark);
-      color: var(--text-light);
-      box-shadow: var(--shadow-heavy);
-      font-size: 12px;
-    }
+  #event-log-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: auto;
+  z-index: 50;
+
+  /* ✅ responsive width */
+  width: min(var(--eventlog-width), calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 32px));
+
+  overflow: hidden;
+
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xl);
+  background: var(--bg-dark);
+  color: var(--text-light);
+  box-shadow: var(--shadow-heavy);
+  font-size: 12px;
+
+  backdrop-filter: blur(6px);
+}
 
     .event-log-header {
       display: flex;
@@ -329,10 +348,10 @@
     }
 
     #event-log {
-      max-height: 360px;
-      overflow-y: auto;
-      padding: 10px;
-    }
+  max-height: calc(min(420px, calc(100vh - 32px)) - 48px);
+  overflow-y: auto;
+  padding: 10px;
+}
 
     #event-log::-webkit-scrollbar {
       width: 8px;
@@ -443,16 +462,17 @@
 
 .summary-panel {
   position: absolute;
-  top: 20px;
-  left: 560px; /* pushes it away from HUD */
-  z-index: 9999;
+  top: 16px;
+  left: calc(16px + var(--hud-width) + var(--overlay-gap));
+  z-index: 40;
 
   display: flex;
   flex-direction: column;
   gap: 12px;
 
-  width: 560px;
-  max-width: calc(100% - 580px);
+  width: clamp(320px, calc(100vw - var(--hud-width) - var(--eventlog-width) - 64px), var(--summary-width));
+max-width: 520px;
+
 
   animation: fadeIn 0.4s ease;
 }
@@ -539,11 +559,6 @@
   opacity: 0.9;
 }
 
-.summary-subtitle:has(:contains("Unknown")) {
-  opacity: 0.6;
-  font-style: italic;
-}
-
 .summary-subtitle.copyable {
   transition: color 0.2s ease, text-shadow 0.2s ease;
 }
@@ -618,23 +633,49 @@
   margin-top: 12px;
 }
 
-/* === Scenario Side Panel === */
 .side-panel {
   position: absolute;
-  top: 20px;
-  left: 1140px; /* 560 panel left + 560 panel width + ~20 gap */
+  top: 16px;
+
+  /* ✅ dynamic positioning between summary and event log */
+  right: calc(16px + var(--eventlog-width) + var(--overlay-gap));
+  animation: slideUp 0.25s ease;
+  z-index: 10000;
+
   width: 320px;
-  max-width: calc(100vw - 1160px);
-  max-height: 420px;
+  max-width: min(360px, calc(100vw - var(--eventlog-width) - 48px));
+  max-height: min(420px, calc(100vh - 32px));
+
   overflow-y: auto;
   padding: 16px;
+
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(15, 18, 28, 0.97);
   color: #e5e7eb;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(10px);
-  z-index: 10000;
+/* ✅ ADD THIS RIGHT AFTER */
+  animation: slideUp 0.25s ease;
+}
+
+/* Closing state */
+.side-panel.closing {
+  animation: slideDown 0.2s ease forwards;
+}
+
+.side-panel {
+  will-change: transform, opacity;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(20px); opacity: 0; }
 }
 
 .side-panel-header {
@@ -832,19 +873,76 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translate(-50%, -10px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 1200px) {
   .summary-panel {
-    width: calc(100% - 24px);
+    top: 260px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+  }
+
+@media (max-width: 1200px) {
+  /* existing rules */
+}
+
+/* ✅ ADD HERE */
+@media (max-width: 768px) {
+  #hud,
+  .summary-panel,
+  #event-log-panel,
+  .side-panel {
     left: 12px;
+    right: 12px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  #hud {
     top: 12px;
+  }
+
+  .summary-panel {
+    top: 270px;
+  }
+
+  #event-log-panel {
+    top: auto;
+    bottom: 140px;
+    max-height: 220px;
+  }
+
+  .side-panel {
+    bottom: 12px;
   }
 
   .status-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+
+  /* Event log becomes right-docked but smaller */
+  #event-log-panel {
+    top: 16px;
+    right: 16px;
+    width: 280px;
+    max-height: 50vh;
+  }
+
+  /* Side panel becomes bottom drawer */
+  .side-panel {
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    max-width: none;
   }
 }
 
@@ -1029,6 +1127,7 @@ body {
   </div>
 
   <div id="hud"></div>
+  <div id="scenario-detail-mount"></div>
 
   <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
