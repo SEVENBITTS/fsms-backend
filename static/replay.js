@@ -82,10 +82,10 @@
         }
       }
 
-     function renderScenarioDetailPanel(scenario) {
-      if (!scenario) {
-        return "";
-      }
+    function renderScenarioDetailPanel(scenario) {
+  if (!scenario) {
+    return "";
+  }
 
   const detail = scenario.detail || {};
 
@@ -139,8 +139,21 @@ function selectScenario(scenarioId) {
 
 function closeScenarioPanel() {
   activeScenarioId = null;
-  renderScenarioList();
-  renderScenarioPanel();
+
+  const panel = document.getElementById("detailPanel");
+  if (!panel) {
+    renderScenarioList();
+    renderScenarioPanel();
+    return;
+  }
+
+  panel.classList.add("closing");
+
+  setTimeout(() => {
+    activeScenarioId = null;
+    renderScenarioList();
+    renderScenarioPanel();
+  }, 200);
 }
 
 function toggleSummaryCard(cardId) {
@@ -174,107 +187,80 @@ window.selectScenario = selectScenario;
 window.closeScenarioPanel = closeScenarioPanel;
 window.toggleSummaryCard = toggleSummaryCard;
 
-
 function positionScenarioPanel() {
   const panel = document.getElementById("detailPanel");
   const summaryCard = document.getElementById("card-scenarios");
   if (!panel || !summaryCard) return;
 
+  const isMobileLayout = window.innerWidth <= 1200;
+  if (isMobileLayout) return;
+
   const rect = summaryCard.getBoundingClientRect();
   const gap = 16;
+  const panelWidth = 320;
+  const viewportRight = window.innerWidth - 20;
 
   panel.style.position = "fixed";
   panel.style.top = `${rect.top}px`;
   panel.style.left = `${rect.right + gap}px`;
-  panel.style.width = "320px";
+  panel.style.width = `${panelWidth}px`;
   panel.style.maxHeight = `${rect.height}px`;
-
-  const viewportRight = window.innerWidth - 20;
-  const panelWidth = 320;
 
   if (rect.right + gap + panelWidth > viewportRight) {
     panel.style.left = `${window.innerWidth - panelWidth - 20}px`;
   }
 }
 
-function formatDateOnly(value) {
-  if (!value) return "Unknown";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString();
-}
-
-function formatTimeOnly(value) {
-  if (!value) return "Unknown";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-}
-
-function formatDateTime(value) {
-  if (!value) return "Unknown";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString();
-}
-
-function updateScenarioSummaryMeta({
-  flightId,
-  flightTimestamp,
-  reportCreatedAt,
-  lastEventTime,
-  version
-} = {}) {
-  const flightEl = document.getElementById("summary-flight");
-  const flightDateEl = document.getElementById("summary-flight-date");
-  const flightTimeEl = document.getElementById("summary-flight-time");
-  const reportCreatedEl = document.getElementById("summary-report-created");
-  const lastEventTimeEl = document.getElementById("summary-last-event-time");
-  const versionEl = document.getElementById("summary-version");
-
-  if (flightEl) {
-    flightEl.textContent = `Flight: ${flightId || "Unknown"}`;
-  }
-
-  if (flightDateEl) {
-    flightDateEl.textContent = `Flight date: ${formatDateOnly(flightTimestamp)}`;
-  }
-
-  if (flightTimeEl) {
-    flightTimeEl.textContent = `Flight time: ${formatTimeOnly(flightTimestamp)}`;
-  }
-
-  if (reportCreatedEl) {
-    reportCreatedEl.textContent = `Report created: ${formatDateTime(reportCreatedAt)}`;
-  }
-
-  if (lastEventTimeEl) {
-    lastEventTimeEl.textContent = `Last event time: ${formatDateTime(lastEventTime)}`;
-  }
-
-  if (versionEl) {
-    versionEl.textContent = `Report version: ${version || "Unknown"}`;
-  }
-}
-
 function renderScenarioPanel() {
-  const existing = document.getElementById("detailPanel");
-  if (existing) {
-    existing.remove();
-  }
+  const mount = document.getElementById("scenario-detail-mount");
+  if (!mount) return;
 
   const activeScenario =
-    latestScenarios.find(s => s.scenario_id === activeScenarioId) || null;
+    latestScenarios.find((s) => s.scenario_id === activeScenarioId) || null;
 
-  if (!activeScenario) return;
+  const existingPanel = document.getElementById("detailPanel");
 
-  document.body.insertAdjacentHTML("beforeend", renderScenarioDetailPanel(activeScenario));
+  if (!activeScenario) {
+    mount.innerHTML = "";
+    return;
+  }
+
+  if (existingPanel) {
+    existingPanel.classList.add("closing");
+
+    setTimeout(() => {
+      mount.innerHTML = renderScenarioDetailPanel(activeScenario);
+      positionScenarioPanel();
+    }, 200);
+
+    return;
+  }
+
+  mount.innerHTML = renderScenarioDetailPanel(activeScenario);
   positionScenarioPanel();
 }
+
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeScenarioPanel();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  const panel = document.getElementById("detailPanel");
+  if (!panel) return;
+
+  const clickedInsidePanel = panel.contains(e.target);
+  const clickedScenarioRow = e.target.closest(".scenario-row");
+  const clickedCloseButton = e.target.closest(".side-panel-close");
+
+  if (clickedCloseButton) return;
+
+  if (!clickedInsidePanel && !clickedScenarioRow) {
+    closeScenarioPanel();
+  }
+});
 
 window.addEventListener("resize", positionScenarioPanel);
 
@@ -3473,10 +3459,6 @@ if (versionEl) {
     safeSetLayerVisibility(map, "airspace-3d", FEATURES.cone);
   }
 
-  
-
-    
-
  function renderFrame(frame, complianceState, predictionState, riskState) {
   renderMapFrame(frame, complianceState, predictionState, riskState);
 
@@ -3522,31 +3504,49 @@ if (versionEl) {
   };
 }
 
-  // =========================
-  // MAIN LOOP
-  // =========================
-  function loop(now) {
-    if (!map || !mapReady) {
-      requestAnimationFrame(loop);
-      return;
-    }
-
-    const styleReady = map.isStyleLoaded?.() ?? true;
-    if (!styleReady) {
-      requestAnimationFrame(loop);
-      return;
-    }
-
-    const frame = computeReplayFrame(now);
-    const complianceState = computeComplianceState(frame);
-    const predictionState = computePredictionState(frame, complianceState);
-    const riskState = computeRiskState(frame, complianceState, predictionState);
-
-    updateReplayEvents(frame, complianceState, predictionState, riskState);
-    renderFrame(frame, complianceState, predictionState, riskState);
-
-    requestAnimationFrame(loop);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeScenarioPanel();
   }
+});
+
+document.addEventListener("click", (e) => {
+  const panel = document.getElementById("detailPanel");
+  if (!panel) return;
+
+  const clickedInside = panel.contains(e.target);
+  const clickedScenario = e.target.closest(".scenario-row");
+
+  if (!clickedInside && !clickedScenario) {
+    closeScenarioPanel();
+  }
+});
+
+// =========================
+// MAIN LOOP
+// =========================
+function loop(now) {
+  if (!map || !mapReady) {
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  const styleReady = map.isStyleLoaded?.() ?? true;
+  if (!styleReady) {
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  const frame = computeReplayFrame(now);
+  const complianceState = computeComplianceState(frame);
+  const predictionState = computePredictionState(frame, complianceState);
+  const riskState = computeRiskState(frame, complianceState, predictionState);
+
+  updateReplayEvents(frame, complianceState, predictionState, riskState);
+  renderFrame(frame, complianceState, predictionState, riskState);
+
+  requestAnimationFrame(loop);
+}
 
       // =========================
       // CONTROLS
