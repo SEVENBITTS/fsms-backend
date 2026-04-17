@@ -228,6 +228,14 @@ Planned improvements include:
 
 ---
 
+# Product Direction
+
+The current FSMS product direction and prototype boundaries are documented in:
+
+- `docs/FSMS_DIRECTION.md`
+
+---
+
 # License
 
 Internal project – FSMS prototype.
