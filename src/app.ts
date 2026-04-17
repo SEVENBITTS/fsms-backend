@@ -23,6 +23,9 @@ import { AlertService } from "./alerts/alert.service";
 
 import { AlertController } from "./alerts/alert.controller";
 import { createAlertRouter } from "./alerts/alert.routes";
+import { MissionReplayService } from "./replay/mission-replay.service";
+import { MissionReplayController } from "./replay/mission-replay.controller";
+import { createMissionReplayRouter } from "./replay/mission-replay.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -78,10 +81,17 @@ const missionTelemetryService = new MissionTelemetryService(
 const missionTelemetryController = new MissionTelemetryController(
   missionTelemetryService,
 );
+const missionReplayService = new MissionReplayService(
+  pool,
+  missionRepo,
+  missionTelemetryRepo,
+);
+const missionReplayController = new MissionReplayController(missionReplayService);
 
 const timelineService = new TimelineService(pool);
 
 app.use("/missions", createMissionRouter(missionController));
+app.use("/missions", createMissionReplayRouter(missionReplayController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/missions", createAlertRouter(alertController));
 app.use("/timeline", createTimelineRouter(timelineService));

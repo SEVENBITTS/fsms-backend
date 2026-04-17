@@ -84,3 +84,8 @@ export interface MissionTelemetryHistoryQuery {
   to?: string;
   limit?: number;
 }
+
+export interface MissionTelemetryRangeQuery {
+  from?: Date;
+  to?: Date;
+}

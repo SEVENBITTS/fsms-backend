@@ -1,5 +1,8 @@
 import type { PoolClient, QueryResultRow } from "pg";
-import type { MissionTelemetryRow } from "./mission-telemetry.types";
+import type {
+  MissionTelemetryRangeQuery,
+  MissionTelemetryRow,
+} from "./mission-telemetry.types";
 
 interface MissionTelemetryRowResult extends QueryResultRow {
   id: string;
@@ -135,6 +138,46 @@ export class MissionTelemetryRepository {
       where ${conditions.join(" and ")}
       order by recorded_at desc
       limit $${values.length}
+    `;
+
+    const result = await tx.query<MissionTelemetryRowResult>(sql, values);
+    return result.rows;
+  }
+
+  async findReplayByMissionId(
+    missionId: string,
+    tx: PoolClient,
+    options: MissionTelemetryRangeQuery,
+  ): Promise<MissionTelemetryRow[]> {
+    const conditions = [`mission_id = $1`];
+    const values: unknown[] = [missionId];
+
+    if (options.from) {
+      values.push(options.from);
+      conditions.push(`recorded_at >= $${values.length}`);
+    }
+
+    if (options.to) {
+      values.push(options.to);
+      conditions.push(`recorded_at <= $${values.length}`);
+    }
+
+    const sql = `
+      select
+        id,
+        mission_id as "missionId",
+        recorded_at as "recordedAt",
+        lat,
+        lng,
+        altitude_m as "altitudeM",
+        speed_mps as "speedMps",
+        heading_deg as "headingDeg",
+        progress_pct as "progressPct",
+        payload,
+        created_at as "createdAt"
+      from mission_telemetry
+      where ${conditions.join(" and ")}
+      order by recorded_at asc, created_at asc, id asc
     `;
 
     const result = await tx.query<MissionTelemetryRowResult>(sql, values);
