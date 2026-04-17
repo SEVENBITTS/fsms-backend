@@ -1,5 +1,6 @@
 import type { PlatformReadinessCheck } from "../platforms/platform.types";
 import type { PilotReadinessCheck } from "../pilots/pilot.types";
+import type { MissionRiskAssessment } from "../mission-risk/mission-risk.types";
 
 export type MissionReadinessResult = "pass" | "warning" | "fail";
 
@@ -13,17 +14,21 @@ export type MissionReadinessReasonCode =
   | "MISSION_PILOT_WARNING"
   | "MISSION_PILOT_FAILED"
   | "MISSION_PILOT_NOT_ASSIGNED"
-  | "MISSION_PILOT_NOT_FOUND";
+  | "MISSION_PILOT_NOT_FOUND"
+  | "MISSION_RISK_READY"
+  | "MISSION_RISK_WARNING"
+  | "MISSION_RISK_FAILED";
 
 export interface MissionReadinessReason {
   code: MissionReadinessReasonCode;
   severity: MissionReadinessResult;
   message: string;
-  source: "mission" | "platform" | "pilot";
+  source: "mission" | "platform" | "pilot" | "risk";
   relatedPlatformId?: string;
   relatedPlatformReasonCodes?: string[];
   relatedPilotId?: string;
   relatedPilotReasonCodes?: string[];
+  relatedRiskReasonCodes?: string[];
 }
 
 export interface MissionReadinessGate {
@@ -42,4 +47,5 @@ export interface MissionReadinessCheck {
   reasons: MissionReadinessReason[];
   platformReadiness: PlatformReadinessCheck | null;
   pilotReadiness: PilotReadinessCheck | null;
+  missionRisk: MissionRiskAssessment | null;
 }
