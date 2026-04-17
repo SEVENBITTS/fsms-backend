@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add pilot readiness assurance checks so mission gates can combine platform and operator fitness.",
+ "nextBuildStep": "Add mission risk scoring inputs so mission gates can combine platform, pilot, and operational risk.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -30,6 +30,10 @@ import { PlatformRepository } from "./platforms/platform.repository";
 import { PlatformService } from "./platforms/platform.service";
 import { PlatformController } from "./platforms/platform.controller";
 import { createPlatformRouter } from "./platforms/platform.routes";
+import { PilotRepository } from "./pilots/pilot.repository";
+import { PilotService } from "./pilots/pilot.service";
+import { PilotController } from "./pilots/pilot.controller";
+import { createPilotRouter } from "./pilots/pilot.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -94,11 +98,15 @@ const timelineService = new TimelineService(pool);
 const platformRepository = new PlatformRepository();
 const platformService = new PlatformService(pool, platformRepository);
 const platformController = new PlatformController(platformService);
+const pilotRepository = new PilotRepository();
+const pilotService = new PilotService(pool, pilotRepository);
+const pilotController = new PilotController(pilotService);
 const missionService = new MissionService(
   db,
   missionRepo,
   missionEventRepo,
   platformService,
+  pilotService,
 );
 const missionController = new MissionController(missionService);
 
@@ -107,6 +115,7 @@ app.use("/missions", createMissionReplayRouter(missionReplayController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/missions", createAlertRouter(alertController));
 app.use("/platforms", createPlatformRouter(platformController));
+app.use("/pilots", createPilotRouter(pilotController));
 app.use("/timeline", createTimelineRouter(timelineService));
 app.get("/", (_req, res) => {
   res.status(200).send("FSMS backend is running");

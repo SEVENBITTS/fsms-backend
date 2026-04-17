@@ -7,6 +7,8 @@ import { runMigrations } from "../migrations/runMigrations";
 const clearTables = async () => {
   await pool.query("delete from mission_events");
   await pool.query("delete from missions");
+  await pool.query("delete from pilot_readiness_evidence");
+  await pool.query("delete from pilots");
   await pool.query("delete from maintenance_records");
   await pool.query("delete from maintenance_schedules");
   await pool.query("delete from platforms");
@@ -22,10 +24,32 @@ const createPlatform = async (params: {
   return response.body.platform as { id: string };
 };
 
+const createReadyPilot = async () => {
+  const pilotResponse = await request(app).post("/pilots").send({
+    displayName: "Ready Pilot",
+    status: "active",
+  });
+
+  expect(pilotResponse.status).toBe(201);
+  const pilot = pilotResponse.body.pilot as { id: string };
+
+  const evidenceResponse = await request(app)
+    .post(`/pilots/${pilot.id}/readiness-evidence`)
+    .send({
+      evidenceType: "operator_authorisation",
+      title: "Current operator authorisation",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+  expect(evidenceResponse.status).toBe(201);
+  return pilot;
+};
+
 const insertMission = async (params: {
   id?: string;
   status?: string;
   platformId?: string | null;
+  pilotId?: string | null;
 }) => {
   const missionId = params.id ?? randomUUID();
 
@@ -36,15 +60,17 @@ const insertMission = async (params: {
       status,
       mission_plan_id,
       platform_id,
+      pilot_id,
       last_event_sequence_no
     )
-    values ($1, $2, $3, $4, $5)
+    values ($1, $2, $3, $4, $5, $6)
     `,
     [
       missionId,
       params.status ?? "submitted",
       "plan-1",
       params.platformId ?? null,
+      params.pilotId ?? null,
       0,
     ],
   );
@@ -52,7 +78,11 @@ const insertMission = async (params: {
   return missionId;
 };
 
-const countRows = async (params: { missionId: string; platformId?: string }) => {
+const countRows = async (params: {
+  missionId: string;
+  platformId?: string;
+  pilotId?: string;
+}) => {
   const result = await pool.query(
     `
     select
@@ -61,9 +91,11 @@ const countRows = async (params: { missionId: string; platformId?: string }) => 
       (select count(*)::int from mission_events where mission_id = $1) as mission_event_count,
       (select count(*)::int from platforms where id = $2) as platform_count,
       (select count(*)::int from maintenance_schedules where platform_id = $2) as schedule_count,
-      (select count(*)::int from maintenance_records where platform_id = $2) as record_count
+      (select count(*)::int from maintenance_records where platform_id = $2) as record_count,
+      (select count(*)::int from pilots where id = $3) as pilot_count,
+      (select count(*)::int from pilot_readiness_evidence where pilot_id = $3) as pilot_evidence_count
     `,
-    [params.missionId, params.platformId ?? null],
+    [params.missionId, params.platformId ?? null, params.pilotId ?? null],
   );
 
   return result.rows[0] as {
@@ -73,6 +105,8 @@ const countRows = async (params: { missionId: string; platformId?: string }) => 
     platform_count: number;
     schedule_count: number;
     record_count: number;
+    pilot_count: number;
+    pilot_evidence_count: number;
   };
 };
 
@@ -94,8 +128,16 @@ describe("mission readiness platform gate integration", () => {
       name: "Mission Ready UAV",
       status: "active",
     });
-    const missionId = await insertMission({ platformId: platform.id });
-    const before = await countRows({ missionId, platformId: platform.id });
+    const pilot = await createReadyPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
 
     const response = await request(app).get(`/missions/${missionId}/readiness`);
 
@@ -103,6 +145,7 @@ describe("mission readiness platform gate integration", () => {
     expect(response.body).toMatchObject({
       missionId,
       platformId: platform.id,
+      pilotId: pilot.id,
       result: "pass",
       gate: {
         result: "pass",
@@ -118,13 +161,28 @@ describe("mission readiness platform gate integration", () => {
           relatedPlatformId: platform.id,
           relatedPlatformReasonCodes: ["PLATFORM_ACTIVE"],
         },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+          relatedPilotId: pilot.id,
+          relatedPilotReasonCodes: ["PILOT_ACTIVE"],
+        },
       ],
       platformReadiness: {
         platformId: platform.id,
         result: "pass",
       },
+      pilotReadiness: {
+        pilotId: pilot.id,
+        result: "pass",
+      },
     });
-    expect(await countRows({ missionId, platformId: platform.id })).toEqual(before);
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
   });
 
   it("surfaces a warning when the assigned platform has overdue maintenance", async () => {
@@ -133,7 +191,11 @@ describe("mission readiness platform gate integration", () => {
       status: "active",
       totalFlightHours: 55,
     });
-    const missionId = await insertMission({ platformId: platform.id });
+    const pilot = await createReadyPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
 
     const scheduleResponse = await request(app)
       .post(`/platforms/${platform.id}/maintenance-schedules`)
@@ -143,7 +205,11 @@ describe("mission readiness platform gate integration", () => {
       });
 
     expect(scheduleResponse.status).toBe(201);
-    const before = await countRows({ missionId, platformId: platform.id });
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
 
     const response = await request(app).get(`/missions/${missionId}/readiness`);
 
@@ -151,6 +217,7 @@ describe("mission readiness platform gate integration", () => {
     expect(response.body).toMatchObject({
       missionId,
       platformId: platform.id,
+      pilotId: pilot.id,
       result: "warning",
       gate: {
         result: "warning",
@@ -166,13 +233,28 @@ describe("mission readiness platform gate integration", () => {
           relatedPlatformId: platform.id,
           relatedPlatformReasonCodes: ["PLATFORM_MAINTENANCE_DUE"],
         },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+          relatedPilotId: pilot.id,
+          relatedPilotReasonCodes: ["PILOT_ACTIVE"],
+        },
       ],
       platformReadiness: {
         platformId: platform.id,
         result: "warning",
       },
+      pilotReadiness: {
+        pilotId: pilot.id,
+        result: "pass",
+      },
     });
-    expect(await countRows({ missionId, platformId: platform.id })).toEqual(before);
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
   });
 
   it.each([
@@ -189,8 +271,16 @@ describe("mission readiness platform gate integration", () => {
       name: `${status} UAV`,
       status,
     });
-    const missionId = await insertMission({ platformId: platform.id });
-    const before = await countRows({ missionId, platformId: platform.id });
+    const pilot = await createReadyPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
 
     const response = await request(app).get(`/missions/${missionId}/readiness`);
 
@@ -198,6 +288,7 @@ describe("mission readiness platform gate integration", () => {
     expect(response.body).toMatchObject({
       missionId,
       platformId: platform.id,
+      pilotId: pilot.id,
       result: "fail",
       gate: {
         result: "fail",
@@ -213,18 +304,37 @@ describe("mission readiness platform gate integration", () => {
           relatedPlatformId: platform.id,
           relatedPlatformReasonCodes: [platformCode],
         },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+          relatedPilotId: pilot.id,
+          relatedPilotReasonCodes: ["PILOT_ACTIVE"],
+        },
       ],
       platformReadiness: {
         platformId: platform.id,
         result: "fail",
       },
+      pilotReadiness: {
+        pilotId: pilot.id,
+        result: "pass",
+      },
     });
-    expect(await countRows({ missionId, platformId: platform.id })).toEqual(before);
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
   });
 
   it("fails explicitly when the mission has no assigned platform", async () => {
-    const missionId = await insertMission({ platformId: null });
-    const before = await countRows({ missionId });
+    const pilot = await createReadyPilot();
+    const missionId = await insertMission({
+      platformId: null,
+      pilotId: pilot.id,
+    });
+    const before = await countRows({ missionId, pilotId: pilot.id });
 
     const response = await request(app).get(`/missions/${missionId}/readiness`);
 
@@ -232,6 +342,7 @@ describe("mission readiness platform gate integration", () => {
     expect(response.body).toMatchObject({
       missionId,
       platformId: null,
+      pilotId: pilot.id,
       result: "fail",
       gate: {
         result: "fail",
@@ -245,10 +356,21 @@ describe("mission readiness platform gate integration", () => {
           severity: "fail",
           source: "mission",
         },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+          relatedPilotId: pilot.id,
+          relatedPilotReasonCodes: ["PILOT_ACTIVE"],
+        },
       ],
       platformReadiness: null,
+      pilotReadiness: {
+        pilotId: pilot.id,
+        result: "pass",
+      },
     });
-    expect(await countRows({ missionId })).toEqual(before);
+    expect(await countRows({ missionId, pilotId: pilot.id })).toEqual(before);
   });
 
   it("fails explicitly when a candidate platform override is unknown", async () => {
@@ -256,9 +378,17 @@ describe("mission readiness platform gate integration", () => {
       name: "Assigned UAV",
       status: "active",
     });
+    const pilot = await createReadyPilot();
     const missingPlatformId = randomUUID();
-    const missionId = await insertMission({ platformId: platform.id });
-    const before = await countRows({ missionId, platformId: platform.id });
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
 
     const response = await request(app)
       .get(`/missions/${missionId}/readiness`)
@@ -268,6 +398,7 @@ describe("mission readiness platform gate integration", () => {
     expect(response.body).toMatchObject({
       missionId,
       platformId: missingPlatformId,
+      pilotId: pilot.id,
       result: "fail",
       gate: {
         result: "fail",
@@ -282,9 +413,185 @@ describe("mission readiness platform gate integration", () => {
           source: "mission",
           relatedPlatformId: missingPlatformId,
         },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+          relatedPilotId: pilot.id,
+          relatedPilotReasonCodes: ["PILOT_ACTIVE"],
+        },
       ],
       platformReadiness: null,
+      pilotReadiness: {
+        pilotId: pilot.id,
+        result: "pass",
+      },
+    });
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
+  });
+
+  it("fails the combined mission gate when the assigned pilot has expired evidence", async () => {
+    const platform = await createPlatform({
+      name: "Ready UAV",
+      status: "active",
+    });
+    const pilotResponse = await request(app).post("/pilots").send({
+      displayName: "Expired Evidence Pilot",
+      status: "active",
+    });
+    expect(pilotResponse.status).toBe(201);
+    const pilot = pilotResponse.body.pilot as { id: string };
+
+    await request(app)
+      .post(`/pilots/${pilot.id}/readiness-evidence`)
+      .send({
+        evidenceType: "operator_authorisation",
+        title: "Expired operator authorisation",
+        expiresAt: "2020-01-01T00:00:00.000Z",
+      });
+
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+
+    const response = await request(app).get(`/missions/${missionId}/readiness`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      result: "fail",
+      gate: {
+        result: "fail",
+        blocksApproval: true,
+        blocksDispatch: true,
+        requiresReview: false,
+      },
+      reasons: [
+        {
+          code: "MISSION_PLATFORM_READY",
+          severity: "pass",
+          source: "platform",
+        },
+        {
+          code: "MISSION_PILOT_FAILED",
+          severity: "fail",
+          source: "pilot",
+          relatedPilotId: pilot.id,
+          relatedPilotReasonCodes: [
+            "PILOT_EVIDENCE_MISSING",
+            "PILOT_EVIDENCE_EXPIRED",
+          ],
+        },
+      ],
+      platformReadiness: {
+        result: "pass",
+      },
+      pilotReadiness: {
+        pilotId: pilot.id,
+        result: "fail",
+      },
+    });
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
+  });
+
+  it("fails explicitly when the mission has no assigned pilot", async () => {
+    const platform = await createPlatform({
+      name: "Ready UAV",
+      status: "active",
+    });
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: null,
+    });
+    const before = await countRows({ missionId, platformId: platform.id });
+
+    const response = await request(app).get(`/missions/${missionId}/readiness`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      missionId,
+      platformId: platform.id,
+      pilotId: null,
+      result: "fail",
+      reasons: [
+        {
+          code: "MISSION_PLATFORM_READY",
+          severity: "pass",
+          source: "platform",
+        },
+        {
+          code: "MISSION_PILOT_NOT_ASSIGNED",
+          severity: "fail",
+          source: "mission",
+        },
+      ],
+      pilotReadiness: null,
     });
     expect(await countRows({ missionId, platformId: platform.id })).toEqual(before);
+  });
+
+  it("fails explicitly when a candidate pilot override is unknown", async () => {
+    const platform = await createPlatform({
+      name: "Ready UAV",
+      status: "active",
+    });
+    const pilot = await createReadyPilot();
+    const missingPilotId = randomUUID();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+
+    const response = await request(app)
+      .get(`/missions/${missionId}/readiness`)
+      .query({ pilotId: missingPilotId });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      missionId,
+      platformId: platform.id,
+      pilotId: missingPilotId,
+      result: "fail",
+      reasons: [
+        {
+          code: "MISSION_PLATFORM_READY",
+          severity: "pass",
+          source: "platform",
+        },
+        {
+          code: "MISSION_PILOT_NOT_FOUND",
+          severity: "fail",
+          source: "mission",
+          relatedPilotId: missingPilotId,
+        },
+      ],
+      pilotReadiness: null,
+    });
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
   });
 });

@@ -8,11 +8,14 @@ import {
 } from "../modules/missions/domain/missionLifecycle";
 import { PlatformNotFoundError } from "../platforms/platform.errors";
 import { PlatformService } from "../platforms/platform.service";
+import { PilotNotFoundError } from "../pilots/pilot.errors";
+import { PilotService } from "../pilots/pilot.service";
 import type {
   MissionReadinessCheck,
   MissionReadinessReason,
   MissionReadinessResult,
 } from "./mission-readiness.types";
+import type { PilotReadinessResult } from "../pilots/pilot.types";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
@@ -50,6 +53,7 @@ export class MissionService {
     private readonly missionRepo: MissionRepository,
     private readonly missionEventRepo: MissionEventRepository,
     private readonly platformService?: PlatformService,
+    private readonly pilotService?: PilotService,
   ) {}
 
   async submitMission(params: {
@@ -236,83 +240,106 @@ export class MissionService {
   async checkMissionReadiness(params: {
     missionId: string;
     platformId?: string;
+    pilotId?: string;
   }): Promise<MissionReadinessCheck> {
     const mission = await this.db.transaction(async (tx) =>
       this.missionRepo.getById(tx, params.missionId),
     );
     const platformId = params.platformId ?? mission.platform_id;
+    const pilotId = params.pilotId ?? mission.pilot_id;
+    const reasons: MissionReadinessReason[] = [];
+    let platformReadiness: MissionReadinessCheck["platformReadiness"] = null;
+    let pilotReadiness: MissionReadinessCheck["pilotReadiness"] = null;
 
     if (!platformId) {
-      return this.buildMissionReadiness({
-        missionId: mission.id,
-        platformId: null,
-        reasons: [
-          {
-            code: "MISSION_PLATFORM_NOT_ASSIGNED",
-            severity: "fail",
-            message: "Mission has no assigned platform for readiness evaluation",
-            source: "mission",
-          },
-        ],
-        platformReadiness: null,
+      reasons.push({
+        code: "MISSION_PLATFORM_NOT_ASSIGNED",
+        severity: "fail",
+        message: "Mission has no assigned platform for readiness evaluation",
+        source: "mission",
       });
-    }
-
-    if (!this.platformService) {
-      return this.buildMissionReadiness({
-        missionId: mission.id,
-        platformId,
-        reasons: [
-          {
+    } else if (!this.platformService) {
+      reasons.push({
             code: "MISSION_PLATFORM_NOT_FOUND",
             severity: "fail",
             message: "Platform readiness service is not available",
             source: "mission",
             relatedPlatformId: platformId,
-          },
-        ],
-        platformReadiness: null,
       });
-    }
+    } else {
+      try {
+        platformReadiness =
+          await this.platformService.checkPlatformReadiness(platformId);
+        reasons.push(
+          this.mapPlatformReadinessReason(
+            platformReadiness.result,
+            platformId,
+            platformReadiness.reasons.map((reason) => reason.code),
+          ),
+        );
+      } catch (error) {
+        if (!(error instanceof PlatformNotFoundError)) {
+          throw error;
+        }
 
-    try {
-      const platformReadiness =
-        await this.platformService.checkPlatformReadiness(platformId);
-      const platformReasonCodes = platformReadiness.reasons.map(
-        (reason) => reason.code,
-      );
-      const reason = this.mapPlatformReadinessReason(
-        platformReadiness.result,
-        platformId,
-        platformReasonCodes,
-      );
-
-      return this.buildMissionReadiness({
-        missionId: mission.id,
-        platformId,
-        reasons: [reason],
-        platformReadiness,
-      });
-    } catch (error) {
-      if (error instanceof PlatformNotFoundError) {
-        return this.buildMissionReadiness({
-          missionId: mission.id,
-          platformId,
-          reasons: [
-            {
+        reasons.push({
               code: "MISSION_PLATFORM_NOT_FOUND",
               severity: "fail",
               message: `Assigned platform was not found: ${platformId}`,
               source: "mission",
               relatedPlatformId: platformId,
-            },
-          ],
-          platformReadiness: null,
         });
       }
-
-      throw error;
     }
+
+    if (!pilotId) {
+      reasons.push({
+        code: "MISSION_PILOT_NOT_ASSIGNED",
+        severity: "fail",
+        message: "Mission has no assigned pilot for readiness evaluation",
+        source: "mission",
+      });
+    } else if (!this.pilotService) {
+      reasons.push({
+        code: "MISSION_PILOT_NOT_FOUND",
+        severity: "fail",
+        message: "Pilot readiness service is not available",
+        source: "mission",
+        relatedPilotId: pilotId,
+      });
+    } else {
+      try {
+        pilotReadiness = await this.pilotService.checkPilotReadiness(pilotId);
+        reasons.push(
+          this.mapPilotReadinessReason(
+            pilotReadiness.result,
+            pilotId,
+            pilotReadiness.reasons.map((reason) => reason.code),
+          ),
+        );
+      } catch (error) {
+        if (!(error instanceof PilotNotFoundError)) {
+          throw error;
+        }
+
+        reasons.push({
+          code: "MISSION_PILOT_NOT_FOUND",
+          severity: "fail",
+          message: `Assigned pilot was not found: ${pilotId}`,
+          source: "mission",
+          relatedPilotId: pilotId,
+        });
+      }
+    }
+
+    return this.buildMissionReadiness({
+      missionId: mission.id,
+      platformId,
+      pilotId,
+      reasons,
+      platformReadiness,
+      pilotReadiness,
+    });
   }
 
   async getMissionEvents(
@@ -386,17 +413,57 @@ export class MissionService {
     };
   }
 
+  private mapPilotReadinessReason(
+    result: PilotReadinessResult,
+    pilotId: string,
+    pilotReasonCodes: string[],
+  ): MissionReadinessReason {
+    if (result === "fail") {
+      return {
+        code: "MISSION_PILOT_FAILED",
+        severity: "fail",
+        message: "Assigned pilot fails readiness and blocks mission approval or dispatch",
+        source: "pilot",
+        relatedPilotId: pilotId,
+        relatedPilotReasonCodes: pilotReasonCodes,
+      };
+    }
+
+    if (result === "warning") {
+      return {
+        code: "MISSION_PILOT_WARNING",
+        severity: "warning",
+        message: "Assigned pilot has readiness warnings requiring review before approval or dispatch",
+        source: "pilot",
+        relatedPilotId: pilotId,
+        relatedPilotReasonCodes: pilotReasonCodes,
+      };
+    }
+
+    return {
+      code: "MISSION_PILOT_READY",
+      severity: "pass",
+      message: "Assigned pilot passes readiness for mission approval and dispatch",
+      source: "pilot",
+      relatedPilotId: pilotId,
+      relatedPilotReasonCodes: pilotReasonCodes,
+    };
+  }
+
   private buildMissionReadiness(params: {
     missionId: string;
     platformId: string | null;
+    pilotId: string | null;
     reasons: MissionReadinessReason[];
     platformReadiness: MissionReadinessCheck["platformReadiness"];
+    pilotReadiness: MissionReadinessCheck["pilotReadiness"];
   }): MissionReadinessCheck {
     const result = this.getMissionReadinessResult(params.reasons);
 
     return {
       missionId: params.missionId,
       platformId: params.platformId,
+      pilotId: params.pilotId,
       result,
       gate: {
         result,
@@ -406,6 +473,7 @@ export class MissionService {
       },
       reasons: params.reasons,
       platformReadiness: params.platformReadiness,
+      pilotReadiness: params.pilotReadiness,
     };
   }
 
