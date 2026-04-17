@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from airspace_compliance_inputs");
   await pool.query("delete from mission_risk_inputs");
   await pool.query("delete from mission_events");
   await pool.query("delete from missions");
@@ -127,6 +128,49 @@ const createHighRiskInput = async (missionId: string) => {
   return response.body.input as { id: string };
 };
 
+const createClearAirspaceInput = async (missionId: string) => {
+  const response = await request(app)
+    .post(`/missions/${missionId}/airspace-inputs`)
+    .send({
+      airspaceClass: "g",
+      maxAltitudeFt: 300,
+      restrictionStatus: "clear",
+      permissionStatus: "not_required",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.input as { id: string };
+};
+
+const createWarningAirspaceInput = async (missionId: string) => {
+  const response = await request(app)
+    .post(`/missions/${missionId}/airspace-inputs`)
+    .send({
+      airspaceClass: "d",
+      maxAltitudeFt: 350,
+      restrictionStatus: "permission_required",
+      permissionStatus: "pending",
+      controlledAirspace: true,
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.input as { id: string };
+};
+
+const createFailingAirspaceInput = async (missionId: string) => {
+  const response = await request(app)
+    .post(`/missions/${missionId}/airspace-inputs`)
+    .send({
+      airspaceClass: "d",
+      maxAltitudeFt: 300,
+      restrictionStatus: "prohibited",
+      permissionStatus: "denied",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.input as { id: string };
+};
+
 const countRows = async (params: {
   missionId: string;
   platformId?: string;
@@ -143,7 +187,8 @@ const countRows = async (params: {
       (select count(*)::int from maintenance_records where platform_id = $2) as record_count,
       (select count(*)::int from pilots where id = $3) as pilot_count,
       (select count(*)::int from pilot_readiness_evidence where pilot_id = $3) as pilot_evidence_count,
-      (select count(*)::int from mission_risk_inputs where mission_id = $1) as risk_input_count
+      (select count(*)::int from mission_risk_inputs where mission_id = $1) as risk_input_count,
+      (select count(*)::int from airspace_compliance_inputs where mission_id = $1) as airspace_input_count
     `,
     [params.missionId, params.platformId ?? null, params.pilotId ?? null],
   );
@@ -158,6 +203,7 @@ const countRows = async (params: {
     pilot_count: number;
     pilot_evidence_count: number;
     risk_input_count: number;
+    airspace_input_count: number;
   };
 };
 
@@ -185,6 +231,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -261,6 +308,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
 
     const scheduleResponse = await request(app)
       .post(`/platforms/${platform.id}/maintenance-schedules`)
@@ -352,6 +400,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -421,6 +470,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({ missionId, pilotId: pilot.id });
 
     const response = await request(app).get(`/missions/${missionId}/readiness`);
@@ -482,6 +532,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -567,6 +618,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -639,6 +691,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: null,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({ missionId, platformId: platform.id });
 
     const response = await request(app).get(`/missions/${missionId}/readiness`);
@@ -688,6 +741,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createLowRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -747,6 +801,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createModerateRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -810,6 +865,7 @@ describe("mission readiness platform gate integration", () => {
       pilotId: pilot.id,
     });
     await createHighRiskInput(missionId);
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -872,6 +928,7 @@ describe("mission readiness platform gate integration", () => {
       platformId: platform.id,
       pilotId: pilot.id,
     });
+    await createClearAirspaceInput(missionId);
     const before = await countRows({
       missionId,
       platformId: platform.id,
@@ -909,6 +966,208 @@ describe("mission readiness platform gate integration", () => {
         result: "fail",
         score: null,
         riskBand: null,
+        input: null,
+      },
+    });
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
+  });
+
+  it("surfaces airspace compliance warnings in the combined readiness gate", async () => {
+    const platform = await createPlatform({
+      name: "Ready UAV",
+      status: "active",
+    });
+    const pilot = await createReadyPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    await createLowRiskInput(missionId);
+    await createWarningAirspaceInput(missionId);
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+
+    const response = await request(app).get(`/missions/${missionId}/readiness`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      result: "warning",
+      gate: {
+        result: "warning",
+        blocksApproval: false,
+        blocksDispatch: false,
+        requiresReview: true,
+      },
+      reasons: [
+        {
+          code: "MISSION_PLATFORM_READY",
+          severity: "pass",
+          source: "platform",
+        },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+        },
+        {
+          code: "MISSION_RISK_READY",
+          severity: "pass",
+          source: "risk",
+        },
+        {
+          code: "MISSION_AIRSPACE_WARNING",
+          severity: "warning",
+          source: "airspace",
+          relatedAirspaceReasonCodes: [
+            "AIRSPACE_PERMISSION_PENDING",
+            "AIRSPACE_PERMISSION_REQUIRED",
+            "AIRSPACE_CONTROLLED",
+          ],
+        },
+      ],
+      airspaceCompliance: {
+        missionId,
+        result: "warning",
+      },
+    });
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
+  });
+
+  it("fails the combined readiness gate for prohibited airspace", async () => {
+    const platform = await createPlatform({
+      name: "Ready UAV",
+      status: "active",
+    });
+    const pilot = await createReadyPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    await createLowRiskInput(missionId);
+    await createFailingAirspaceInput(missionId);
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+
+    const response = await request(app).get(`/missions/${missionId}/readiness`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      result: "fail",
+      gate: {
+        result: "fail",
+        blocksApproval: true,
+        blocksDispatch: true,
+        requiresReview: false,
+      },
+      reasons: [
+        {
+          code: "MISSION_PLATFORM_READY",
+          severity: "pass",
+          source: "platform",
+        },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+        },
+        {
+          code: "MISSION_RISK_READY",
+          severity: "pass",
+          source: "risk",
+        },
+        {
+          code: "MISSION_AIRSPACE_FAILED",
+          severity: "fail",
+          source: "airspace",
+          relatedAirspaceReasonCodes: [
+            "AIRSPACE_PROHIBITED",
+            "AIRSPACE_PERMISSION_DENIED",
+          ],
+        },
+      ],
+      airspaceCompliance: {
+        missionId,
+        result: "fail",
+      },
+    });
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    })).toEqual(before);
+  });
+
+  it("fails explicitly when airspace compliance inputs are missing", async () => {
+    const platform = await createPlatform({
+      name: "Ready UAV",
+      status: "active",
+    });
+    const pilot = await createReadyPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    await createLowRiskInput(missionId);
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+
+    const response = await request(app).get(`/missions/${missionId}/readiness`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      result: "fail",
+      reasons: [
+        {
+          code: "MISSION_PLATFORM_READY",
+          severity: "pass",
+          source: "platform",
+        },
+        {
+          code: "MISSION_PILOT_READY",
+          severity: "pass",
+          source: "pilot",
+        },
+        {
+          code: "MISSION_RISK_READY",
+          severity: "pass",
+          source: "risk",
+        },
+        {
+          code: "MISSION_AIRSPACE_FAILED",
+          severity: "fail",
+          source: "airspace",
+          relatedAirspaceReasonCodes: ["AIRSPACE_INPUT_MISSING"],
+        },
+      ],
+      airspaceCompliance: {
+        missionId,
+        result: "fail",
         input: null,
       },
     });
