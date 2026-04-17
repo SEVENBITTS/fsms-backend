@@ -34,6 +34,10 @@ import { PilotRepository } from "./pilots/pilot.repository";
 import { PilotService } from "./pilots/pilot.service";
 import { PilotController } from "./pilots/pilot.controller";
 import { createPilotRouter } from "./pilots/pilot.routes";
+import { MissionRiskRepository } from "./mission-risk/mission-risk.repository";
+import { MissionRiskService } from "./mission-risk/mission-risk.service";
+import { MissionRiskController } from "./mission-risk/mission-risk.controller";
+import { createMissionRiskRouter } from "./mission-risk/mission-risk.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -101,16 +105,21 @@ const platformController = new PlatformController(platformService);
 const pilotRepository = new PilotRepository();
 const pilotService = new PilotService(pool, pilotRepository);
 const pilotController = new PilotController(pilotService);
+const missionRiskRepository = new MissionRiskRepository();
+const missionRiskService = new MissionRiskService(pool, missionRiskRepository);
+const missionRiskController = new MissionRiskController(missionRiskService);
 const missionService = new MissionService(
   db,
   missionRepo,
   missionEventRepo,
   platformService,
   pilotService,
+  missionRiskService,
 );
 const missionController = new MissionController(missionService);
 
 app.use("/missions", createMissionRouter(missionController));
+app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createMissionReplayRouter(missionReplayController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/missions", createAlertRouter(alertController));

@@ -10,12 +10,14 @@ import { PlatformNotFoundError } from "../platforms/platform.errors";
 import { PlatformService } from "../platforms/platform.service";
 import { PilotNotFoundError } from "../pilots/pilot.errors";
 import { PilotService } from "../pilots/pilot.service";
+import { MissionRiskService } from "../mission-risk/mission-risk.service";
 import type {
   MissionReadinessCheck,
   MissionReadinessReason,
   MissionReadinessResult,
 } from "./mission-readiness.types";
 import type { PilotReadinessResult } from "../pilots/pilot.types";
+import type { MissionRiskResult } from "../mission-risk/mission-risk.types";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
@@ -54,6 +56,7 @@ export class MissionService {
     private readonly missionEventRepo: MissionEventRepository,
     private readonly platformService?: PlatformService,
     private readonly pilotService?: PilotService,
+    private readonly missionRiskService?: MissionRiskService,
   ) {}
 
   async submitMission(params: {
@@ -250,6 +253,7 @@ export class MissionService {
     const reasons: MissionReadinessReason[] = [];
     let platformReadiness: MissionReadinessCheck["platformReadiness"] = null;
     let pilotReadiness: MissionReadinessCheck["pilotReadiness"] = null;
+    let missionRisk: MissionReadinessCheck["missionRisk"] = null;
 
     if (!platformId) {
       reasons.push({
@@ -332,6 +336,23 @@ export class MissionService {
       }
     }
 
+    if (!this.missionRiskService) {
+      reasons.push({
+        code: "MISSION_RISK_FAILED",
+        severity: "fail",
+        message: "Mission risk assessment service is not available",
+        source: "mission",
+      });
+    } else {
+      missionRisk = await this.missionRiskService.assessMissionRisk(mission.id);
+      reasons.push(
+        this.mapMissionRiskReason(
+          missionRisk.result,
+          missionRisk.reasons.map((reason) => reason.code),
+        ),
+      );
+    }
+
     return this.buildMissionReadiness({
       missionId: mission.id,
       platformId,
@@ -339,6 +360,7 @@ export class MissionService {
       reasons,
       platformReadiness,
       pilotReadiness,
+      missionRisk,
     });
   }
 
@@ -450,6 +472,39 @@ export class MissionService {
     };
   }
 
+  private mapMissionRiskReason(
+    result: MissionRiskResult,
+    riskReasonCodes: string[],
+  ): MissionReadinessReason {
+    if (result === "fail") {
+      return {
+        code: "MISSION_RISK_FAILED",
+        severity: "fail",
+        message: "Mission risk assessment fails and blocks approval or dispatch",
+        source: "risk",
+        relatedRiskReasonCodes: riskReasonCodes,
+      };
+    }
+
+    if (result === "warning") {
+      return {
+        code: "MISSION_RISK_WARNING",
+        severity: "warning",
+        message: "Mission risk assessment requires explicit review before approval or dispatch",
+        source: "risk",
+        relatedRiskReasonCodes: riskReasonCodes,
+      };
+    }
+
+    return {
+      code: "MISSION_RISK_READY",
+      severity: "pass",
+      message: "Mission risk assessment passes for planning",
+      source: "risk",
+      relatedRiskReasonCodes: riskReasonCodes,
+    };
+  }
+
   private buildMissionReadiness(params: {
     missionId: string;
     platformId: string | null;
@@ -457,6 +512,7 @@ export class MissionService {
     reasons: MissionReadinessReason[];
     platformReadiness: MissionReadinessCheck["platformReadiness"];
     pilotReadiness: MissionReadinessCheck["pilotReadiness"];
+    missionRisk: MissionReadinessCheck["missionRisk"];
   }): MissionReadinessCheck {
     const result = this.getMissionReadinessResult(params.reasons);
 
@@ -474,6 +530,7 @@ export class MissionService {
       reasons: params.reasons,
       platformReadiness: params.platformReadiness,
       pilotReadiness: params.pilotReadiness,
+      missionRisk: params.missionRisk,
     };
   }
 

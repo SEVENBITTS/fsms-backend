@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission risk scoring inputs so mission gates can combine platform, pilot, and operational risk.",
+ "nextBuildStep": "Add airspace compliance inputs so mission gates can combine readiness, risk, and operating constraints.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
