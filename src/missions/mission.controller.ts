@@ -75,10 +75,12 @@ export class MissionController {
     try {
       const missionId = this.requireString(req.params.missionId, "missionId");
       const platformId = this.optionalString(req.query.platformId);
+      const pilotId = this.optionalString(req.query.pilotId);
 
       const result = await this.missionService.checkMissionReadiness({
         missionId,
         platformId,
+        pilotId,
       });
 
       res.status(200).json(result);
