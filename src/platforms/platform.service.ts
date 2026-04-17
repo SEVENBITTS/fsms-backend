@@ -11,6 +11,9 @@ import type {
   CreatePlatformInput,
   MaintenanceSchedule,
   PlatformMaintenanceStatus,
+  PlatformReadinessCheck,
+  PlatformReadinessReason,
+  PlatformReadinessResult,
 } from "./platform.types";
 import {
   validateCreateMaintenanceRecordInput,
@@ -204,6 +207,20 @@ export class PlatformService {
     }
   }
 
+  async checkPlatformReadiness(
+    platformId: string,
+  ): Promise<PlatformReadinessCheck> {
+    const maintenanceStatus = await this.getMaintenanceStatus(platformId);
+    const reasons = this.buildReadinessReasons(maintenanceStatus);
+
+    return {
+      platformId,
+      result: this.getReadinessResult(reasons),
+      reasons,
+      maintenanceStatus,
+    };
+  }
+
   private computeNextDueAt(
     schedule: MaintenanceSchedule,
     completedAt: Date,
@@ -246,5 +263,74 @@ export class PlatformService {
       schedule.nextDueFlightHours <= platformTotalFlightHours;
 
     return dueByDate || dueByHours;
+  }
+
+  private buildReadinessReasons(
+    maintenanceStatus: PlatformMaintenanceStatus,
+  ): PlatformReadinessReason[] {
+    const { platform, dueSchedules } = maintenanceStatus;
+
+    if (platform.status === "grounded") {
+      return [
+        {
+          code: "PLATFORM_GROUNDED",
+          severity: "fail",
+          message: "Platform is grounded and is not fit for mission use",
+        },
+      ];
+    }
+
+    if (platform.status === "retired") {
+      return [
+        {
+          code: "PLATFORM_RETIRED",
+          severity: "fail",
+          message: "Platform is retired and is not fit for mission use",
+        },
+      ];
+    }
+
+    const reasons: PlatformReadinessReason[] = [];
+
+    if (platform.status === "inactive") {
+      reasons.push({
+        code: "PLATFORM_INACTIVE",
+        severity: "warning",
+        message: "Platform is inactive and requires review before mission use",
+      });
+    }
+
+    if (platform.status === "maintenance_due" || dueSchedules.length > 0) {
+      reasons.push({
+        code: "PLATFORM_MAINTENANCE_DUE",
+        severity: "warning",
+        message: "Platform has overdue maintenance requiring review before mission use",
+        relatedScheduleIds: dueSchedules.map((schedule) => schedule.id),
+      });
+    }
+
+    if (reasons.length === 0) {
+      reasons.push({
+        code: "PLATFORM_ACTIVE",
+        severity: "pass",
+        message: "Platform is active with no overdue maintenance",
+      });
+    }
+
+    return reasons;
+  }
+
+  private getReadinessResult(
+    reasons: PlatformReadinessReason[],
+  ): PlatformReadinessResult {
+    if (reasons.some((reason) => reason.severity === "fail")) {
+      return "fail";
+    }
+
+    if (reasons.some((reason) => reason.severity === "warning")) {
+      return "warning";
+    }
+
+    return "pass";
   }
 }

@@ -78,4 +78,19 @@ export class PlatformController {
       next(error);
     }
   };
+
+  getReadiness = async (
+    req: Request<PlatformIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const readiness = await this.platformService.checkPlatformReadiness(
+        req.params.id,
+      );
+      res.status(200).json(readiness);
+    } catch (error) {
+      next(error);
+    }
+  };
 }
