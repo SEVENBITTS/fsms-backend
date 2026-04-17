@@ -1,14 +1,31 @@
 import { PoolClient } from "pg";
 import { MissionSequenceAllocator } from "./mission-event.repository";
+import type { MissionStatus } from "./mission-telemetry.types";
 
 export type DbTx = PoolClient;
 
 export interface MissionRow {
   id: string;
-  status: string;
+  status: MissionStatus;
   mission_plan_id: string | null;
   last_event_sequence_no: number;
 }
+
+type AppError = Error & {
+  statusCode: number;
+  code: string;
+};
+
+const makeAppError = (
+  message: string,
+  statusCode: number,
+  code: string,
+): AppError => {
+  const error = new Error(message) as AppError;
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+};
 
 export class MissionRepository implements MissionSequenceAllocator {
   async getForUpdate(tx: DbTx, missionId: string): Promise<MissionRow> {
@@ -27,7 +44,11 @@ export class MissionRepository implements MissionSequenceAllocator {
     );
 
     if (result.rowCount !== 1) {
-      throw new Error(`Mission not found: ${missionId}`);
+      throw makeAppError(
+        `Mission not found: ${missionId}`,
+        404,
+        "MISSION_NOT_FOUND",
+      );
     }
 
     return {
@@ -51,8 +72,40 @@ export class MissionRepository implements MissionSequenceAllocator {
     );
 
     if (result.rowCount !== 1) {
-      throw new Error(`Failed to update mission status: ${missionId}`);
+      throw makeAppError(
+        `Failed to update mission status: ${missionId}`,
+        500,
+        "MISSION_STATUS_UPDATE_FAILED",
+      );
     }
+  }
+
+  async getById(tx: DbTx, missionId: string): Promise<MissionRow> {
+    const result = await tx.query<MissionRow>(
+      `
+      select
+        id,
+        status,
+        mission_plan_id,
+        last_event_sequence_no
+      from missions
+      where id = $1
+      `,
+      [missionId],
+    );
+
+    if (result.rowCount !== 1) {
+      throw makeAppError(
+        `Mission ${missionId} not found`,
+        404,
+        "MISSION_NOT_FOUND",
+      );
+    }
+
+    return {
+      ...result.rows[0],
+      last_event_sequence_no: Number(result.rows[0].last_event_sequence_no),
+    };
   }
 
   async bumpLastEventSequence(tx: DbTx, missionId: string): Promise<number> {
@@ -67,7 +120,11 @@ export class MissionRepository implements MissionSequenceAllocator {
     );
 
     if (result.rowCount !== 1) {
-      throw new Error(`Failed to bump event sequence for mission: ${missionId}`);
+      throw makeAppError(
+        `Failed to bump event sequence for mission: ${missionId}`,
+        500,
+        "MISSION_SEQUENCE_BUMP_FAILED",
+      );
     }
 
     return Number(result.rows[0].last_event_sequence_no);

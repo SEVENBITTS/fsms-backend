@@ -59,6 +59,10 @@ jobs:
           PGPASSWORD: postgres
           PGDATABASE: fsms_test
 
+      - name: Enforce nextBuildStep quality on PR
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-next-build-step-pr.mjs origin/${{ github.base_ref }}
+
       - name: Generate nextBuildStep suggestion
         if: github.event_name == 'pull_request'
         run: node scripts/suggest-next-build-step.mjs origin/${{ github.base_ref }} nextstep-comment.md

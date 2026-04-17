@@ -1,8 +1,8 @@
 {
   "$schema": "./fsms-save-point.schema.json",
-  "module": "Risk Engine",
-  "date": "2026-03-19",
-  "buildId": "v0.3-risk",
+  "module": "Mission Lifecycle",
+"date": "2026-04-10",
+"buildId": "v0.3-mission-lifecycle-preflight",
   "systemLayerMap": [
     "Replay",
     "Compliance",
@@ -17,11 +17,22 @@
     "confirmedInputOutputChains": []
   },
   "changesThisSession": {
-    "added": [],
-    "modified": [],
+    "added": [
+      "Shared mission lifecycle transition map and action metadata in src/missions/domain/missionLifecycle.ts",
+      "Read-only mission lifecycle transition preflight endpoint for action validation without state mutation",
+      "Integration coverage for transition preflight allowed, rejected, and unsupported-action cases"
+    ],
+    "modified": [
+      "Mission service lifecycle commands now validate transitions through the shared domain transition guard",
+      "Mission controller and router extended with read-only lifecycle transition checking"
+    ],
     "removed": [],
-    "fixed": []
-  },
+    "fixed": [
+      "Removed duplicated per-handler mission transition validation logic while preserving 409 invalid-transition semantics and audit-safe rejection behavior",
+      "Verified preflight transition checks do not mutate mission state or append mission events"
+    ]
+},
+
   "decisionsMade": {
     "architectural": [],
     "tradeoffsAccepted": [],
@@ -56,22 +67,36 @@
     "technicalDebt": [],
     "performanceConcerns": []
   },
-"validationDone": {
-  "nominalFlight": false,
-  "lowMargin": false,
-  "boundaryCrossing": false,
-  "verticalBreach": false,
-  "fourDConflict": false,
-  "envelopeConflict": false,
-  "notes": []
-},
-"nextBuildStep": "Verify integration test execution after mission error import cleanup",
-"doNotChangeRules": {
-  "criticalInvariants": [],
-  "orderingRules": [
-    "Replay -> Compliance -> Prediction -> Risk -> Advisory -> HUD"
-  ],
-  "structuralConstraints": [],
-  "compatibilityRule": "Do not break existing replay, compliance, or airspace logic without a defined migration path"
+  "validationDone": {
+    "nominalFlight": false,
+    "lowMargin": false,
+    "boundaryCrossing": false,
+    "verticalBreach": false,
+    "fourDConflict": false,
+    "envelopeConflict": false,
+    "notes": [
+      "Validated duplicate approve rejection returns 409 and appends no second mission.approved event",
+      "Validated approve before submit returns 409 and appends no mission.approved event",
+      "Validated complete before launch returns 409 and appends no mission.completed event",
+      "Validated launch before approve returns 409 and appends no mission.launched event",
+      "Validated approve after active returns 409 and appends no mission.approved event",
+      "Validated submit after approved returns 409 and appends no mission.submitted event",
+      "Validated submit after completed returns 409 and appends no mission.submitted event",
+      "Validated complete after aborted returns 409 and appends no mission.completed event",
+      "Validated rejected lifecycle transitions leave mission event counts and mission state unchanged",
+      "Validated shared mission lifecycle transition guard preserves existing mission and timeline behavior with full test suite green",
+      "Validated transition preflight endpoint returns allowed true for valid actions, allowed false for invalid actions, and 400 for unsupported actions without mutating mission state or appending events"
+    ]
+
+  },
+ "nextBuildStep": "Add a stable mission lifecycle metadata read model that exposes supported actions, target states, and action labels for clients so operator workflows can use shared lifecycle rules without duplicating logic.",
+  "doNotChangeRules": {
+    "criticalInvariants": [],
+    "orderingRules": [
+      "Replay -> Compliance -> Prediction -> Risk -> Advisory -> HUD"
+    ],
+    "structuralConstraints": [],
+    "compatibilityRule": "Do not break existing replay, compliance, or airspace logic without a defined migration path"
+  }
 }
-}
+

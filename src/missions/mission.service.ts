@@ -1,7 +1,11 @@
 import { Pool } from "pg";
 import { MissionRepository } from "./mission.repository";
 import { MissionEventRepository } from "./mission-event.repository";
-import { InvalidMissionTransitionError } from "./errors";
+import {
+  assertMissionActionAllowed,
+  checkMissionActionAllowed,
+  MissionLifecycleAction,
+} from "../modules/missions/domain/missionLifecycle";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
@@ -9,6 +13,7 @@ export interface GetMissionEventsFilters {
   severity?: "info" | "warning" | "critical";
   type?: string;
 }
+
 
 export class Db {
   constructor(private readonly pool: Pool) {}
@@ -30,6 +35,8 @@ export class Db {
   }
 }
 
+
+
 export class MissionService {
   constructor(
     private readonly db: Db,
@@ -37,31 +44,6 @@ export class MissionService {
     private readonly missionEventRepo: MissionEventRepository,
   ) {}
 
-  private assertMissionStatus(
-    actual: string,
-    expected: string,
-    action: string,
-  ): void {
-    if (actual !== expected) {
-      throw new InvalidMissionTransitionError(
-        `Mission cannot be ${action} from status ${actual}`,
-      );
-    }
-  }
-
-  private assertMissionAbortable(status: string): void {
-  const abortableStatuses = ["draft", "submitted", "approved", "active"];
-
-  if (!abortableStatuses.includes(status)) {
-    throw new InvalidMissionTransitionError(
-      `Mission cannot be aborted from status ${status}`,
-    );
-  }
-}
-
-  // ===============================
-  // SUBMIT MISSION
-  // ===============================
   async submitMission(params: {
     missionId: string;
     userId: string;
@@ -71,7 +53,7 @@ export class MissionService {
     await this.db.transaction(async (tx) => {
       const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
 
-      this.assertMissionStatus(mission.status, "draft", "submitted");
+      assertMissionActionAllowed(mission.status, "submit");
 
       await this.missionRepo.updateStatus(tx, params.missionId, "submitted");
 
@@ -94,9 +76,6 @@ export class MissionService {
     });
   }
 
-  // ===============================
-  // APPROVE MISSION
-  // ===============================
   async approveMission(params: {
   missionId: string;
   reviewerId: string;
@@ -107,7 +86,7 @@ export class MissionService {
   await this.db.transaction(async (tx) => {
     const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
 
-    this.assertMissionStatus(mission.status, "submitted", "approved");
+    assertMissionActionAllowed(mission.status, "approve");
 
     await this.missionRepo.updateStatus(tx, params.missionId, "approved");
 
@@ -129,11 +108,8 @@ export class MissionService {
       correlationId: params.correlationId ?? null,
     });
   });
-}
+} 
 
-  // ===============================
-  // LAUNCH MISSION
-  // ===============================
   async launchMission(params: {
     missionId: string;
     operatorId: string;
@@ -145,9 +121,10 @@ export class MissionService {
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
       const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
+      
+      assertMissionActionAllowed(mission.status, "launch");
 
-      this.assertMissionStatus(mission.status, "approved", "launched");
-
+      
       await this.missionRepo.updateStatus(tx, params.missionId, "active");
 
       await this.missionEventRepo.append(tx, this.missionRepo, {
@@ -173,18 +150,15 @@ export class MissionService {
     });
   }
 
-  // ===============================
-  // COMPLETE MISSION
-  // ===============================
   async completeMission(params: {
     missionId: string;
     operatorId?: string;
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
       const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
-
-      this.assertMissionStatus(mission.status, "active", "completed");
-
+      
+      assertMissionActionAllowed(mission.status, "complete");
+      
       await this.missionRepo.updateStatus(tx, params.missionId, "completed");
 
       await this.missionEventRepo.append(tx, this.missionRepo, {
@@ -202,35 +176,52 @@ export class MissionService {
     });
   }
 
-  // ===============================
-  // ABORT MISSION
-  // ===============================
   async abortMission(params: {
+    missionId: string;
+    actorId?: string;
+    reason: string;
+  }): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
+
+      assertMissionActionAllowed(mission.status, "abort");
+
+      await this.missionRepo.updateStatus(tx, params.missionId, "aborted");
+
+      await this.missionEventRepo.append(tx, this.missionRepo, {
+        missionId: mission.id,
+        missionPlanId: mission.mission_plan_id,
+        eventType: "mission.aborted",
+        actorType: params.actorId ? "user" : "system",
+        actorId: params.actorId ?? null,
+        fromState: mission.status,
+        toState: "aborted",
+        summary: "Mission aborted",
+        details: {
+          reason: params.reason,
+        },
+        source: "ops-console",
+      });
+    });
+  }
+
+  async checkMissionTransition(params: {
   missionId: string;
-  actorId?: string;
-  reason: string;
-}): Promise<void> {
-  await this.db.transaction(async (tx) => {
+  action: MissionLifecycleAction;
+}) {
+  return this.db.transaction(async (tx) => {
     const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
 
-    this.assertMissionAbortable(mission.status);
+    const result = checkMissionActionAllowed(mission.status, params.action);
 
-    await this.missionRepo.updateStatus(tx, params.missionId, "aborted");
-
-    await this.missionEventRepo.append(tx, this.missionRepo, {
+    return {
       missionId: mission.id,
-      missionPlanId: mission.mission_plan_id,
-      eventType: "mission.aborted",
-      actorType: params.actorId ? "user" : "system",
-      actorId: params.actorId ?? null,
-      fromState: mission.status,
-      toState: "aborted",
-      summary: "Mission aborted",
-      details: {
-        reason: params.reason,
-      },
-      source: "ops-console",
-    });
+      currentStatus: result.currentStatus,
+      action: result.action,
+      targetStatus: result.targetStatus,
+      allowed: result.allowed,
+      error: result.error,
+    };
   });
 }
 

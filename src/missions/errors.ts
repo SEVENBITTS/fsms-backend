@@ -1,6 +1,8 @@
-export class InvalidMissionTransitionError extends Error {
+import { HttpError } from "../utils/errors";
+
+export class InvalidMissionTransitionError extends HttpError {
   constructor(message: string) {
-    super(message);
+    super(409, message, "invalid_state_transition");
     this.name = "InvalidMissionTransitionError";
   }
 }
