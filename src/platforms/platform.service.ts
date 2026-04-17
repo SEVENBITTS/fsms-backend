@@ -1,0 +1,250 @@
+import type { Pool } from "pg";
+import {
+  MaintenanceScheduleNotFoundError,
+  PlatformNotFoundError,
+  PlatformValidationError,
+} from "./platform.errors";
+import { PlatformRepository } from "./platform.repository";
+import type {
+  CreateMaintenanceRecordInput,
+  CreateMaintenanceScheduleInput,
+  CreatePlatformInput,
+  MaintenanceSchedule,
+  PlatformMaintenanceStatus,
+} from "./platform.types";
+import {
+  validateCreateMaintenanceRecordInput,
+  validateCreateMaintenanceScheduleInput,
+  validateCreatePlatformInput,
+} from "./platform.validators";
+
+export class PlatformService {
+  constructor(
+    private readonly pool: Pool,
+    private readonly platformRepository: PlatformRepository,
+  ) {}
+
+  async createPlatform(input: CreatePlatformInput) {
+    const validated = validateCreatePlatformInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      return await this.platformRepository.insertPlatform(client, validated);
+    } finally {
+      client.release();
+    }
+  }
+
+  async getPlatform(platformId: string) {
+    const client = await this.pool.connect();
+
+    try {
+      const platform = await this.platformRepository.getPlatformById(
+        client,
+        platformId,
+      );
+
+      if (!platform) {
+        throw new PlatformNotFoundError(platformId);
+      }
+
+      return platform;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createMaintenanceSchedule(
+    platformId: string,
+    input: CreateMaintenanceScheduleInput,
+  ) {
+    const validated = validateCreateMaintenanceScheduleInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const platform = await this.platformRepository.getPlatformById(
+        client,
+        platformId,
+      );
+
+      if (!platform) {
+        throw new PlatformNotFoundError(platformId);
+      }
+
+      return await this.platformRepository.insertMaintenanceSchedule(client, {
+        platformId,
+        ...validated,
+      });
+    } finally {
+      client.release();
+    }
+  }
+
+  async createMaintenanceRecord(
+    platformId: string,
+    input: CreateMaintenanceRecordInput,
+  ) {
+    const validated = validateCreateMaintenanceRecordInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+
+      const platform = await this.platformRepository.getPlatformById(
+        client,
+        platformId,
+      );
+
+      if (!platform) {
+        throw new PlatformNotFoundError(platformId);
+      }
+
+      let schedule: MaintenanceSchedule | null = null;
+
+      if (validated.scheduleId) {
+        schedule = await this.platformRepository.getMaintenanceScheduleById(
+          client,
+          platformId,
+          validated.scheduleId,
+        );
+
+        if (!schedule) {
+          throw new MaintenanceScheduleNotFoundError(validated.scheduleId);
+        }
+      }
+
+      const taskName = validated.taskName ?? schedule?.taskName;
+
+      if (!taskName) {
+        throw new PlatformValidationError(
+          "taskName is required when scheduleId is not provided",
+        );
+      }
+
+      const record = await this.platformRepository.insertMaintenanceRecord(
+        client,
+        {
+          platformId,
+          scheduleId: validated.scheduleId,
+          taskName,
+          completedAt: validated.completedAt,
+          completedBy: validated.completedBy,
+          completedFlightHours: validated.completedFlightHours,
+          notes: validated.notes,
+          evidenceRef: validated.evidenceRef,
+        },
+      );
+
+      if (schedule) {
+        await this.platformRepository.updateScheduleCompletion(client, {
+          scheduleId: schedule.id,
+          completedAt: validated.completedAt,
+          completedFlightHours: validated.completedFlightHours,
+          nextDueAt: this.computeNextDueAt(schedule, validated.completedAt),
+          nextDueFlightHours: this.computeNextDueFlightHours(
+            schedule,
+            validated.completedFlightHours,
+          ),
+        });
+      }
+
+      await client.query("commit");
+      return record;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getMaintenanceStatus(
+    platformId: string,
+  ): Promise<PlatformMaintenanceStatus> {
+    const client = await this.pool.connect();
+
+    try {
+      const platform = await this.platformRepository.getPlatformById(
+        client,
+        platformId,
+      );
+
+      if (!platform) {
+        throw new PlatformNotFoundError(platformId);
+      }
+
+      const schedules = await this.platformRepository.listMaintenanceSchedules(
+        client,
+        platformId,
+      );
+      const latestRecords = await this.platformRepository.listMaintenanceRecords(
+        client,
+        platformId,
+      );
+
+      const dueSchedules = schedules.filter((schedule) =>
+        this.isScheduleDue(schedule, platform.totalFlightHours),
+      );
+      const upcomingSchedules = schedules.filter(
+        (schedule) => !dueSchedules.some((item) => item.id === schedule.id),
+      );
+
+      return {
+        platform,
+        effectiveStatus:
+          platform.status === "active" && dueSchedules.length > 0
+            ? "maintenance_due"
+            : platform.status,
+        dueSchedules,
+        upcomingSchedules,
+        latestRecords,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  private computeNextDueAt(
+    schedule: MaintenanceSchedule,
+    completedAt: Date,
+  ): Date | null {
+    if (schedule.intervalDays === null) {
+      return schedule.nextDueAt ? new Date(schedule.nextDueAt) : null;
+    }
+
+    const next = new Date(completedAt);
+    next.setUTCDate(next.getUTCDate() + schedule.intervalDays);
+    return next;
+  }
+
+  private computeNextDueFlightHours(
+    schedule: MaintenanceSchedule,
+    completedFlightHours: number | null,
+  ): number | null {
+    if (
+      schedule.intervalFlightHours === null ||
+      completedFlightHours === null
+    ) {
+      return schedule.nextDueFlightHours;
+    }
+
+    return completedFlightHours + schedule.intervalFlightHours;
+  }
+
+  private isScheduleDue(
+    schedule: MaintenanceSchedule,
+    platformTotalFlightHours: number,
+  ): boolean {
+    if (schedule.status !== "active") {
+      return false;
+    }
+
+    const dueByDate =
+      schedule.nextDueAt !== null && new Date(schedule.nextDueAt) <= new Date();
+    const dueByHours =
+      schedule.nextDueFlightHours !== null &&
+      schedule.nextDueFlightHours <= platformTotalFlightHours;
+
+    return dueByDate || dueByHours;
+  }
+}

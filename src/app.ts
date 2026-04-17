@@ -26,6 +26,10 @@ import { createAlertRouter } from "./alerts/alert.routes";
 import { MissionReplayService } from "./replay/mission-replay.service";
 import { MissionReplayController } from "./replay/mission-replay.controller";
 import { createMissionReplayRouter } from "./replay/mission-replay.routes";
+import { PlatformRepository } from "./platforms/platform.repository";
+import { PlatformService } from "./platforms/platform.service";
+import { PlatformController } from "./platforms/platform.controller";
+import { createPlatformRouter } from "./platforms/platform.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -89,11 +93,15 @@ const missionReplayService = new MissionReplayService(
 const missionReplayController = new MissionReplayController(missionReplayService);
 
 const timelineService = new TimelineService(pool);
+const platformRepository = new PlatformRepository();
+const platformService = new PlatformService(pool, platformRepository);
+const platformController = new PlatformController(platformService);
 
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionReplayRouter(missionReplayController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/missions", createAlertRouter(alertController));
+app.use("/platforms", createPlatformRouter(platformController));
 app.use("/timeline", createTimelineRouter(timelineService));
 app.get("/", (_req, res) => {
   res.status(200).send("FSMS backend is running");
