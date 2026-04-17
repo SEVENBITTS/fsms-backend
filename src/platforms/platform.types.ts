@@ -90,3 +90,26 @@ export interface PlatformMaintenanceStatus {
   upcomingSchedules: MaintenanceSchedule[];
   latestRecords: MaintenanceRecord[];
 }
+
+export type PlatformReadinessResult = "pass" | "warning" | "fail";
+
+export type PlatformReadinessReasonCode =
+  | "PLATFORM_ACTIVE"
+  | "PLATFORM_INACTIVE"
+  | "PLATFORM_MAINTENANCE_DUE"
+  | "PLATFORM_GROUNDED"
+  | "PLATFORM_RETIRED";
+
+export interface PlatformReadinessReason {
+  code: PlatformReadinessReasonCode;
+  severity: PlatformReadinessResult;
+  message: string;
+  relatedScheduleIds?: string[];
+}
+
+export interface PlatformReadinessCheck {
+  platformId: string;
+  result: PlatformReadinessResult;
+  reasons: PlatformReadinessReason[];
+  maintenanceStatus: PlatformMaintenanceStatus;
+}
