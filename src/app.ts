@@ -38,6 +38,10 @@ import { MissionRiskRepository } from "./mission-risk/mission-risk.repository";
 import { MissionRiskService } from "./mission-risk/mission-risk.service";
 import { MissionRiskController } from "./mission-risk/mission-risk.controller";
 import { createMissionRiskRouter } from "./mission-risk/mission-risk.routes";
+import { AirspaceComplianceRepository } from "./airspace-compliance/airspace-compliance.repository";
+import { AirspaceComplianceService } from "./airspace-compliance/airspace-compliance.service";
+import { AirspaceComplianceController } from "./airspace-compliance/airspace-compliance.controller";
+import { createAirspaceComplianceRouter } from "./airspace-compliance/airspace-compliance.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -108,6 +112,14 @@ const pilotController = new PilotController(pilotService);
 const missionRiskRepository = new MissionRiskRepository();
 const missionRiskService = new MissionRiskService(pool, missionRiskRepository);
 const missionRiskController = new MissionRiskController(missionRiskService);
+const airspaceComplianceRepository = new AirspaceComplianceRepository();
+const airspaceComplianceService = new AirspaceComplianceService(
+  pool,
+  airspaceComplianceRepository,
+);
+const airspaceComplianceController = new AirspaceComplianceController(
+  airspaceComplianceService,
+);
 const missionService = new MissionService(
   db,
   missionRepo,
@@ -115,11 +127,13 @@ const missionService = new MissionService(
   platformService,
   pilotService,
   missionRiskService,
+  airspaceComplianceService,
 );
 const missionController = new MissionController(missionService);
 
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionRiskRouter(missionRiskController));
+app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
 app.use("/missions", createMissionReplayRouter(missionReplayController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/missions", createAlertRouter(alertController));

@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add airspace compliance inputs so mission gates can combine readiness, risk, and operating constraints.",
+ "nextBuildStep": "Add audit evidence snapshots so mission gates can preserve readiness decisions as reviewable records.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -11,6 +11,7 @@ import { PlatformService } from "../platforms/platform.service";
 import { PilotNotFoundError } from "../pilots/pilot.errors";
 import { PilotService } from "../pilots/pilot.service";
 import { MissionRiskService } from "../mission-risk/mission-risk.service";
+import { AirspaceComplianceService } from "../airspace-compliance/airspace-compliance.service";
 import type {
   MissionReadinessCheck,
   MissionReadinessReason,
@@ -18,6 +19,7 @@ import type {
 } from "./mission-readiness.types";
 import type { PilotReadinessResult } from "../pilots/pilot.types";
 import type { MissionRiskResult } from "../mission-risk/mission-risk.types";
+import type { AirspaceComplianceResult } from "../airspace-compliance/airspace-compliance.types";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
@@ -57,6 +59,7 @@ export class MissionService {
     private readonly platformService?: PlatformService,
     private readonly pilotService?: PilotService,
     private readonly missionRiskService?: MissionRiskService,
+    private readonly airspaceComplianceService?: AirspaceComplianceService,
   ) {}
 
   async submitMission(params: {
@@ -254,6 +257,7 @@ export class MissionService {
     let platformReadiness: MissionReadinessCheck["platformReadiness"] = null;
     let pilotReadiness: MissionReadinessCheck["pilotReadiness"] = null;
     let missionRisk: MissionReadinessCheck["missionRisk"] = null;
+    let airspaceCompliance: MissionReadinessCheck["airspaceCompliance"] = null;
 
     if (!platformId) {
       reasons.push({
@@ -353,6 +357,28 @@ export class MissionService {
       );
     }
 
+    if (!this.airspaceComplianceService) {
+      reasons.push({
+        code: "MISSION_AIRSPACE_FAILED",
+        severity: "fail",
+        message: "Airspace compliance assessment service is not available",
+        source: "mission",
+      });
+    } else {
+      airspaceCompliance =
+        await this.airspaceComplianceService.assessAirspaceCompliance(
+          mission.id,
+        );
+      if (airspaceCompliance.result !== "pass") {
+        reasons.push(
+          this.mapAirspaceComplianceReason(
+            airspaceCompliance.result,
+            airspaceCompliance.reasons.map((reason) => reason.code),
+          ),
+        );
+      }
+    }
+
     return this.buildMissionReadiness({
       missionId: mission.id,
       platformId,
@@ -361,6 +387,7 @@ export class MissionService {
       platformReadiness,
       pilotReadiness,
       missionRisk,
+      airspaceCompliance,
     });
   }
 
@@ -505,6 +532,39 @@ export class MissionService {
     };
   }
 
+  private mapAirspaceComplianceReason(
+    result: AirspaceComplianceResult,
+    airspaceReasonCodes: string[],
+  ): MissionReadinessReason {
+    if (result === "fail") {
+      return {
+        code: "MISSION_AIRSPACE_FAILED",
+        severity: "fail",
+        message: "Airspace compliance assessment fails and blocks approval or dispatch",
+        source: "airspace",
+        relatedAirspaceReasonCodes: airspaceReasonCodes,
+      };
+    }
+
+    if (result === "warning") {
+      return {
+        code: "MISSION_AIRSPACE_WARNING",
+        severity: "warning",
+        message: "Airspace compliance assessment requires explicit review before approval or dispatch",
+        source: "airspace",
+        relatedAirspaceReasonCodes: airspaceReasonCodes,
+      };
+    }
+
+    return {
+      code: "MISSION_AIRSPACE_READY",
+      severity: "pass",
+      message: "Airspace compliance assessment passes for planning",
+      source: "airspace",
+      relatedAirspaceReasonCodes: airspaceReasonCodes,
+    };
+  }
+
   private buildMissionReadiness(params: {
     missionId: string;
     platformId: string | null;
@@ -513,6 +573,7 @@ export class MissionService {
     platformReadiness: MissionReadinessCheck["platformReadiness"];
     pilotReadiness: MissionReadinessCheck["pilotReadiness"];
     missionRisk: MissionReadinessCheck["missionRisk"];
+    airspaceCompliance: MissionReadinessCheck["airspaceCompliance"];
   }): MissionReadinessCheck {
     const result = this.getMissionReadinessResult(params.reasons);
 
@@ -531,6 +592,7 @@ export class MissionService {
       platformReadiness: params.platformReadiness,
       pilotReadiness: params.pilotReadiness,
       missionRisk: params.missionRisk,
+      airspaceCompliance: params.airspaceCompliance,
     };
   }
 
