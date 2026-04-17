@@ -66,8 +66,6 @@ const pool = new Pool({
 const db = new Db(pool);
 const missionRepo = new MissionRepository();
 const missionEventRepo = new MissionEventRepository();
-const missionService = new MissionService(db, missionRepo, missionEventRepo);
-const missionController = new MissionController(missionService);
 
 const missionLifecyclePolicy = new MissionLifecyclePolicy();
 const missionTelemetryRepo = new MissionTelemetryRepository();
@@ -96,6 +94,13 @@ const timelineService = new TimelineService(pool);
 const platformRepository = new PlatformRepository();
 const platformService = new PlatformService(pool, platformRepository);
 const platformController = new PlatformController(platformService);
+const missionService = new MissionService(
+  db,
+  missionRepo,
+  missionEventRepo,
+  platformService,
+);
+const missionController = new MissionController(missionService);
 
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionReplayRouter(missionReplayController));

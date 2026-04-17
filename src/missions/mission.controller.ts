@@ -67,6 +67,26 @@ export class MissionController {
     }
   };
 
+  checkReadiness = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireString(req.params.missionId, "missionId");
+      const platformId = this.optionalString(req.query.platformId);
+
+      const result = await this.missionService.checkMissionReadiness({
+        missionId,
+        platformId,
+      });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   submitMission = async (
     req: Request,
     res: Response,

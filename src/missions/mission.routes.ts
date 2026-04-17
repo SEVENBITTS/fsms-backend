@@ -13,6 +13,7 @@ export function createMissionRouter(
   router.post("/:missionId/abort", missionController.abortMission);
 
   router.get("/:missionId/events", missionController.getMissionEvents);
+  router.get("/:missionId/readiness", missionController.checkReadiness);
   router.get(
     "/:missionId/transitions/:action/check",
     missionController.checkTransition,

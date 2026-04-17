@@ -6,6 +6,13 @@ import {
   checkMissionActionAllowed,
   MissionLifecycleAction,
 } from "../modules/missions/domain/missionLifecycle";
+import { PlatformNotFoundError } from "../platforms/platform.errors";
+import { PlatformService } from "../platforms/platform.service";
+import type {
+  MissionReadinessCheck,
+  MissionReadinessReason,
+  MissionReadinessResult,
+} from "./mission-readiness.types";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
@@ -42,6 +49,7 @@ export class MissionService {
     private readonly db: Db,
     private readonly missionRepo: MissionRepository,
     private readonly missionEventRepo: MissionEventRepository,
+    private readonly platformService?: PlatformService,
   ) {}
 
   async submitMission(params: {
@@ -225,6 +233,88 @@ export class MissionService {
   });
 }
 
+  async checkMissionReadiness(params: {
+    missionId: string;
+    platformId?: string;
+  }): Promise<MissionReadinessCheck> {
+    const mission = await this.db.transaction(async (tx) =>
+      this.missionRepo.getById(tx, params.missionId),
+    );
+    const platformId = params.platformId ?? mission.platform_id;
+
+    if (!platformId) {
+      return this.buildMissionReadiness({
+        missionId: mission.id,
+        platformId: null,
+        reasons: [
+          {
+            code: "MISSION_PLATFORM_NOT_ASSIGNED",
+            severity: "fail",
+            message: "Mission has no assigned platform for readiness evaluation",
+            source: "mission",
+          },
+        ],
+        platformReadiness: null,
+      });
+    }
+
+    if (!this.platformService) {
+      return this.buildMissionReadiness({
+        missionId: mission.id,
+        platformId,
+        reasons: [
+          {
+            code: "MISSION_PLATFORM_NOT_FOUND",
+            severity: "fail",
+            message: "Platform readiness service is not available",
+            source: "mission",
+            relatedPlatformId: platformId,
+          },
+        ],
+        platformReadiness: null,
+      });
+    }
+
+    try {
+      const platformReadiness =
+        await this.platformService.checkPlatformReadiness(platformId);
+      const platformReasonCodes = platformReadiness.reasons.map(
+        (reason) => reason.code,
+      );
+      const reason = this.mapPlatformReadinessReason(
+        platformReadiness.result,
+        platformId,
+        platformReasonCodes,
+      );
+
+      return this.buildMissionReadiness({
+        missionId: mission.id,
+        platformId,
+        reasons: [reason],
+        platformReadiness,
+      });
+    } catch (error) {
+      if (error instanceof PlatformNotFoundError) {
+        return this.buildMissionReadiness({
+          missionId: mission.id,
+          platformId,
+          reasons: [
+            {
+              code: "MISSION_PLATFORM_NOT_FOUND",
+              severity: "fail",
+              message: `Assigned platform was not found: ${platformId}`,
+              source: "mission",
+              relatedPlatformId: platformId,
+            },
+          ],
+          platformReadiness: null,
+        });
+      }
+
+      throw error;
+    }
+  }
+
   async getMissionEvents(
     missionId: string,
     filters: GetMissionEventsFilters = {},
@@ -257,5 +347,79 @@ export class MissionService {
         requestId: row.request_id,
       }));
     });
+  }
+
+  private mapPlatformReadinessReason(
+    result: MissionReadinessResult,
+    platformId: string,
+    platformReasonCodes: string[],
+  ): MissionReadinessReason {
+    if (result === "fail") {
+      return {
+        code: "MISSION_PLATFORM_FAILED",
+        severity: "fail",
+        message: "Assigned platform fails readiness and blocks mission approval or dispatch",
+        source: "platform",
+        relatedPlatformId: platformId,
+        relatedPlatformReasonCodes: platformReasonCodes,
+      };
+    }
+
+    if (result === "warning") {
+      return {
+        code: "MISSION_PLATFORM_WARNING",
+        severity: "warning",
+        message: "Assigned platform has readiness warnings requiring review before approval or dispatch",
+        source: "platform",
+        relatedPlatformId: platformId,
+        relatedPlatformReasonCodes: platformReasonCodes,
+      };
+    }
+
+    return {
+      code: "MISSION_PLATFORM_READY",
+      severity: "pass",
+      message: "Assigned platform passes readiness for mission approval and dispatch",
+      source: "platform",
+      relatedPlatformId: platformId,
+      relatedPlatformReasonCodes: platformReasonCodes,
+    };
+  }
+
+  private buildMissionReadiness(params: {
+    missionId: string;
+    platformId: string | null;
+    reasons: MissionReadinessReason[];
+    platformReadiness: MissionReadinessCheck["platformReadiness"];
+  }): MissionReadinessCheck {
+    const result = this.getMissionReadinessResult(params.reasons);
+
+    return {
+      missionId: params.missionId,
+      platformId: params.platformId,
+      result,
+      gate: {
+        result,
+        blocksApproval: result === "fail",
+        blocksDispatch: result === "fail",
+        requiresReview: result === "warning",
+      },
+      reasons: params.reasons,
+      platformReadiness: params.platformReadiness,
+    };
+  }
+
+  private getMissionReadinessResult(
+    reasons: MissionReadinessReason[],
+  ): MissionReadinessResult {
+    if (reasons.some((reason) => reason.severity === "fail")) {
+      return "fail";
+    }
+
+    if (reasons.some((reason) => reason.severity === "warning")) {
+      return "warning";
+    }
+
+    return "pass";
   }
 }
