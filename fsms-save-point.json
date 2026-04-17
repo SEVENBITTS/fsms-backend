@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add platform readiness assurance checks against the platform maintenance schema so mission gates can detect overdue maintenance.",
+ "nextBuildStep": "Add pilot readiness assurance checks so mission gates can combine platform and operator fitness.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

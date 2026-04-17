@@ -8,6 +8,7 @@ export interface MissionRow {
   id: string;
   status: MissionStatus;
   mission_plan_id: string | null;
+  platform_id: string | null;
   last_event_sequence_no: number;
 }
 
@@ -35,6 +36,7 @@ export class MissionRepository implements MissionSequenceAllocator {
         id,
         status,
         mission_plan_id,
+        platform_id,
         last_event_sequence_no
       from missions
       where id = $1
@@ -87,6 +89,7 @@ export class MissionRepository implements MissionSequenceAllocator {
         id,
         status,
         mission_plan_id,
+        platform_id,
         last_event_sequence_no
       from missions
       where id = $1
