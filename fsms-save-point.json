@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add audit evidence approval linkage migration so readiness snapshots can be tied to mission approval and dispatch decisions.",
+ "nextBuildStep": "Add mission approval guard migration so approval decisions require linked readiness evidence snapshots.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

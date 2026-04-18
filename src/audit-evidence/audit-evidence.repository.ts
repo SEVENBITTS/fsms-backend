@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
-import type { AuditEvidenceSnapshot } from "./audit-evidence.types";
+import type {
+  AuditEvidenceSnapshot,
+  MissionDecisionEvidenceLink,
+} from "./audit-evidence.types";
 
 interface AuditEvidenceSnapshotRow extends QueryResultRow {
   id: string;
@@ -23,6 +26,22 @@ interface CreateAuditEvidenceSnapshotRow {
   createdBy: string | null;
 }
 
+interface MissionDecisionEvidenceLinkRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  audit_evidence_snapshot_id: string;
+  decision_type: MissionDecisionEvidenceLink["decisionType"];
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface CreateMissionDecisionEvidenceLinkRow {
+  missionId: string;
+  snapshotId: string;
+  decisionType: MissionDecisionEvidenceLink["decisionType"];
+  createdBy: string | null;
+}
+
 const toAuditEvidenceSnapshot = (
   row: AuditEvidenceSnapshotRow,
 ): AuditEvidenceSnapshot => ({
@@ -35,6 +54,17 @@ const toAuditEvidenceSnapshot = (
   blocksDispatch: row.blocks_dispatch,
   requiresReview: row.requires_review,
   readinessSnapshot: row.readiness_snapshot,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
+const toMissionDecisionEvidenceLink = (
+  row: MissionDecisionEvidenceLinkRow,
+): MissionDecisionEvidenceLink => ({
+  id: row.id,
+  missionId: row.mission_id,
+  auditEvidenceSnapshotId: row.audit_evidence_snapshot_id,
+  decisionType: row.decision_type,
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
 });
@@ -107,5 +137,68 @@ export class AuditEvidenceRepository {
     );
 
     return result.rows.map(toAuditEvidenceSnapshot);
+  }
+
+  async snapshotExistsForMission(
+    tx: PoolClient,
+    missionId: string,
+    snapshotId: string,
+  ): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from audit_evidence_snapshots
+      where mission_id = $1
+        and id = $2
+      `,
+      [missionId, snapshotId],
+    );
+
+    return result.rowCount === 1;
+  }
+
+  async insertDecisionEvidenceLink(
+    tx: PoolClient,
+    input: CreateMissionDecisionEvidenceLinkRow,
+  ): Promise<MissionDecisionEvidenceLink> {
+    const result = await tx.query<MissionDecisionEvidenceLinkRow>(
+      `
+      insert into mission_decision_evidence_links (
+        id,
+        mission_id,
+        audit_evidence_snapshot_id,
+        decision_type,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        input.snapshotId,
+        input.decisionType,
+        input.createdBy,
+      ],
+    );
+
+    return toMissionDecisionEvidenceLink(result.rows[0]);
+  }
+
+  async listDecisionEvidenceLinks(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<MissionDecisionEvidenceLink[]> {
+    const result = await tx.query<MissionDecisionEvidenceLinkRow>(
+      `
+      select *
+      from mission_decision_evidence_links
+      where mission_id = $1
+      order by created_at desc, id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toMissionDecisionEvidenceLink);
   }
 }

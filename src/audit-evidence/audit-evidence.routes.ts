@@ -14,6 +14,14 @@ export function createAuditEvidenceRouter(
     "/:missionId/readiness/audit-snapshots",
     controller.listMissionReadinessSnapshots,
   );
+  router.post(
+    "/:missionId/decision-evidence-links",
+    controller.createMissionDecisionEvidenceLink,
+  );
+  router.get(
+    "/:missionId/decision-evidence-links",
+    controller.listMissionDecisionEvidenceLinks,
+  );
 
   return router;
 }

@@ -40,4 +40,37 @@ export class AuditEvidenceController {
       next(error);
     }
   };
+
+  createMissionDecisionEvidenceLink = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const link =
+        await this.auditEvidenceService.createMissionDecisionEvidenceLink(
+          req.params.missionId,
+          req.body,
+        );
+      res.status(201).json({ link });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listMissionDecisionEvidenceLinks = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const links =
+        await this.auditEvidenceService.listMissionDecisionEvidenceLinks(
+          req.params.missionId,
+        );
+      res.status(200).json({ links });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

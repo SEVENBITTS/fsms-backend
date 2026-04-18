@@ -11,3 +11,12 @@ export class AuditEvidenceMissionNotFoundError extends Error {
     super(`Mission not found: ${missionId}`);
   }
 }
+
+export class AuditEvidenceSnapshotNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "AUDIT_EVIDENCE_SNAPSHOT_NOT_FOUND";
+
+  constructor(snapshotId: string) {
+    super(`Audit evidence snapshot not found for mission: ${snapshotId}`);
+  }
+}
