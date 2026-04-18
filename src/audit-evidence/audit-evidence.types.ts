@@ -124,3 +124,9 @@ export interface PostOperationEvidenceRenderedReport {
     plainText: string;
   };
 }
+
+export interface PostOperationEvidencePdf {
+  fileName: string;
+  contentType: "application/pdf";
+  content: Buffer;
+}

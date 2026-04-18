@@ -17,6 +17,7 @@ import type {
   MissionLifecycleEvidenceEvent,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceExportPackage,
+  PostOperationEvidencePdf,
   PostOperationEvidenceRenderedReport,
   PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
@@ -289,6 +290,27 @@ export class AuditEvidenceService {
     };
   }
 
+  async generatePostOperationEvidencePdf(
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationEvidencePdf> {
+    const renderedReport = await this.renderPostOperationEvidenceSnapshot(
+      missionId,
+      snapshotId,
+    );
+    const content = this.buildSimplePdf([
+      renderedReport.report.title,
+      "",
+      renderedReport.report.plainText,
+    ]);
+
+    return {
+      fileName: `mission-${missionId}-post-operation-evidence-${snapshotId}.pdf`,
+      contentType: "application/pdf",
+      content,
+    };
+  }
+
   private async buildPostOperationCompletionSnapshot(
     client: Awaited<ReturnType<Pool["connect"]>>,
     mission: { missionId: string; missionPlanId: string | null; status: string },
@@ -493,5 +515,72 @@ export class AuditEvidenceService {
     }
 
     return `${site.lat}, ${site.lng}`;
+  }
+
+  private buildSimplePdf(blocks: string[]): Buffer {
+    const lines = blocks
+      .join("\n")
+      .split("\n")
+      .flatMap((line) => this.wrapPdfText(line, 92));
+    const textCommands = lines
+      .map((line, index) => {
+        const operator = index === 0 ? "Td" : "T*";
+        const leading = index === 0 ? "72 760" : "";
+        return `${leading} ${operator} (${this.escapePdfText(line)}) Tj`.trim();
+      })
+      .join("\n");
+    const stream = `BT\n/F1 10 Tf\n12 TL\n${textCommands}\nET`;
+    const objects = [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+      `<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}\nendstream`,
+    ];
+    let pdf = "%PDF-1.4\n";
+    const offsets = [0];
+
+    objects.forEach((object, index) => {
+      offsets.push(Buffer.byteLength(pdf, "latin1"));
+      pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    });
+
+    const xrefOffset = Buffer.byteLength(pdf, "latin1");
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += "0000000000 65535 f \n";
+    pdf += offsets
+      .slice(1)
+      .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
+      .join("");
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
+    pdf += `startxref\n${xrefOffset}\n%%EOF\n`;
+
+    return Buffer.from(pdf, "latin1");
+  }
+
+  private wrapPdfText(line: string, maxLength: number): string[] {
+    if (line.length <= maxLength) {
+      return [line];
+    }
+
+    const wrapped: string[] = [];
+    let remaining = line;
+
+    while (remaining.length > maxLength) {
+      const breakAt = remaining.lastIndexOf(" ", maxLength);
+      const splitAt = breakAt > 0 ? breakAt : maxLength;
+      wrapped.push(remaining.slice(0, splitAt));
+      remaining = remaining.slice(splitAt).trimStart();
+    }
+
+    wrapped.push(remaining);
+    return wrapped;
+  }
+
+  private escapePdfText(value: string): string {
+    return value
+      .replace(/\\/g, "\\\\")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)");
   }
 }
