@@ -1,5 +1,11 @@
 import { AuditEvidenceValidationError } from "./audit-evidence.errors";
-import type { CreateAuditEvidenceSnapshotInput } from "./audit-evidence.types";
+import type {
+  CreateAuditEvidenceSnapshotInput,
+  CreateMissionDecisionEvidenceLinkInput,
+  MissionDecisionType,
+} from "./audit-evidence.types";
+
+const DECISION_TYPES = new Set<MissionDecisionType>(["approval", "dispatch"]);
 
 function optionalTrimmed(value: unknown, fieldName: string): string | null {
   if (value === undefined || value === null) {
@@ -28,6 +34,36 @@ export function validateCreateAuditEvidenceSnapshotInput(
   }
 
   return {
+    createdBy: optionalTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+function requiredString(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new AuditEvidenceValidationError(`${fieldName} is required`);
+  }
+
+  return value.trim();
+}
+
+function requiredDecisionType(value: unknown): MissionDecisionType {
+  if (typeof value !== "string" || !DECISION_TYPES.has(value as MissionDecisionType)) {
+    throw new AuditEvidenceValidationError("decisionType is not supported");
+  }
+
+  return value as MissionDecisionType;
+}
+
+export function validateCreateMissionDecisionEvidenceLinkInput(
+  input: CreateMissionDecisionEvidenceLinkInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new AuditEvidenceValidationError("Request body must be an object");
+  }
+
+  return {
+    snapshotId: requiredString(input.snapshotId, "snapshotId"),
+    decisionType: requiredDecisionType(input.decisionType),
     createdBy: optionalTrimmed(input.createdBy, "createdBy"),
   };
 }
