@@ -42,6 +42,10 @@ export function createAuditEvidenceRouter(
     "/:missionId/post-operation/evidence-snapshots/:snapshotId/export/render/pdf",
     controller.generatePostOperationEvidencePdf,
   );
+  router.post(
+    "/:missionId/post-operation/evidence-snapshots/:snapshotId/signoffs",
+    controller.createPostOperationAuditSignoff,
+  );
 
   return router;
 }

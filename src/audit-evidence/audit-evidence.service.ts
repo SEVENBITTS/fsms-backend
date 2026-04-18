@@ -4,6 +4,7 @@ import {
   AuditEvidenceMissionNotCompletedError,
   AuditEvidenceMissionNotFoundError,
   AuditEvidenceSnapshotNotFoundError,
+  PostOperationAuditSignoffAlreadyExistsError,
   PostOperationEvidenceSnapshotNotFoundError,
 } from "./audit-evidence.errors";
 import { AuditEvidenceRepository } from "./audit-evidence.repository";
@@ -12,9 +13,11 @@ import type {
   AuditReportSection,
   CreateAuditEvidenceSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
+  CreatePostOperationAuditSignoffInput,
   CreatePostOperationEvidenceSnapshotInput,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
+  PostOperationAuditSignoff,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceExportPackage,
   PostOperationEvidencePdf,
@@ -24,6 +27,7 @@ import type {
 import {
   validateCreateAuditEvidenceSnapshotInput,
   validateCreateMissionDecisionEvidenceLinkInput,
+  validateCreatePostOperationAuditSignoffInput,
   validateCreatePostOperationEvidenceSnapshotInput,
 } from "./audit-evidence.validators";
 
@@ -309,6 +313,84 @@ export class AuditEvidenceService {
       contentType: "application/pdf",
       content,
     };
+  }
+
+  async createPostOperationAuditSignoff(
+    missionId: string,
+    snapshotId: string,
+    input: CreatePostOperationAuditSignoffInput | undefined,
+  ): Promise<PostOperationAuditSignoff> {
+    const validated = validateCreatePostOperationAuditSignoffInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      const snapshot =
+        await this.auditEvidenceRepository.getPostOperationEvidenceSnapshotForMission(
+          client,
+          missionId,
+          snapshotId,
+        );
+
+      if (!snapshot) {
+        throw new PostOperationEvidenceSnapshotNotFoundError(snapshotId);
+      }
+
+      const signoffExists =
+        await this.auditEvidenceRepository.postOperationAuditSignoffExistsForSnapshot(
+          client,
+          snapshotId,
+        );
+
+      if (signoffExists) {
+        throw new PostOperationAuditSignoffAlreadyExistsError(snapshotId);
+      }
+
+      const signoff =
+        await this.auditEvidenceRepository.insertPostOperationAuditSignoff(
+          client,
+          {
+            missionId,
+            postOperationEvidenceSnapshotId: snapshot.id,
+            accountableManagerName: validated.accountableManagerName,
+            accountableManagerRole: validated.accountableManagerRole,
+            reviewDecision: validated.reviewDecision,
+            signedAt: validated.signedAt,
+            signatureReference: validated.signatureReference,
+            createdBy: validated.createdBy,
+          },
+        );
+
+      await client.query("COMMIT");
+      return signoff;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if (this.isUniqueViolation(error)) {
+        throw new PostOperationAuditSignoffAlreadyExistsError(snapshotId);
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "23505"
+    );
   }
 
   private async buildPostOperationCompletionSnapshot(

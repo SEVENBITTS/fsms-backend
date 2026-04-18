@@ -1160,6 +1160,185 @@ describe("audit evidence snapshots", () => {
     expect(await countRows(missionId)).toEqual(before);
   });
 
+  it("creates accountable-manager sign-offs through the post-operation snapshot endpoint", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .post(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/signoffs`,
+      )
+      .send({
+        accountableManagerName: " Alex Accountable ",
+        accountableManagerRole: " Accountable Manager ",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+        signatureReference: " signature://accountable-manager/alex ",
+        createdBy: " audit-admin ",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.signoff).toMatchObject({
+      missionId,
+      postOperationEvidenceSnapshotId: snapshotResponse.body.snapshot.id,
+      accountableManagerName: "Alex Accountable",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-18T18:00:00.000Z",
+      signatureReference: "signature://accountable-manager/alex",
+      createdBy: "audit-admin",
+    });
+    expect(response.body.signoff.id).toEqual(expect.any(String));
+    expect(response.body.signoff.createdAt).toEqual(expect.any(String));
+    expect(await countRows(missionId)).toEqual({
+      ...before,
+      post_operation_signoff_count: before.post_operation_signoff_count + 1,
+    });
+  });
+
+  it("rejects duplicate accountable-manager sign-offs for the same snapshot", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const endpoint = `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/signoffs`;
+    const firstResponse = await request(app).post(endpoint).send({
+      accountableManagerName: "Alex Accountable",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-18T18:00:00.000Z",
+    });
+    const beforeDuplicate = await countRows(missionId);
+    const duplicateResponse = await request(app).post(endpoint).send({
+      accountableManagerName: "Alex Accountable",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-18T18:00:00.000Z",
+    });
+
+    expect(firstResponse.status).toBe(201);
+    expect(duplicateResponse.status).toBe(409);
+    expect(duplicateResponse.body).toMatchObject({
+      error: {
+        type: "post_operation_audit_signoff_already_exists",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(beforeDuplicate);
+  });
+
+  it("does not create accountable-manager sign-offs for another mission's snapshot", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+    const secondSnapshot = await request(app)
+      .post(`/missions/${second.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(secondSnapshot.status).toBe(201);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app)
+      .post(
+        `/missions/${first.missionId}/post-operation/evidence-snapshots/${secondSnapshot.body.snapshot.id}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Alex Accountable",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
+  });
+
+  it("rejects invalid accountable-manager sign-off requests", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const endpoint = `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/signoffs`;
+    const before = await countRows(missionId);
+
+    const missingNameResponse = await request(app).post(endpoint).send({
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-18T18:00:00.000Z",
+    });
+    const invalidDecisionResponse = await request(app).post(endpoint).send({
+      accountableManagerName: "Alex Accountable",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "maybe",
+      signedAt: "2026-04-18T18:00:00.000Z",
+    });
+    const invalidDateResponse = await request(app).post(endpoint).send({
+      accountableManagerName: "Alex Accountable",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "not-a-date",
+    });
+
+    expect(missingNameResponse.status).toBe(400);
+    expect(invalidDecisionResponse.status).toBe(400);
+    expect(invalidDateResponse.status).toBe(400);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("returns 404 for unknown sign-off missions and snapshots", async () => {
+    const { missionId } = await createCompletedMission();
+    const before = await countRows(missionId);
+
+    const missingSnapshotResponse = await request(app)
+      .post(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${randomUUID()}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Alex Accountable",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+      });
+    const missingMissionResponse = await request(app)
+      .post(
+        `/missions/${randomUUID()}/post-operation/evidence-snapshots/${randomUUID()}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Alex Accountable",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+      });
+
+    expect(missingSnapshotResponse.status).toBe(404);
+    expect(missingSnapshotResponse.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(missingMissionResponse.status).toBe(404);
+    expect(missingMissionResponse.body).toMatchObject({
+      error: {
+        type: "mission_not_found",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
   it("stores accountable-manager sign-off records against post-operation evidence snapshots", async () => {
     const { missionId } = await createCompletedMission();
     const snapshotResponse = await request(app)

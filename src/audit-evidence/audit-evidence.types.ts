@@ -6,11 +6,25 @@ export type PostOperationEvidenceType = "post_operation_completion";
 
 export type MissionDecisionType = "approval" | "dispatch";
 
+export type PostOperationAuditSignoffDecision =
+  | "approved"
+  | "rejected"
+  | "requires_follow_up";
+
 export interface CreateAuditEvidenceSnapshotInput {
   createdBy?: string | null;
 }
 
 export interface CreatePostOperationEvidenceSnapshotInput {
+  createdBy?: string | null;
+}
+
+export interface CreatePostOperationAuditSignoffInput {
+  accountableManagerName?: string;
+  accountableManagerRole?: string;
+  reviewDecision?: PostOperationAuditSignoffDecision;
+  signedAt?: string;
+  signatureReference?: string | null;
   createdBy?: string | null;
 }
 
@@ -86,6 +100,19 @@ export interface PostOperationEvidenceSnapshot {
   evidenceType: PostOperationEvidenceType;
   lifecycleState: string;
   completionSnapshot: PostOperationCompletionSnapshot;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface PostOperationAuditSignoff {
+  id: string;
+  missionId: string;
+  postOperationEvidenceSnapshotId: string;
+  accountableManagerName: string;
+  accountableManagerRole: string;
+  reviewDecision: PostOperationAuditSignoffDecision;
+  signedAt: string;
+  signatureReference: string | null;
   createdBy: string | null;
   createdAt: string;
 }
