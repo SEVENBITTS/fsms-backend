@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
+import type { MissionPlanningReview } from "./mission-planning.types";
 
 interface MissionPlanningDraftRow extends QueryResultRow {
   id: string;
@@ -139,5 +140,41 @@ export class MissionPlanningRepository {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  async insertApprovalHandoffTrace(
+    tx: PoolClient,
+    input: {
+      missionId: string;
+      snapshotId: string;
+      approvalEvidenceLinkId: string;
+      review: MissionPlanningReview;
+      createdBy: string | null;
+    },
+  ): Promise<string> {
+    const result = await tx.query<{ id: string }>(
+      `
+      insert into mission_planning_approval_handoffs (
+        id,
+        mission_id,
+        audit_evidence_snapshot_id,
+        mission_decision_evidence_link_id,
+        planning_review,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5::jsonb, $6)
+      returning id
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        input.snapshotId,
+        input.approvalEvidenceLinkId,
+        JSON.stringify(input.review),
+        input.createdBy,
+      ],
+    );
+
+    return result.rows[0].id;
   }
 }

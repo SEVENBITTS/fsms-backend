@@ -190,6 +190,19 @@ export class MissionService {
         "Mission approval evidence must reference a readiness snapshot",
       );
     }
+
+    const referencesPlanningHandoff =
+      await this.auditEvidenceRepository.decisionEvidenceLinkReferencesPlanningApprovalHandoff(
+        tx,
+        missionId,
+        decisionEvidenceLinkId,
+      );
+
+    if (!referencesPlanningHandoff) {
+      throw new InvalidMissionApprovalEvidenceError(
+        "Mission approval evidence must reference a gate-ready planning handoff",
+      );
+    }
   }
 
   async launchMission(params: {

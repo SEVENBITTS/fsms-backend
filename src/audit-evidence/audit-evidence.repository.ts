@@ -242,4 +242,31 @@ export class AuditEvidenceRepository {
 
     return result.rowCount === 1;
   }
+
+  async decisionEvidenceLinkReferencesPlanningApprovalHandoff(
+    tx: PoolClient,
+    missionId: string,
+    linkId: string,
+  ): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from mission_planning_approval_handoffs handoffs
+      inner join mission_decision_evidence_links links
+        on links.id = handoffs.mission_decision_evidence_link_id
+       and links.mission_id = handoffs.mission_id
+      inner join audit_evidence_snapshots snapshots
+        on snapshots.mission_id = handoffs.mission_id
+       and snapshots.id = handoffs.audit_evidence_snapshot_id
+      where handoffs.mission_id = $1
+        and handoffs.mission_decision_evidence_link_id = $2
+        and links.decision_type = 'approval'
+        and snapshots.evidence_type = 'mission_readiness_gate'
+        and coalesce((handoffs.planning_review ->> 'readyForApproval')::boolean, false) = true
+      `,
+      [missionId, linkId],
+    );
+
+    return result.rowCount === 1;
+  }
 }

@@ -101,11 +101,49 @@ const createDecisionEvidenceLink = async (
 
   expect(linkResponse.status).toBe(201);
 
-  return linkResponse.body.link as { id: string };
+  return linkResponse.body.link as {
+    id: string;
+    auditEvidenceSnapshotId: string;
+  };
 };
 
-const createApprovalEvidenceLink = async (missionId: string) =>
-  createDecisionEvidenceLink(missionId, "approval");
+const createPlanningApprovalHandoffTrace = async (
+  missionId: string,
+  link: { id: string; auditEvidenceSnapshotId: string },
+) => {
+  await pool.query(
+    `
+    insert into mission_planning_approval_handoffs (
+      id,
+      mission_id,
+      audit_evidence_snapshot_id,
+      mission_decision_evidence_link_id,
+      planning_review,
+      created_by
+    )
+    values ($1, $2, $3, $4, $5::jsonb, $6)
+    `,
+    [
+      randomUUID(),
+      missionId,
+      link.auditEvidenceSnapshotId,
+      link.id,
+      JSON.stringify({
+        missionId,
+        readyForApproval: true,
+        blockingReasons: [],
+        checklist: [],
+      }),
+      "reviewer-1",
+    ],
+  );
+};
+
+const createApprovalEvidenceLink = async (missionId: string) => {
+  const link = await createDecisionEvidenceLink(missionId, "approval");
+  await createPlanningApprovalHandoffTrace(missionId, link);
+  return link;
+};
 
 const createDispatchEvidenceLink = async (missionId: string) =>
   createDecisionEvidenceLink(missionId, "dispatch");
@@ -384,6 +422,39 @@ describe("mission integration", () => {
     expect(approveResponse.body).toMatchObject({
       error: {
         type: "invalid_mission_approval_evidence",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "submitted",
+      last_event_sequence_no: 0,
+    });
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await getAuditEvidenceState(missionId)).toEqual(auditBefore);
+  });
+
+  it("POST /missions/:missionId/approve rejects generic approval evidence without planning handoff trace", async () => {
+    const missionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "submitted",
+    });
+    const approvalLink = await createDecisionEvidenceLink(missionId, "approval");
+    const auditBefore = await getAuditEvidenceState(missionId);
+
+    const approveResponse = await request(app)
+      .post(`/missions/${missionId}/approve`)
+      .send({
+        reviewerId: "reviewer-1",
+        decisionEvidenceLinkId: approvalLink.id,
+      });
+
+    expect(approveResponse.status).toBe(409);
+    expect(approveResponse.body).toMatchObject({
+      error: {
+        type: "invalid_mission_approval_evidence",
+        message: expect.stringContaining("gate-ready planning handoff"),
       },
     });
 

@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
   await pool.query("delete from audit_evidence_snapshots");
   await pool.query("delete from airspace_compliance_inputs");
@@ -83,6 +84,7 @@ const countRows = async (missionId?: string) => {
       (select count(*)::int from mission_risk_inputs where ($1::uuid is null or mission_id = $1)) as risk_input_count,
       (select count(*)::int from airspace_compliance_inputs where ($1::uuid is null or mission_id = $1)) as airspace_input_count,
       (select count(*)::int from audit_evidence_snapshots where ($1::uuid is null or mission_id = $1)) as snapshot_count,
+      (select count(*)::int from mission_planning_approval_handoffs where ($1::uuid is null or mission_id = $1)) as planning_handoff_count,
       (select count(*)::int from mission_decision_evidence_links where ($1::uuid is null or mission_id = $1)) as decision_link_count
     `,
     [missionId ?? null],
@@ -94,6 +96,7 @@ const countRows = async (missionId?: string) => {
     risk_input_count: number;
     airspace_input_count: number;
     snapshot_count: number;
+    planning_handoff_count: number;
     decision_link_count: number;
   };
 };
@@ -154,6 +157,7 @@ describe("mission planning drafts", () => {
       risk_input_count: 0,
       airspace_input_count: 0,
       snapshot_count: 0,
+      planning_handoff_count: 0,
       decision_link_count: 0,
     });
     expect((await countRows()).mission_count).toBe(before.mission_count + 1);
@@ -229,6 +233,7 @@ describe("mission planning drafts", () => {
       risk_input_count: 1,
       airspace_input_count: 1,
       snapshot_count: 0,
+      planning_handoff_count: 0,
       decision_link_count: 0,
     });
   });
@@ -369,11 +374,69 @@ describe("mission planning drafts", () => {
     expect(afterCounts).toEqual({
       ...beforeCounts,
       snapshot_count: beforeCounts.snapshot_count + 1,
+      planning_handoff_count: beforeCounts.planning_handoff_count + 1,
       decision_link_count: beforeCounts.decision_link_count + 1,
     });
     expect(afterCounts.mission_event_count).toBe(0);
     expect(await getMissionStatus(createResponse.body.draft.missionId)).toBe(
       "draft",
+    );
+  });
+
+  it("allows approval with linked gate-ready planning handoff evidence", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-handoff-approval",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+
+    const handoffResponse = await request(app)
+      .post(
+        `/mission-plans/drafts/${createResponse.body.draft.missionId}/approval-handoff`,
+      )
+      .send({
+        createdBy: "planning lead",
+      });
+    const submitResponse = await request(app)
+      .post(`/missions/${createResponse.body.draft.missionId}/submit`)
+      .send({
+        userId: "operator-1",
+      });
+    const approveResponse = await request(app)
+      .post(`/missions/${createResponse.body.draft.missionId}/approve`)
+      .send({
+        reviewerId: "approver-1",
+        decisionEvidenceLinkId:
+          handoffResponse.body.handoff.approvalEvidenceLink.id,
+        notes: "planning evidence verified",
+      });
+    const eventsResponse = await request(app).get(
+      `/missions/${createResponse.body.draft.missionId}/events`,
+    );
+
+    expect(handoffResponse.status).toBe(201);
+    expect(submitResponse.status).toBe(204);
+    expect(approveResponse.status).toBe(204);
+    expect(await getMissionStatus(createResponse.body.draft.missionId)).toBe(
+      "approved",
+    );
+    expect(eventsResponse.status).toBe(200);
+    expect(eventsResponse.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "mission.approved",
+          details: expect.objectContaining({
+            decision_evidence_link_id:
+              handoffResponse.body.handoff.approvalEvidenceLink.id,
+          }),
+        }),
+      ]),
     );
   });
 
@@ -451,6 +514,7 @@ describe("mission planning drafts", () => {
       risk_input_count: 1,
       airspace_input_count: 0,
       snapshot_count: 0,
+      planning_handoff_count: 0,
       decision_link_count: 0,
     });
   });
@@ -493,6 +557,7 @@ describe("mission planning drafts", () => {
       risk_input_count: 2,
       airspace_input_count: 2,
       snapshot_count: 0,
+      planning_handoff_count: 0,
       decision_link_count: 0,
     });
 
@@ -605,6 +670,7 @@ describe("mission planning drafts", () => {
       risk_input_count: 0,
       airspace_input_count: 0,
       snapshot_count: 0,
+      planning_handoff_count: 0,
       decision_link_count: 0,
     });
   });
@@ -632,6 +698,7 @@ describe("mission planning drafts", () => {
     expect(await countRows()).toMatchObject({
       mission_count: 0,
       snapshot_count: 0,
+      planning_handoff_count: 0,
       decision_link_count: 0,
     });
   });
