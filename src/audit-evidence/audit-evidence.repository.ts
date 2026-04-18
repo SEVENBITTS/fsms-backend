@@ -446,6 +446,28 @@ export class AuditEvidenceRepository {
     return result.rows.map(toPostOperationEvidenceSnapshot);
   }
 
+  async getPostOperationEvidenceSnapshotForMission(
+    tx: PoolClient,
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationEvidenceSnapshot | null> {
+    const result = await tx.query<PostOperationEvidenceSnapshotRow>(
+      `
+      select *
+      from post_operation_evidence_snapshots
+      where mission_id = $1
+        and id = $2
+        and evidence_type = 'post_operation_completion'
+      limit 1
+      `,
+      [missionId, snapshotId],
+    );
+
+    return result.rows[0]
+      ? toPostOperationEvidenceSnapshot(result.rows[0])
+      : null;
+  }
+
   async decisionEvidenceLinkReferencesReadinessSnapshot(
     tx: PoolClient,
     missionId: string,

@@ -5,6 +5,10 @@ type MissionIdParams = {
   missionId: string;
 };
 
+type PostOperationSnapshotParams = MissionIdParams & {
+  snapshotId: string;
+};
+
 export class AuditEvidenceController {
   constructor(private readonly auditEvidenceService: AuditEvidenceService) {}
 
@@ -102,6 +106,23 @@ export class AuditEvidenceController {
           req.params.missionId,
         );
       res.status(200).json({ snapshots });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  exportPostOperationEvidenceSnapshot = async (
+    req: Request<PostOperationSnapshotParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const evidenceExport =
+        await this.auditEvidenceService.exportPostOperationEvidenceSnapshot(
+          req.params.missionId,
+          req.params.snapshotId,
+        );
+      res.status(200).json({ export: evidenceExport });
     } catch (error) {
       next(error);
     }
