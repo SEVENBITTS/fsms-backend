@@ -20,3 +20,14 @@ export class AuditEvidenceSnapshotNotFoundError extends Error {
     super(`Audit evidence snapshot not found for mission: ${snapshotId}`);
   }
 }
+
+export class AuditEvidenceMissionNotCompletedError extends Error {
+  readonly statusCode = 409;
+  readonly code = "MISSION_NOT_COMPLETED";
+
+  constructor(missionId: string, status: string) {
+    super(
+      `Mission ${missionId} must be completed before post-operation evidence can be captured; current status is ${status}`,
+    );
+  }
+}

@@ -2,6 +2,7 @@ import { AuditEvidenceValidationError } from "./audit-evidence.errors";
 import type {
   CreateAuditEvidenceSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
+  CreatePostOperationEvidenceSnapshotInput,
   MissionDecisionType,
 } from "./audit-evidence.types";
 
@@ -22,6 +23,24 @@ function optionalTrimmed(value: unknown, fieldName: string): string | null {
 
 export function validateCreateAuditEvidenceSnapshotInput(
   input: CreateAuditEvidenceSnapshotInput | undefined,
+) {
+  if (input === undefined || input === null) {
+    return {
+      createdBy: null,
+    };
+  }
+
+  if (typeof input !== "object") {
+    throw new AuditEvidenceValidationError("Request body must be an object");
+  }
+
+  return {
+    createdBy: optionalTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+export function validateCreatePostOperationEvidenceSnapshotInput(
+  input: CreatePostOperationEvidenceSnapshotInput | undefined,
 ) {
   if (input === undefined || input === null) {
     return {
