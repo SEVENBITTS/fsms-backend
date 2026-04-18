@@ -260,12 +260,38 @@ export class MissionPlanningService {
           createdBy: validated.createdBy,
         },
       );
+    await this.recordApprovalHandoffTrace({
+      missionId,
+      snapshotId: snapshot.id,
+      approvalEvidenceLinkId: approvalEvidenceLink.id,
+      review,
+      createdBy: validated.createdBy,
+    });
 
     return {
       review,
       snapshot,
       approvalEvidenceLink,
     };
+  }
+
+  private async recordApprovalHandoffTrace(input: {
+    missionId: string;
+    snapshotId: string;
+    approvalEvidenceLinkId: string;
+    review: MissionPlanningReview;
+    createdBy: string | null;
+  }): Promise<void> {
+    const client = await this.pool.connect();
+
+    try {
+      await this.missionPlanningRepository.insertApprovalHandoffTrace(
+        client,
+        input,
+      );
+    } finally {
+      client.release();
+    }
   }
 
   private async getDraftForClient(

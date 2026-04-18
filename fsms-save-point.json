@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission approval endpoint integration so approval can require the linked gate-ready planning evidence before changing mission state.",
+ "nextBuildStep": "Add mission dispatch integration so launch decisions can require linked approval and dispatch evidence without weakening the audit chain.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
