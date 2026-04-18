@@ -225,6 +225,7 @@ export class MissionService {
         mission.id,
         params.decisionEvidenceLinkId,
       );
+      await this.assertPlanningBackedApprovalForDispatch(tx, mission.id);
       
       await this.missionRepo.updateStatus(tx, params.missionId, "active");
 
@@ -296,6 +297,29 @@ export class MissionService {
     if (!referencesReadinessSnapshot) {
       throw new InvalidMissionDispatchEvidenceError(
         "Mission dispatch evidence must reference a readiness snapshot",
+      );
+    }
+  }
+
+  private async assertPlanningBackedApprovalForDispatch(
+    tx: any,
+    missionId: string,
+  ): Promise<void> {
+    if (!this.auditEvidenceRepository) {
+      throw new InvalidMissionDispatchEvidenceError(
+        "Mission dispatch evidence repository is not available",
+      );
+    }
+
+    const hasPlanningBackedApproval =
+      await this.auditEvidenceRepository.missionHasPlanningBackedApprovalEvent(
+        tx,
+        missionId,
+      );
+
+    if (!hasPlanningBackedApproval) {
+      throw new InvalidMissionDispatchEvidenceError(
+        "Mission launch requires approval backed by gate-ready planning evidence",
       );
     }
   }
