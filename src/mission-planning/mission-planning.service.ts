@@ -1,21 +1,26 @@
 import type { Pool } from "pg";
 import { AirspaceComplianceRepository } from "../airspace-compliance/airspace-compliance.repository";
 import { validateCreateAirspaceComplianceInput } from "../airspace-compliance/airspace-compliance.validators";
+import { AuditEvidenceService } from "../audit-evidence/audit-evidence.service";
 import { MissionRiskRepository } from "../mission-risk/mission-risk.repository";
 import { validateCreateMissionRiskInput } from "../mission-risk/mission-risk.validators";
 import {
   MissionPlanningDraftNotFoundError,
   MissionPlanningReferenceNotFoundError,
+  MissionPlanningReviewNotReadyError,
 } from "./mission-planning.errors";
 import { MissionPlanningRepository } from "./mission-planning.repository";
 import type {
+  CreateMissionPlanningApprovalHandoffInput,
   CreateMissionPlanningDraftInput,
+  MissionPlanningApprovalHandoff,
   MissionPlanningDraft,
   MissionPlanningChecklistItem,
   MissionPlanningReview,
   UpdateMissionPlanningDraftInput,
 } from "./mission-planning.types";
 import {
+  validateCreateMissionPlanningApprovalHandoffInput,
   validateCreateMissionPlanningDraftInput,
   validateUpdateMissionPlanningDraftInput,
 } from "./mission-planning.validators";
@@ -26,6 +31,7 @@ export class MissionPlanningService {
     private readonly missionPlanningRepository: MissionPlanningRepository,
     private readonly missionRiskRepository: MissionRiskRepository,
     private readonly airspaceComplianceRepository: AirspaceComplianceRepository,
+    private readonly auditEvidenceService: AuditEvidenceService,
   ) {}
 
   async createDraft(
@@ -227,6 +233,38 @@ export class MissionPlanningService {
       readyForApproval: blockingReasons.length === 0,
       blockingReasons,
       checklist: draft.checklist,
+    };
+  }
+
+  async createApprovalHandoff(
+    missionId: string,
+    input: CreateMissionPlanningApprovalHandoffInput | undefined,
+  ): Promise<MissionPlanningApprovalHandoff> {
+    const validated = validateCreateMissionPlanningApprovalHandoffInput(input);
+    const review = await this.reviewDraft(missionId);
+
+    if (!review.readyForApproval) {
+      throw new MissionPlanningReviewNotReadyError(review.blockingReasons);
+    }
+
+    const snapshot =
+      await this.auditEvidenceService.createMissionReadinessSnapshot(missionId, {
+        createdBy: validated.createdBy,
+      });
+    const approvalEvidenceLink =
+      await this.auditEvidenceService.createMissionDecisionEvidenceLink(
+        missionId,
+        {
+          snapshotId: snapshot.id,
+          decisionType: "approval",
+          createdBy: validated.createdBy,
+        },
+      );
+
+    return {
+      review,
+      snapshot,
+      approvalEvidenceLink,
     };
   }
 

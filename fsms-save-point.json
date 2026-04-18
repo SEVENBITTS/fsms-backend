@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission planning approval handoff so a gate-ready review can be linked to approval evidence without mutating the draft review itself.",
+ "nextBuildStep": "Add mission approval endpoint integration so approval can require the linked gate-ready planning evidence before changing mission state.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

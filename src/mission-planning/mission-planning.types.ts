@@ -1,4 +1,8 @@
 import type { CreateAirspaceComplianceInput } from "../airspace-compliance/airspace-compliance.types";
+import type {
+  AuditEvidenceSnapshot,
+  MissionDecisionEvidenceLink,
+} from "../audit-evidence/audit-evidence.types";
 import type { CreateMissionRiskInput } from "../mission-risk/mission-risk.types";
 
 export interface CreateMissionPlanningDraftInput {
@@ -48,4 +52,14 @@ export interface MissionPlanningReview {
   readyForApproval: boolean;
   blockingReasons: string[];
   checklist: MissionPlanningChecklistItem[];
+}
+
+export interface CreateMissionPlanningApprovalHandoffInput {
+  createdBy?: string | null;
+}
+
+export interface MissionPlanningApprovalHandoff {
+  review: MissionPlanningReview;
+  snapshot: AuditEvidenceSnapshot;
+  approvalEvidenceLink: MissionDecisionEvidenceLink;
 }

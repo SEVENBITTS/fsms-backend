@@ -98,6 +98,15 @@ const countRows = async (missionId?: string) => {
   };
 };
 
+const getMissionStatus = async (missionId: string) => {
+  const result = await pool.query<{ status: string }>(
+    "select status from missions where id = $1",
+    [missionId],
+  );
+
+  return result.rows[0]?.status;
+};
+
 describe("mission planning drafts", () => {
   beforeAll(async () => {
     await runMigrations(pool);
@@ -311,6 +320,93 @@ describe("mission planning drafts", () => {
         { key: "airspace", status: "missing" },
       ],
     });
+  });
+
+  it("hands off a gate-ready planning review to approval evidence", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-handoff-ready",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+
+    const beforeReview = await request(app).get(
+      `/mission-plans/drafts/${createResponse.body.draft.missionId}/review`,
+    );
+    const beforeCounts = await countRows(createResponse.body.draft.missionId);
+    const handoffResponse = await request(app)
+      .post(
+        `/mission-plans/drafts/${createResponse.body.draft.missionId}/approval-handoff`,
+      )
+      .send({
+        createdBy: " planning lead ",
+      });
+    const afterReview = await request(app).get(
+      `/mission-plans/drafts/${createResponse.body.draft.missionId}/review`,
+    );
+    const afterCounts = await countRows(createResponse.body.draft.missionId);
+
+    expect(beforeReview.status).toBe(200);
+    expect(handoffResponse.status).toBe(201);
+    expect(handoffResponse.body.handoff.review).toEqual(beforeReview.body.review);
+    expect(handoffResponse.body.handoff.snapshot).toMatchObject({
+      missionId: createResponse.body.draft.missionId,
+      evidenceType: "mission_readiness_gate",
+      createdBy: "planning lead",
+    });
+    expect(handoffResponse.body.handoff.approvalEvidenceLink).toMatchObject({
+      missionId: createResponse.body.draft.missionId,
+      auditEvidenceSnapshotId: handoffResponse.body.handoff.snapshot.id,
+      decisionType: "approval",
+      createdBy: "planning lead",
+    });
+    expect(afterReview.body.review).toEqual(beforeReview.body.review);
+    expect(afterCounts).toEqual({
+      ...beforeCounts,
+      snapshot_count: beforeCounts.snapshot_count + 1,
+      decision_link_count: beforeCounts.decision_link_count + 1,
+    });
+    expect(afterCounts.mission_event_count).toBe(0);
+    expect(await getMissionStatus(createResponse.body.draft.missionId)).toBe(
+      "draft",
+    );
+  });
+
+  it("rejects approval handoff when the planning review is not ready", async () => {
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-handoff-blocked",
+      riskInput: lowRiskInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+
+    const beforeCounts = await countRows(createResponse.body.draft.missionId);
+    const handoffResponse = await request(app)
+      .post(
+        `/mission-plans/drafts/${createResponse.body.draft.missionId}/approval-handoff`,
+      )
+      .send({
+        createdBy: "approver",
+      });
+    const afterCounts = await countRows(createResponse.body.draft.missionId);
+
+    expect(handoffResponse.status).toBe(409);
+    expect(handoffResponse.body).toMatchObject({
+      error: {
+        type: "mission_planning_review_not_ready",
+        blockingReasons: [
+          "Assign a platform before readiness can pass",
+          "Assign a pilot before readiness can pass",
+          "Add airspace compliance inputs before readiness can pass",
+        ],
+      },
+    });
+    expect(afterCounts).toEqual(beforeCounts);
   });
 
   it("updates draft placeholders without replacing omitted values", async () => {
@@ -589,6 +685,37 @@ describe("mission planning drafts", () => {
     const submittedResponse = await request(app).get(
       `/mission-plans/drafts/${missionId}/review`,
     );
+
+    expect(missingResponse.status).toBe(404);
+    expect(submittedResponse.status).toBe(404);
+  });
+
+  it("returns 404 when handing off missing or non-draft missions", async () => {
+    const missingResponse = await request(app)
+      .post(`/mission-plans/drafts/${randomUUID()}/approval-handoff`)
+      .send({
+        createdBy: "approver",
+      });
+    const missionId = randomUUID();
+
+    await pool.query(
+      `
+      insert into missions (
+        id,
+        status,
+        mission_plan_id,
+        last_event_sequence_no
+      )
+      values ($1, 'submitted', 'submitted-plan', 0)
+      `,
+      [missionId],
+    );
+
+    const submittedResponse = await request(app)
+      .post(`/mission-plans/drafts/${missionId}/approval-handoff`)
+      .send({
+        createdBy: "approver",
+      });
 
     expect(missingResponse.status).toBe(404);
     expect(submittedResponse.status).toBe(404);

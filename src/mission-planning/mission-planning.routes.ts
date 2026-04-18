@@ -8,6 +8,10 @@ export function createMissionPlanningRouter(
 
   router.post("/drafts", controller.createDraft);
   router.patch("/drafts/:missionId", controller.updateDraft);
+  router.post(
+    "/drafts/:missionId/approval-handoff",
+    controller.createApprovalHandoff,
+  );
   router.get("/drafts/:missionId/review", controller.reviewDraft);
   router.get("/drafts/:missionId", controller.getDraft);
 
