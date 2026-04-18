@@ -102,3 +102,25 @@ export interface PostOperationEvidenceExportPackage {
   createdAt: string;
   completionSnapshot: PostOperationCompletionSnapshot;
 }
+
+export interface AuditReportField {
+  label: string;
+  value: string | number | boolean | null;
+}
+
+export interface AuditReportSection {
+  heading: string;
+  fields: AuditReportField[];
+}
+
+export interface PostOperationEvidenceRenderedReport {
+  renderType: "post_operation_completion_evidence_report";
+  formatVersion: 1;
+  generatedAt: string;
+  sourceExport: PostOperationEvidenceExportPackage;
+  report: {
+    title: string;
+    sections: AuditReportSection[];
+    plainText: string;
+  };
+}
