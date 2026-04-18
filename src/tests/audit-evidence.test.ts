@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from post_operation_evidence_snapshots");
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
   await pool.query("delete from audit_evidence_snapshots");
@@ -156,11 +157,117 @@ const createReadyMission = async () => {
   };
 };
 
+const createDecisionEvidenceLink = async (
+  missionId: string,
+  decisionType: "approval" | "dispatch",
+) => {
+  const snapshotResponse = await request(app)
+    .post(`/missions/${missionId}/readiness/audit-snapshots`)
+    .send({ createdBy: "evidence-reviewer" });
+
+  expect(snapshotResponse.status).toBe(201);
+
+  const linkResponse = await request(app)
+    .post(`/missions/${missionId}/decision-evidence-links`)
+    .send({
+      snapshotId: snapshotResponse.body.snapshot.id,
+      decisionType,
+      createdBy: "evidence-reviewer",
+    });
+
+  expect(linkResponse.status).toBe(201);
+
+  return linkResponse.body.link as {
+    id: string;
+    auditEvidenceSnapshotId: string;
+    decisionType: "approval" | "dispatch";
+  };
+};
+
+const createPlanningApprovalHandoffTrace = async (
+  missionId: string,
+  link: { id: string; auditEvidenceSnapshotId: string },
+) => {
+  await pool.query(
+    `
+    insert into mission_planning_approval_handoffs (
+      id,
+      mission_id,
+      audit_evidence_snapshot_id,
+      mission_decision_evidence_link_id,
+      planning_review,
+      created_by
+    )
+    values ($1, $2, $3, $4, $5::jsonb, $6)
+    `,
+    [
+      randomUUID(),
+      missionId,
+      link.auditEvidenceSnapshotId,
+      link.id,
+      JSON.stringify({
+        missionId,
+        readyForApproval: true,
+        blockingReasons: [],
+        checklist: [
+          {
+            code: "MISSION_READY_FOR_APPROVAL",
+            passed: true,
+          },
+        ],
+      }),
+      "planning-lead",
+    ],
+  );
+};
+
+const createCompletedMission = async () => {
+  const { missionId } = await createReadyMission();
+  const approvalLink = await createDecisionEvidenceLink(missionId, "approval");
+  await createPlanningApprovalHandoffTrace(missionId, approvalLink);
+
+  const approveResponse = await request(app)
+    .post(`/missions/${missionId}/approve`)
+    .send({
+      reviewerId: "approver-1",
+      decisionEvidenceLinkId: approvalLink.id,
+      notes: "post-operation evidence test approval",
+    });
+  expect(approveResponse.status).toBe(204);
+
+  const dispatchLink = await createDecisionEvidenceLink(missionId, "dispatch");
+  const launchResponse = await request(app)
+    .post(`/missions/${missionId}/launch`)
+    .send({
+      operatorId: "operator-1",
+      vehicleId: "uav-1",
+      lat: 51.5074,
+      lng: -0.1278,
+      decisionEvidenceLinkId: dispatchLink.id,
+    });
+  expect(launchResponse.status).toBe(204);
+
+  const completeResponse = await request(app)
+    .post(`/missions/${missionId}/complete`)
+    .send({
+      operatorId: "operator-1",
+    });
+  expect(completeResponse.status).toBe(204);
+
+  return {
+    missionId,
+    approvalLink,
+    dispatchLink,
+  };
+};
+
 const countRows = async (missionId: string) => {
   const result = await pool.query(
     `
     select
+      (select status from missions where id = $1) as mission_status,
       (select count(*)::int from audit_evidence_snapshots where mission_id = $1) as snapshot_count,
+      (select count(*)::int from post_operation_evidence_snapshots where mission_id = $1) as post_operation_snapshot_count,
       (select count(*)::int from mission_decision_evidence_links where mission_id = $1) as decision_link_count,
       (select count(*)::int from mission_events where mission_id = $1) as mission_event_count,
       (select count(*)::int from mission_risk_inputs where mission_id = $1) as risk_input_count,
@@ -171,7 +278,9 @@ const countRows = async (missionId: string) => {
   );
 
   return result.rows[0] as {
+    mission_status: string;
     snapshot_count: number;
+    post_operation_snapshot_count: number;
     decision_link_count: number;
     mission_event_count: number;
     risk_input_count: number;
@@ -528,5 +637,161 @@ describe("audit evidence snapshots", () => {
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.snapshots[0]).toEqual(beforeSnapshot);
+  });
+
+  it("captures post-operation completion evidence without mutating the mission", async () => {
+    const { missionId, approvalLink, dispatchLink } =
+      await createCompletedMission();
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({
+        createdBy: " accountable-manager ",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.snapshot).toMatchObject({
+      missionId,
+      evidenceType: "post_operation_completion",
+      lifecycleState: "completed",
+      createdBy: "accountable-manager",
+      completionSnapshot: {
+        missionId,
+        status: "completed",
+        approvalEvent: {
+          type: "mission.approved",
+          details: {
+            decision_evidence_link_id: approvalLink.id,
+          },
+        },
+        launchEvent: {
+          type: "mission.launched",
+          details: {
+            decision_evidence_link_id: dispatchLink.id,
+            vehicle_id: "uav-1",
+          },
+        },
+        completionEvent: {
+          type: "mission.completed",
+          toState: "completed",
+        },
+        approvalEvidenceLink: {
+          id: approvalLink.id,
+          decisionType: "approval",
+        },
+        dispatchEvidenceLink: {
+          id: dispatchLink.id,
+          decisionType: "dispatch",
+        },
+        planningApprovalHandoff: {
+          missionDecisionEvidenceLinkId: approvalLink.id,
+          planningReview: {
+            readyForApproval: true,
+          },
+        },
+      },
+    });
+    expect(response.body.snapshot.id).toEqual(expect.any(String));
+    expect(response.body.snapshot.createdAt).toEqual(expect.any(String));
+    expect(response.body.snapshot.completionSnapshot.capturedAt).toEqual(
+      expect.any(String),
+    );
+
+    expect(await countRows(missionId)).toEqual({
+      ...before,
+      post_operation_snapshot_count:
+        before.post_operation_snapshot_count + 1,
+    });
+  });
+
+  it("keeps post-operation snapshots immutable when source events are later queried again", async () => {
+    const { missionId, approvalLink, dispatchLink } =
+      await createCompletedMission();
+
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.snapshots).toHaveLength(1);
+    expect(listResponse.body.snapshots[0]).toEqual(snapshotResponse.body.snapshot);
+    expect(listResponse.body.snapshots[0].completionSnapshot).toMatchObject({
+      approvalEvidenceLink: {
+        id: approvalLink.id,
+      },
+      dispatchEvidenceLink: {
+        id: dispatchLink.id,
+      },
+      completionEvent: {
+        type: "mission.completed",
+      },
+    });
+  });
+
+  it("lists post-operation snapshots only for the requested mission", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+
+    const firstSnapshot = await request(app)
+      .post(`/missions/${first.missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "reviewer-a" });
+    const secondSnapshot = await request(app)
+      .post(`/missions/${second.missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "reviewer-b" });
+
+    expect(firstSnapshot.status).toBe(201);
+    expect(secondSnapshot.status).toBe(201);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/post-operation/evidence-snapshots`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.snapshots).toHaveLength(1);
+    expect(response.body.snapshots[0]).toMatchObject({
+      missionId: first.missionId,
+      createdBy: "reviewer-a",
+    });
+  });
+
+  it("rejects post-operation evidence before mission completion", async () => {
+    const { missionId } = await createReadyMission();
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "mission_not_completed",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("rejects invalid post-operation snapshot metadata", async () => {
+    const { missionId } = await createCompletedMission();
+
+    const response = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({
+        createdBy: 42,
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "audit_evidence_validation_failed",
+      },
+    });
   });
 });

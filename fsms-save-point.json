@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add post-operation completion evidence snapshots so completed missions preserve launch, flight, and readiness decisions as reviewable records.",
+ "nextBuildStep": "Add migration-backed post-operation audit export endpoint so reviewable completion snapshots can be packaged for operators, accountable managers, or regulators.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -4,6 +4,10 @@ import type { MissionReadinessCheck } from "../missions/mission-readiness.types"
 import type {
   AuditEvidenceSnapshot,
   MissionDecisionEvidenceLink,
+  MissionLifecycleEvidenceEvent,
+  PlanningApprovalHandoffEvidence,
+  PostOperationCompletionSnapshot,
+  PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
 
 interface AuditEvidenceSnapshotRow extends QueryResultRow {
@@ -42,6 +46,53 @@ interface CreateMissionDecisionEvidenceLinkRow {
   createdBy: string | null;
 }
 
+interface MissionAuditStateRow extends QueryResultRow {
+  id: string;
+  status: string;
+  mission_plan_id: string | null;
+}
+
+interface MissionLifecycleEvidenceEventRow extends QueryResultRow {
+  id: string;
+  sequence_no: number;
+  event_type: string;
+  event_ts: Date;
+  recorded_at: Date;
+  actor_type: string;
+  actor_id: string | null;
+  from_state: string | null;
+  to_state: string | null;
+  summary: string;
+  details: Record<string, unknown>;
+}
+
+interface PlanningApprovalHandoffEvidenceRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  audit_evidence_snapshot_id: string;
+  mission_decision_evidence_link_id: string;
+  planning_review: Record<string, unknown>;
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface PostOperationEvidenceSnapshotRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  evidence_type: PostOperationEvidenceSnapshot["evidenceType"];
+  lifecycle_state: string;
+  completion_snapshot: PostOperationCompletionSnapshot;
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface CreatePostOperationEvidenceSnapshotRow {
+  missionId: string;
+  lifecycleState: string;
+  completionSnapshot: PostOperationCompletionSnapshot;
+  createdBy: string | null;
+}
+
 const toAuditEvidenceSnapshot = (
   row: AuditEvidenceSnapshotRow,
 ): AuditEvidenceSnapshot => ({
@@ -69,6 +120,46 @@ const toMissionDecisionEvidenceLink = (
   createdAt: row.created_at.toISOString(),
 });
 
+const toMissionLifecycleEvidenceEvent = (
+  row: MissionLifecycleEvidenceEventRow,
+): MissionLifecycleEvidenceEvent => ({
+  id: Number(row.id),
+  sequence: row.sequence_no,
+  type: row.event_type,
+  time: row.event_ts.toISOString(),
+  recordedAt: row.recorded_at.toISOString(),
+  actorType: row.actor_type,
+  actorId: row.actor_id,
+  fromState: row.from_state,
+  toState: row.to_state,
+  summary: row.summary,
+  details: row.details,
+});
+
+const toPlanningApprovalHandoffEvidence = (
+  row: PlanningApprovalHandoffEvidenceRow,
+): PlanningApprovalHandoffEvidence => ({
+  id: row.id,
+  missionId: row.mission_id,
+  auditEvidenceSnapshotId: row.audit_evidence_snapshot_id,
+  missionDecisionEvidenceLinkId: row.mission_decision_evidence_link_id,
+  planningReview: row.planning_review,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
+const toPostOperationEvidenceSnapshot = (
+  row: PostOperationEvidenceSnapshotRow,
+): PostOperationEvidenceSnapshot => ({
+  id: row.id,
+  missionId: row.mission_id,
+  evidenceType: row.evidence_type,
+  lifecycleState: row.lifecycle_state,
+  completionSnapshot: row.completion_snapshot,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
 export class AuditEvidenceRepository {
   async missionExists(tx: PoolClient, missionId: string): Promise<boolean> {
     const result = await tx.query(
@@ -81,6 +172,22 @@ export class AuditEvidenceRepository {
     );
 
     return result.rowCount === 1;
+  }
+
+  async getMissionAuditState(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<MissionAuditStateRow | null> {
+    const result = await tx.query<MissionAuditStateRow>(
+      `
+      select id, status, mission_plan_id
+      from missions
+      where id = $1
+      `,
+      [missionId],
+    );
+
+    return result.rows[0] ?? null;
   }
 
   async insertReadinessSnapshot(
@@ -219,6 +326,124 @@ export class AuditEvidenceRepository {
     );
 
     return result.rows[0] ? toMissionDecisionEvidenceLink(result.rows[0]) : null;
+  }
+
+  async getDecisionEvidenceLinkById(
+    tx: PoolClient,
+    missionId: string,
+    linkId: string | null,
+  ): Promise<MissionDecisionEvidenceLink | null> {
+    if (!linkId) {
+      return null;
+    }
+
+    return this.getDecisionEvidenceLinkForMission(tx, missionId, linkId);
+  }
+
+  async getLifecycleEvidenceEvents(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<MissionLifecycleEvidenceEvent[]> {
+    const result = await tx.query<MissionLifecycleEvidenceEventRow>(
+      `
+      select
+        id,
+        sequence_no,
+        event_type,
+        event_ts,
+        recorded_at,
+        actor_type,
+        actor_id,
+        from_state,
+        to_state,
+        summary,
+        details
+      from mission_events
+      where mission_id = $1
+        and event_type in (
+          'mission.approved',
+          'mission.launched',
+          'mission.completed'
+        )
+      order by sequence_no asc, id asc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toMissionLifecycleEvidenceEvent);
+  }
+
+  async getPlanningApprovalHandoffForDecisionLink(
+    tx: PoolClient,
+    missionId: string,
+    decisionEvidenceLinkId: string | null,
+  ): Promise<PlanningApprovalHandoffEvidence | null> {
+    if (!decisionEvidenceLinkId) {
+      return null;
+    }
+
+    const result = await tx.query<PlanningApprovalHandoffEvidenceRow>(
+      `
+      select *
+      from mission_planning_approval_handoffs
+      where mission_id = $1
+        and mission_decision_evidence_link_id = $2
+      limit 1
+      `,
+      [missionId, decisionEvidenceLinkId],
+    );
+
+    return result.rows[0]
+      ? toPlanningApprovalHandoffEvidence(result.rows[0])
+      : null;
+  }
+
+  async insertPostOperationEvidenceSnapshot(
+    tx: PoolClient,
+    input: CreatePostOperationEvidenceSnapshotRow,
+  ): Promise<PostOperationEvidenceSnapshot> {
+    const result = await tx.query<PostOperationEvidenceSnapshotRow>(
+      `
+      insert into post_operation_evidence_snapshots (
+        id,
+        mission_id,
+        evidence_type,
+        lifecycle_state,
+        completion_snapshot,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5::jsonb, $6)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        "post_operation_completion",
+        input.lifecycleState,
+        JSON.stringify(input.completionSnapshot),
+        input.createdBy,
+      ],
+    );
+
+    return toPostOperationEvidenceSnapshot(result.rows[0]);
+  }
+
+  async listPostOperationEvidenceSnapshots(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<PostOperationEvidenceSnapshot[]> {
+    const result = await tx.query<PostOperationEvidenceSnapshotRow>(
+      `
+      select *
+      from post_operation_evidence_snapshots
+      where mission_id = $1
+        and evidence_type = 'post_operation_completion'
+      order by created_at desc, id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toPostOperationEvidenceSnapshot);
   }
 
   async decisionEvidenceLinkReferencesReadinessSnapshot(

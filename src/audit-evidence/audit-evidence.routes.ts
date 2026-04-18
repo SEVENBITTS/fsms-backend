@@ -22,6 +22,14 @@ export function createAuditEvidenceRouter(
     "/:missionId/decision-evidence-links",
     controller.listMissionDecisionEvidenceLinks,
   );
+  router.post(
+    "/:missionId/post-operation/evidence-snapshots",
+    controller.createPostOperationEvidenceSnapshot,
+  );
+  router.get(
+    "/:missionId/post-operation/evidence-snapshots",
+    controller.listPostOperationEvidenceSnapshots,
+  );
 
   return router;
 }
