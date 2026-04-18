@@ -35,4 +35,20 @@ export class MissionPlanningController {
       next(error);
     }
   };
+
+  updateDraft = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const draft = await this.missionPlanningService.updateDraft(
+        req.params.missionId,
+        req.body,
+      );
+      res.status(200).json({ draft });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

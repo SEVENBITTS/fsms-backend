@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission planning draft update endpoints so operators can progressively fill platform, pilot, risk, and airspace placeholders.",
+ "nextBuildStep": "Add mission planning review endpoint so a completed draft can produce a gate-ready planning summary before approval.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

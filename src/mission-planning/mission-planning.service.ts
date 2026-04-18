@@ -12,8 +12,12 @@ import type {
   CreateMissionPlanningDraftInput,
   MissionPlanningDraft,
   MissionPlanningChecklistItem,
+  UpdateMissionPlanningDraftInput,
 } from "./mission-planning.types";
-import { validateCreateMissionPlanningDraftInput } from "./mission-planning.validators";
+import {
+  validateCreateMissionPlanningDraftInput,
+  validateUpdateMissionPlanningDraftInput,
+} from "./mission-planning.validators";
 
 export class MissionPlanningService {
   constructor(
@@ -102,6 +106,106 @@ export class MissionPlanningService {
 
     try {
       return await this.getDraftForClient(client, missionId);
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateDraft(
+    missionId: string,
+    input: UpdateMissionPlanningDraftInput | undefined,
+  ): Promise<MissionPlanningDraft> {
+    const validated = validateUpdateMissionPlanningDraftInput(input);
+    const riskInput = validated.riskInput
+      ? validateCreateMissionRiskInput(validated.riskInput)
+      : null;
+    const airspaceInput = validated.airspaceInput
+      ? validateCreateAirspaceComplianceInput(validated.airspaceInput)
+      : null;
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+      await this.getDraftForClient(client, missionId);
+
+      if (
+        validated.platformId.provided &&
+        validated.platformId.value &&
+        !(await this.missionPlanningRepository.platformExists(
+          client,
+          validated.platformId.value,
+        ))
+      ) {
+        throw new MissionPlanningReferenceNotFoundError(
+          `Platform not found: ${validated.platformId.value}`,
+        );
+      }
+
+      if (
+        validated.pilotId.provided &&
+        validated.pilotId.value &&
+        !(await this.missionPlanningRepository.pilotExists(
+          client,
+          validated.pilotId.value,
+        ))
+      ) {
+        throw new MissionPlanningReferenceNotFoundError(
+          `Pilot not found: ${validated.pilotId.value}`,
+        );
+      }
+
+      const placeholderUpdates: {
+        missionPlanId?: string | null;
+        platformId?: string | null;
+        pilotId?: string | null;
+      } = {};
+
+      if (validated.missionPlanId.provided) {
+        placeholderUpdates.missionPlanId = validated.missionPlanId.value;
+      }
+
+      if (validated.platformId.provided) {
+        placeholderUpdates.platformId = validated.platformId.value;
+      }
+
+      if (validated.pilotId.provided) {
+        placeholderUpdates.pilotId = validated.pilotId.value;
+      }
+
+      const updated =
+        await this.missionPlanningRepository.updateDraftMissionPlaceholders(
+          client,
+          missionId,
+          placeholderUpdates,
+        );
+
+      if (!updated) {
+        throw new MissionPlanningDraftNotFoundError(missionId);
+      }
+
+      if (riskInput) {
+        await this.missionRiskRepository.insertMissionRiskInput(client, {
+          missionId,
+          ...riskInput,
+        });
+      }
+
+      if (airspaceInput) {
+        await this.airspaceComplianceRepository.insertAirspaceComplianceInput(
+          client,
+          {
+            missionId,
+            ...airspaceInput,
+          },
+        );
+      }
+
+      const draft = await this.getDraftForClient(client, missionId);
+      await client.query("COMMIT");
+      return draft;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
     } finally {
       client.release();
     }

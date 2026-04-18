@@ -65,6 +65,50 @@ export class MissionPlanningRepository {
     return result.rows[0].id;
   }
 
+  async updateDraftMissionPlaceholders(
+    tx: PoolClient,
+    missionId: string,
+    input: {
+      missionPlanId?: string | null;
+      platformId?: string | null;
+      pilotId?: string | null;
+    },
+  ): Promise<boolean> {
+    const setClauses: string[] = [];
+    const values: Array<string | null> = [missionId];
+
+    if (Object.prototype.hasOwnProperty.call(input, "missionPlanId")) {
+      values.push(input.missionPlanId ?? null);
+      setClauses.push(`mission_plan_id = $${values.length}`);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(input, "platformId")) {
+      values.push(input.platformId ?? null);
+      setClauses.push(`platform_id = $${values.length}`);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(input, "pilotId")) {
+      values.push(input.pilotId ?? null);
+      setClauses.push(`pilot_id = $${values.length}`);
+    }
+
+    if (setClauses.length === 0) {
+      return true;
+    }
+
+    const result = await tx.query(
+      `
+      update missions
+      set ${setClauses.join(", ")}
+      where id = $1
+        and status = 'draft'
+      `,
+      values,
+    );
+
+    return result.rowCount === 1;
+  }
+
   async getDraftMission(
     tx: PoolClient,
     missionId: string,

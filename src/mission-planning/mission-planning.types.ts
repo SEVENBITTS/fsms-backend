@@ -9,6 +9,14 @@ export interface CreateMissionPlanningDraftInput {
   airspaceInput?: CreateAirspaceComplianceInput | null;
 }
 
+export interface UpdateMissionPlanningDraftInput {
+  missionPlanId?: string | null;
+  platformId?: string | null;
+  pilotId?: string | null;
+  riskInput?: CreateMissionRiskInput;
+  airspaceInput?: CreateAirspaceComplianceInput;
+}
+
 export interface MissionPlanningChecklistItem {
   key: "platform" | "pilot" | "risk" | "airspace";
   status: "present" | "missing";
