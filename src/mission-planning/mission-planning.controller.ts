@@ -36,6 +36,21 @@ export class MissionPlanningController {
     }
   };
 
+  reviewDraft = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const review = await this.missionPlanningService.reviewDraft(
+        req.params.missionId,
+      );
+      res.status(200).json({ review });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   updateDraft = async (
     req: Request<MissionIdParams>,
     res: Response,

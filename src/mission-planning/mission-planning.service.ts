@@ -12,6 +12,7 @@ import type {
   CreateMissionPlanningDraftInput,
   MissionPlanningDraft,
   MissionPlanningChecklistItem,
+  MissionPlanningReview,
   UpdateMissionPlanningDraftInput,
 } from "./mission-planning.types";
 import {
@@ -209,6 +210,24 @@ export class MissionPlanningService {
     } finally {
       client.release();
     }
+  }
+
+  async reviewDraft(missionId: string): Promise<MissionPlanningReview> {
+    const draft = await this.getDraft(missionId);
+    const blockingReasons = draft.checklist
+      .filter((item) => item.status === "missing")
+      .map((item) => item.message);
+
+    return {
+      missionId: draft.missionId,
+      missionPlanId: draft.missionPlanId,
+      status: draft.status,
+      platformId: draft.platformId,
+      pilotId: draft.pilotId,
+      readyForApproval: blockingReasons.length === 0,
+      blockingReasons,
+      checklist: draft.checklist,
+    };
   }
 
   private async getDraftForClient(

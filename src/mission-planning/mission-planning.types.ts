@@ -38,3 +38,14 @@ export interface MissionPlanningDraft {
   checklist: MissionPlanningChecklistItem[];
   readinessCheckAvailable: boolean;
 }
+
+export interface MissionPlanningReview {
+  missionId: string;
+  missionPlanId: string | null;
+  status: "draft";
+  platformId: string | null;
+  pilotId: string | null;
+  readyForApproval: boolean;
+  blockingReasons: string[];
+  checklist: MissionPlanningChecklistItem[];
+}
