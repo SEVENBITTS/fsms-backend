@@ -4,6 +4,14 @@ import request from "supertest";
 import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
+const parseBinaryResponse = (res: NodeJS.ReadableStream, callback: (error: Error | null, body?: Buffer) => void) => {
+  const chunks: Buffer[] = [];
+
+  res.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+  res.on("end", () => callback(null, Buffer.concat(chunks)));
+  res.on("error", (error: Error) => callback(error));
+};
+
 const clearTables = async () => {
   await pool.query("delete from post_operation_evidence_snapshots");
   await pool.query("delete from mission_planning_approval_handoffs");
@@ -1011,6 +1019,90 @@ describe("audit evidence snapshots", () => {
     );
     const missingMissionResponse = await request(app).get(
       `/missions/${randomUUID()}/post-operation/evidence-snapshots/${randomUUID()}/export/render`,
+    );
+
+    expect(missingSnapshotResponse.status).toBe(404);
+    expect(missingSnapshotResponse.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(missingMissionResponse.status).toBe(404);
+    expect(missingMissionResponse.body).toMatchObject({
+      error: {
+        type: "mission_not_found",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("generates a post-operation audit PDF download without mutating audit state", async () => {
+    const { missionId, dispatchLink } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    expect(response.headers["content-disposition"]).toContain("attachment");
+    expect(response.headers["content-disposition"]).toContain(
+      `mission-${missionId}-post-operation-evidence-${snapshotResponse.body.snapshot.id}.pdf`,
+    );
+    expect(Buffer.isBuffer(response.body)).toBe(true);
+    expect(response.body.toString("latin1", 0, 8)).toBe("%PDF-1.4");
+    expect(response.body.toString("latin1")).toContain(
+      `Post-operation completion evidence for mission ${missionId}`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      `Dispatch evidence link ID: ${dispatchLink.id}`,
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("does not generate PDFs for post-operation snapshots from another mission", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+    const secondSnapshot = await request(app)
+      .post(`/missions/${second.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(secondSnapshot.status).toBe(201);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/post-operation/evidence-snapshots/${secondSnapshot.body.snapshot.id}/export/render/pdf`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
+  });
+
+  it("returns 404 for unknown post-operation PDF missions and snapshots", async () => {
+    const { missionId } = await createCompletedMission();
+    const before = await countRows(missionId);
+
+    const missingSnapshotResponse = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${randomUUID()}/export/render/pdf`,
+    );
+    const missingMissionResponse = await request(app).get(
+      `/missions/${randomUUID()}/post-operation/evidence-snapshots/${randomUUID()}/export/render/pdf`,
     );
 
     expect(missingSnapshotResponse.status).toBe(404);

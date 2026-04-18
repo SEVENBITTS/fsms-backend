@@ -38,6 +38,10 @@ export function createAuditEvidenceRouter(
     "/:missionId/post-operation/evidence-snapshots/:snapshotId/export/render",
     controller.renderPostOperationEvidenceSnapshot,
   );
+  router.get(
+    "/:missionId/post-operation/evidence-snapshots/:snapshotId/export/render/pdf",
+    controller.generatePostOperationEvidencePdf,
+  );
 
   return router;
 }
