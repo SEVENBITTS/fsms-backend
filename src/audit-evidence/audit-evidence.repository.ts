@@ -269,4 +269,31 @@ export class AuditEvidenceRepository {
 
     return result.rowCount === 1;
   }
+
+  async missionHasPlanningBackedApprovalEvent(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from mission_events events
+      inner join mission_planning_approval_handoffs handoffs
+        on handoffs.mission_id = events.mission_id
+       and handoffs.mission_decision_evidence_link_id::text =
+        events.details ->> 'decision_evidence_link_id'
+      inner join mission_decision_evidence_links links
+        on links.id = handoffs.mission_decision_evidence_link_id
+       and links.mission_id = handoffs.mission_id
+      where events.mission_id = $1
+        and events.event_type = 'mission.approved'
+        and links.decision_type = 'approval'
+        and coalesce((handoffs.planning_review ->> 'readyForApproval')::boolean, false) = true
+      limit 1
+      `,
+      [missionId],
+    );
+
+    return result.rowCount === 1;
+  }
 }

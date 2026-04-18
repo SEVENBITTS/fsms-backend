@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission dispatch integration so launch decisions can require linked approval and dispatch evidence without weakening the audit chain.",
+ "nextBuildStep": "Add post-operation completion evidence snapshots so completed missions preserve launch, flight, and readiness decisions as reviewable records.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

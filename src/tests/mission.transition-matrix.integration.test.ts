@@ -144,6 +144,73 @@ const createApprovalEvidenceLink = async (missionId: string) => {
 const createDispatchEvidenceLink = async (missionId: string) =>
   createDecisionEvidenceLink(missionId, "dispatch");
 
+const recordPlanningBackedApprovalEvent = async (missionId: string) => {
+  const approvalLink = await createApprovalEvidenceLink(missionId);
+
+  await pool.query(
+    `
+    insert into mission_events (
+      mission_id,
+      mission_plan_id,
+      event_type,
+      event_version,
+      event_ts,
+      recorded_at,
+      sequence_no,
+      actor_type,
+      actor_id,
+      from_state,
+      to_state,
+      summary,
+      details,
+      source_component,
+      source,
+      severity,
+      safety_relevant,
+      compliance_relevant,
+      metadata
+    )
+    values (
+      $1,
+      'plan-1',
+      'mission.approved',
+      1,
+      now(),
+      now(),
+      1,
+      'user',
+      'reviewer-1',
+      'submitted',
+      'approved',
+      'Mission approved',
+      $2::jsonb,
+      'mission-review-service',
+      'mission-review-service',
+      'info',
+      false,
+      true,
+      '{}'::jsonb
+    )
+    `,
+    [
+      missionId,
+      JSON.stringify({
+        decision: "approved",
+        decision_evidence_link_id: approvalLink.id,
+        notes: "planning-backed approval fixture",
+      }),
+    ],
+  );
+  await pool.query(
+    `
+    update missions
+    set last_event_sequence_no = greatest(last_event_sequence_no, 1)
+    where id = $1
+    `,
+    [missionId],
+  );
+};
+
 type TransitionCase = {
   name: string;
   route: (missionId: string) => string;
@@ -351,6 +418,7 @@ describe("mission transition matrix integration", () => {
       }
 
       if (testCase.expectedEventType === "mission.launched" && testCase.allowed) {
+        await recordPlanningBackedApprovalEvent(missionId);
         const link = await createDispatchEvidenceLink(missionId);
         requestBody.decisionEvidenceLinkId = link.id;
       }
