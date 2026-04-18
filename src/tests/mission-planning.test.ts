@@ -240,6 +240,79 @@ describe("mission planning drafts", () => {
     expect(getResponse.body.draft).toEqual(createResponse.body.draft);
   });
 
+  it("reviews a complete draft as gate-ready without side effects", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-review-ready",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+
+    const beforeReview = await countRows(createResponse.body.draft.missionId);
+    const reviewResponse = await request(app).get(
+      `/mission-plans/drafts/${createResponse.body.draft.missionId}/review`,
+    );
+    const afterReview = await countRows(createResponse.body.draft.missionId);
+
+    expect(reviewResponse.status).toBe(200);
+    expect(reviewResponse.body.review).toMatchObject({
+      missionId: createResponse.body.draft.missionId,
+      missionPlanId: "plan-review-ready",
+      status: "draft",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      readyForApproval: true,
+      blockingReasons: [],
+      checklist: [
+        { key: "platform", status: "present" },
+        { key: "pilot", status: "present" },
+        { key: "risk", status: "present" },
+        { key: "airspace", status: "present" },
+      ],
+    });
+    expect(afterReview).toEqual(beforeReview);
+  });
+
+  it("reviews an incomplete draft with blocking reasons", async () => {
+    const platform = await createPlatform();
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-review-blocked",
+      platformId: platform.id,
+    });
+
+    expect(createResponse.status).toBe(201);
+
+    const reviewResponse = await request(app).get(
+      `/mission-plans/drafts/${createResponse.body.draft.missionId}/review`,
+    );
+
+    expect(reviewResponse.status).toBe(200);
+    expect(reviewResponse.body.review).toMatchObject({
+      missionId: createResponse.body.draft.missionId,
+      missionPlanId: "plan-review-blocked",
+      status: "draft",
+      platformId: platform.id,
+      pilotId: null,
+      readyForApproval: false,
+      blockingReasons: [
+        "Assign a pilot before readiness can pass",
+        "Add mission risk inputs before readiness can pass",
+        "Add airspace compliance inputs before readiness can pass",
+      ],
+      checklist: [
+        { key: "platform", status: "present" },
+        { key: "pilot", status: "missing" },
+        { key: "risk", status: "missing" },
+        { key: "airspace", status: "missing" },
+      ],
+    });
+  });
+
   it("updates draft placeholders without replacing omitted values", async () => {
     const platform = await createPlatform();
     const pilot = await createPilot();
@@ -488,6 +561,33 @@ describe("mission planning drafts", () => {
 
     const submittedResponse = await request(app).get(
       `/mission-plans/drafts/${missionId}`,
+    );
+
+    expect(missingResponse.status).toBe(404);
+    expect(submittedResponse.status).toBe(404);
+  });
+
+  it("returns 404 when reviewing missing or non-draft missions", async () => {
+    const missingResponse = await request(app).get(
+      `/mission-plans/drafts/${randomUUID()}/review`,
+    );
+    const missionId = randomUUID();
+
+    await pool.query(
+      `
+      insert into missions (
+        id,
+        status,
+        mission_plan_id,
+        last_event_sequence_no
+      )
+      values ($1, 'submitted', 'submitted-plan', 0)
+      `,
+      [missionId],
+    );
+
+    const submittedResponse = await request(app).get(
+      `/mission-plans/drafts/${missionId}/review`,
     );
 
     expect(missingResponse.status).toBe(404);

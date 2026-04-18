@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission planning review endpoint so a completed draft can produce a gate-ready planning summary before approval.",
+ "nextBuildStep": "Add mission planning approval handoff so a gate-ready review can be linked to approval evidence without mutating the draft review itself.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
