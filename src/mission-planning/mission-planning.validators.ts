@@ -1,5 +1,8 @@
 import { MissionPlanningValidationError } from "./mission-planning.errors";
-import type { CreateMissionPlanningDraftInput } from "./mission-planning.types";
+import type {
+  CreateMissionPlanningDraftInput,
+  UpdateMissionPlanningDraftInput,
+} from "./mission-planning.types";
 
 function optionalTrimmed(value: unknown, fieldName: string): string | null {
   if (value === undefined || value === null) {
@@ -20,6 +23,18 @@ function optionalObject<T>(value: unknown, fieldName: string): T | null {
   }
 
   if (typeof value !== "object" || Array.isArray(value)) {
+    throw new MissionPlanningValidationError(`${fieldName} must be an object`);
+  }
+
+  return value as T;
+}
+
+function requiredPatchObject<T>(value: unknown, fieldName: string): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new MissionPlanningValidationError(`${fieldName} must be an object`);
   }
 
@@ -49,5 +64,34 @@ export function validateCreateMissionPlanningDraftInput(
     pilotId: optionalTrimmed(input.pilotId, "pilotId"),
     riskInput: optionalObject(input.riskInput, "riskInput"),
     airspaceInput: optionalObject(input.airspaceInput, "airspaceInput"),
+  };
+}
+
+export function validateUpdateMissionPlanningDraftInput(
+  input: UpdateMissionPlanningDraftInput | undefined,
+) {
+  if (input === undefined || input === null) {
+    throw new MissionPlanningValidationError("Request body must be an object");
+  }
+
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new MissionPlanningValidationError("Request body must be an object");
+  }
+
+  return {
+    missionPlanId: {
+      provided: Object.prototype.hasOwnProperty.call(input, "missionPlanId"),
+      value: optionalTrimmed(input.missionPlanId, "missionPlanId"),
+    },
+    platformId: {
+      provided: Object.prototype.hasOwnProperty.call(input, "platformId"),
+      value: optionalTrimmed(input.platformId, "platformId"),
+    },
+    pilotId: {
+      provided: Object.prototype.hasOwnProperty.call(input, "pilotId"),
+      value: optionalTrimmed(input.pilotId, "pilotId"),
+    },
+    riskInput: requiredPatchObject(input.riskInput, "riskInput"),
+    airspaceInput: requiredPatchObject(input.airspaceInput, "airspaceInput"),
   };
 }
