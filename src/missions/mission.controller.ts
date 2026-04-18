@@ -150,6 +150,7 @@ export class MissionController {
         vehicleId: this.requireString(req.body.vehicleId, "vehicleId"),
         lat: this.requireNumber(req.body.lat, "lat"),
         lng: this.requireNumber(req.body.lng, "lng"),
+        decisionEvidenceLinkId: this.optionalString(req.body.decisionEvidenceLinkId),
         requestId: this.optionalString(req.headers["x-request-id"]),
         correlationId: this.optionalString(req.headers["x-correlation-id"]),
       });

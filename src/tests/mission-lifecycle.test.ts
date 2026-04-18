@@ -107,6 +107,9 @@ const createDecisionEvidenceLink = async (
 const createApprovalEvidenceLink = async (missionId: string) =>
   createDecisionEvidenceLink(missionId, "approval");
 
+const createDispatchEvidenceLink = async (missionId: string) =>
+  createDecisionEvidenceLink(missionId, "dispatch");
+
 const getAuditEvidenceState = async (missionId: string) => {
   const result = await pool.query(
     `
@@ -253,11 +256,16 @@ describe("mission integration", () => {
     route: (missionId) => `/missions/${missionId}/launch`,
     initialStatus: "approved",
     expectedStatusAfterFirstCall: "active",
-    requestBody: {
-      operatorId: "operator-1",
-      vehicleId: "vehicle-1",
-      lat: 51.5074,
-      lng: -0.1278,
+    requestBody: async (missionId) => {
+      const link = await createDispatchEvidenceLink(missionId);
+
+      return {
+        operatorId: "operator-1",
+        vehicleId: "vehicle-1",
+        lat: 51.5074,
+        lng: -0.1278,
+        decisionEvidenceLinkId: link.id,
+      };
     },
     expectedErrorMessage: "Mission cannot be launched from status active",
     eventType: "mission.launched",
@@ -532,13 +540,14 @@ describe("mission integration", () => {
   expect(await countMissionEventsByType(missionId, "mission.launched")).toBe(0);
 });
 
-  it("POST /missions/:missionId/launch updates mission state and creates exactly one mission.launched event", async () => {
+  it("POST /missions/:missionId/launch rejects approved launch without linked readiness evidence", async () => {
     const missionId = randomUUID();
 
     await insertMission({
       id: missionId,
       status: "approved",
     });
+    const auditBefore = await getAuditEvidenceState(missionId);
 
     const launchResponse = await request(app)
       .post(`/missions/${missionId}/launch`)
@@ -547,6 +556,117 @@ describe("mission integration", () => {
         vehicleId: "vehicle-1",
         lat: 51.5074,
         lng: -0.1278,
+      });
+
+    expect(launchResponse.status).toBe(400);
+    expect(launchResponse.body).toMatchObject({
+      error: {
+        type: "mission_dispatch_evidence_required",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "approved",
+      last_event_sequence_no: 0,
+    });
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await getAuditEvidenceState(missionId)).toEqual(auditBefore);
+  });
+
+  it("POST /missions/:missionId/launch rejects approval evidence links", async () => {
+    const missionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "approved",
+    });
+    const approvalLink = await createApprovalEvidenceLink(missionId);
+    const auditBefore = await getAuditEvidenceState(missionId);
+
+    const launchResponse = await request(app)
+      .post(`/missions/${missionId}/launch`)
+      .send({
+        operatorId: "operator-1",
+        vehicleId: "vehicle-1",
+        lat: 51.5074,
+        lng: -0.1278,
+        decisionEvidenceLinkId: approvalLink.id,
+      });
+
+    expect(launchResponse.status).toBe(409);
+    expect(launchResponse.body).toMatchObject({
+      error: {
+        type: "invalid_mission_dispatch_evidence",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "approved",
+      last_event_sequence_no: 0,
+    });
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await getAuditEvidenceState(missionId)).toEqual(auditBefore);
+  });
+
+  it("POST /missions/:missionId/launch rejects dispatch evidence from another mission", async () => {
+    const missionId = randomUUID();
+    const otherMissionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "approved",
+    });
+    await insertMission({
+      id: otherMissionId,
+      status: "approved",
+    });
+    const otherLink = await createDispatchEvidenceLink(otherMissionId);
+    const auditBefore = await getAuditEvidenceState(missionId);
+    const otherAuditBefore = await getAuditEvidenceState(otherMissionId);
+
+    const launchResponse = await request(app)
+      .post(`/missions/${missionId}/launch`)
+      .send({
+        operatorId: "operator-1",
+        vehicleId: "vehicle-1",
+        lat: 51.5074,
+        lng: -0.1278,
+        decisionEvidenceLinkId: otherLink.id,
+      });
+
+    expect(launchResponse.status).toBe(409);
+    expect(launchResponse.body).toMatchObject({
+      error: {
+        type: "invalid_mission_dispatch_evidence",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "approved",
+      last_event_sequence_no: 0,
+    });
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await getAuditEvidenceState(missionId)).toEqual(auditBefore);
+    expect(await getAuditEvidenceState(otherMissionId)).toEqual(otherAuditBefore);
+  });
+
+  it("POST /missions/:missionId/launch updates mission state and creates exactly one mission.launched event", async () => {
+    const missionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "approved",
+    });
+    const dispatchLink = await createDispatchEvidenceLink(missionId);
+
+    const launchResponse = await request(app)
+      .post(`/missions/${missionId}/launch`)
+      .send({
+        operatorId: "operator-1",
+        vehicleId: "vehicle-1",
+        lat: 51.5074,
+        lng: -0.1278,
+        decisionEvidenceLinkId: dispatchLink.id,
       });
 
     expect(launchResponse.status).toBe(204);
@@ -573,6 +693,7 @@ describe("mission integration", () => {
 
     expect(launchedEvents[0].details).toMatchObject({
       vehicle_id: "vehicle-1",
+      decision_evidence_link_id: dispatchLink.id,
       launch_site: {
         lat: 51.5074,
         lng: -0.1278,
@@ -885,6 +1006,8 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
 
     expect(approveResponse.status).toBe(204);
 
+    const dispatchEvidenceLink = await createDispatchEvidenceLink(missionId);
+
     const launchResponse = await request(app)
       .post(`/missions/${missionId}/launch`)
       .send({
@@ -892,6 +1015,7 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
         vehicleId: "vehicle-1",
         lat: 51.5074,
         lng: -0.1278,
+        decisionEvidenceLinkId: dispatchEvidenceLink.id,
       });
 
     expect(launchResponse.status).toBe(204);
@@ -977,6 +1101,7 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
       summary: "Mission launched",
       details: {
         vehicle_id: "vehicle-1",
+        decision_evidence_link_id: dispatchEvidenceLink.id,
         launch_site: {
           lat: 51.5074,
           lng: -0.1278,

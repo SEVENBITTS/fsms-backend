@@ -24,3 +24,21 @@ export class InvalidMissionApprovalEvidenceError extends HttpError {
     this.name = "InvalidMissionApprovalEvidenceError";
   }
 }
+
+export class MissionDispatchEvidenceRequiredError extends HttpError {
+  constructor() {
+    super(
+      400,
+      "Mission launch requires a linked readiness evidence snapshot",
+      "mission_dispatch_evidence_required",
+    );
+    this.name = "MissionDispatchEvidenceRequiredError";
+  }
+}
+
+export class InvalidMissionDispatchEvidenceError extends HttpError {
+  constructor(message: string) {
+    super(409, message, "invalid_mission_dispatch_evidence");
+    this.name = "InvalidMissionDispatchEvidenceError";
+  }
+}

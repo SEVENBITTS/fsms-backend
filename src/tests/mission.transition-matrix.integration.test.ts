@@ -77,7 +77,10 @@ const countMissionEventsByType = async (
   return result.rows[0].count as number;
 };
 
-const createApprovalEvidenceLink = async (missionId: string) => {
+const createDecisionEvidenceLink = async (
+  missionId: string,
+  decisionType: "approval" | "dispatch",
+) => {
   const snapshotResponse = await request(app)
     .post(`/missions/${missionId}/readiness/audit-snapshots`)
     .send({});
@@ -88,7 +91,7 @@ const createApprovalEvidenceLink = async (missionId: string) => {
     .post(`/missions/${missionId}/decision-evidence-links`)
     .send({
       snapshotId: snapshotResponse.body.snapshot.id,
-      decisionType: "approval",
+      decisionType,
       createdBy: "reviewer-1",
     });
 
@@ -96,6 +99,12 @@ const createApprovalEvidenceLink = async (missionId: string) => {
 
   return linkResponse.body.link as { id: string };
 };
+
+const createApprovalEvidenceLink = async (missionId: string) =>
+  createDecisionEvidenceLink(missionId, "approval");
+
+const createDispatchEvidenceLink = async (missionId: string) =>
+  createDecisionEvidenceLink(missionId, "dispatch");
 
 type TransitionCase = {
   name: string;
@@ -300,6 +309,11 @@ describe("mission transition matrix integration", () => {
 
       if (testCase.expectedEventType === "mission.approved" && testCase.allowed) {
         const link = await createApprovalEvidenceLink(missionId);
+        requestBody.decisionEvidenceLinkId = link.id;
+      }
+
+      if (testCase.expectedEventType === "mission.launched" && testCase.allowed) {
+        const link = await createDispatchEvidenceLink(missionId);
         requestBody.decisionEvidenceLinkId = link.id;
       }
 

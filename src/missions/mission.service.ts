@@ -23,7 +23,9 @@ import type { MissionRiskResult } from "../mission-risk/mission-risk.types";
 import type { AirspaceComplianceResult } from "../airspace-compliance/airspace-compliance.types";
 import {
   InvalidMissionApprovalEvidenceError,
+  InvalidMissionDispatchEvidenceError,
   MissionApprovalEvidenceRequiredError,
+  MissionDispatchEvidenceRequiredError,
 } from "./errors";
 
 export interface GetMissionEventsFilters {
@@ -196,6 +198,7 @@ export class MissionService {
     vehicleId: string;
     lat: number;
     lng: number;
+    decisionEvidenceLinkId?: string;
     requestId?: string;
     correlationId?: string;
   }): Promise<void> {
@@ -204,6 +207,11 @@ export class MissionService {
       
       assertMissionActionAllowed(mission.status, "launch");
 
+      await this.assertDispatchEvidenceLinked(
+        tx,
+        mission.id,
+        params.decisionEvidenceLinkId,
+      );
       
       await this.missionRepo.updateStatus(tx, params.missionId, "active");
 
@@ -218,6 +226,7 @@ export class MissionService {
         summary: "Mission launched",
         details: {
           vehicle_id: params.vehicleId,
+          decision_evidence_link_id: params.decisionEvidenceLinkId,
           launch_site: {
             lat: params.lat,
             lng: params.lng,
@@ -228,6 +237,54 @@ export class MissionService {
         correlationId: params.correlationId ?? null,
       });
     });
+  }
+
+  private async assertDispatchEvidenceLinked(
+    tx: any,
+    missionId: string,
+    decisionEvidenceLinkId?: string,
+  ): Promise<void> {
+    if (!decisionEvidenceLinkId) {
+      throw new MissionDispatchEvidenceRequiredError();
+    }
+
+    if (!this.auditEvidenceRepository) {
+      throw new InvalidMissionDispatchEvidenceError(
+        "Mission dispatch evidence repository is not available",
+      );
+    }
+
+    const link =
+      await this.auditEvidenceRepository.getDecisionEvidenceLinkForMission(
+        tx,
+        missionId,
+        decisionEvidenceLinkId,
+      );
+
+    if (!link) {
+      throw new InvalidMissionDispatchEvidenceError(
+        "Mission dispatch evidence link was not found for this mission",
+      );
+    }
+
+    if (link.decisionType !== "dispatch") {
+      throw new InvalidMissionDispatchEvidenceError(
+        "Mission launch requires a dispatch evidence link",
+      );
+    }
+
+    const referencesReadinessSnapshot =
+      await this.auditEvidenceRepository.decisionEvidenceLinkReferencesReadinessSnapshot(
+        tx,
+        missionId,
+        decisionEvidenceLinkId,
+      );
+
+    if (!referencesReadinessSnapshot) {
+      throw new InvalidMissionDispatchEvidenceError(
+        "Mission dispatch evidence must reference a readiness snapshot",
+      );
+    }
   }
 
   async completeMission(params: {

@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission dispatch guard migration so launch decisions require linked readiness evidence snapshots.",
+ "nextBuildStep": "Add mission planning draft endpoints so operators can create mission plans with platform, pilot, risk, and airspace placeholders.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
