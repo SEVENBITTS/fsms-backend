@@ -51,6 +51,23 @@ export class MissionPlanningController {
     }
   };
 
+  createApprovalHandoff = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const handoff =
+        await this.missionPlanningService.createApprovalHandoff(
+          req.params.missionId,
+          req.body,
+        );
+      res.status(201).json({ handoff });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   updateDraft = async (
     req: Request<MissionIdParams>,
     res: Response,

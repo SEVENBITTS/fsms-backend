@@ -1,5 +1,6 @@
 import { MissionPlanningValidationError } from "./mission-planning.errors";
 import type {
+  CreateMissionPlanningApprovalHandoffInput,
   CreateMissionPlanningDraftInput,
   UpdateMissionPlanningDraftInput,
 } from "./mission-planning.types";
@@ -93,5 +94,23 @@ export function validateUpdateMissionPlanningDraftInput(
     },
     riskInput: requiredPatchObject(input.riskInput, "riskInput"),
     airspaceInput: requiredPatchObject(input.airspaceInput, "airspaceInput"),
+  };
+}
+
+export function validateCreateMissionPlanningApprovalHandoffInput(
+  input: CreateMissionPlanningApprovalHandoffInput | undefined,
+) {
+  if (input === undefined || input === null) {
+    return {
+      createdBy: null,
+    };
+  }
+
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new MissionPlanningValidationError("Request body must be an object");
+  }
+
+  return {
+    createdBy: optionalTrimmed(input.createdBy, "createdBy"),
   };
 }

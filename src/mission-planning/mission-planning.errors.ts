@@ -20,3 +20,12 @@ export class MissionPlanningReferenceNotFoundError extends Error {
     super(message);
   }
 }
+
+export class MissionPlanningReviewNotReadyError extends Error {
+  readonly statusCode = 409;
+  readonly code = "MISSION_PLANNING_REVIEW_NOT_READY";
+
+  constructor(readonly blockingReasons: string[]) {
+    super("Mission planning review is not ready for approval handoff");
+  }
+}

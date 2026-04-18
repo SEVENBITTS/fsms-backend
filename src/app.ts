@@ -154,6 +154,7 @@ const missionPlanningService = new MissionPlanningService(
   missionPlanningRepository,
   missionRiskRepository,
   airspaceComplianceRepository,
+  auditEvidenceService,
 );
 const missionPlanningController = new MissionPlanningController(
   missionPlanningService,
@@ -194,12 +195,14 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
       statusCode: number;
       code?: string;
       type?: string;
+      blockingReasons?: string[];
     };
 
     return res.status(appError.statusCode).json({
       error: {
         message: appError.message,
         type: appError.type ?? appError.code?.toLowerCase() ?? "application_error",
+        blockingReasons: appError.blockingReasons,
       },
     });
   }
