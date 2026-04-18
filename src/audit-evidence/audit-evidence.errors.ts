@@ -31,3 +31,12 @@ export class AuditEvidenceMissionNotCompletedError extends Error {
     );
   }
 }
+
+export class PostOperationEvidenceSnapshotNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "POST_OPERATION_EVIDENCE_SNAPSHOT_NOT_FOUND";
+
+  constructor(snapshotId: string) {
+    super(`Post-operation evidence snapshot not found for mission: ${snapshotId}`);
+  }
+}

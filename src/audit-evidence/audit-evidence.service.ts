@@ -4,6 +4,7 @@ import {
   AuditEvidenceMissionNotCompletedError,
   AuditEvidenceMissionNotFoundError,
   AuditEvidenceSnapshotNotFoundError,
+  PostOperationEvidenceSnapshotNotFoundError,
 } from "./audit-evidence.errors";
 import { AuditEvidenceRepository } from "./audit-evidence.repository";
 import type {
@@ -14,6 +15,7 @@ import type {
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PostOperationCompletionSnapshot,
+  PostOperationEvidenceExportPackage,
   PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
 import {
@@ -213,6 +215,50 @@ export class AuditEvidenceService {
         client,
         missionId,
       );
+    } finally {
+      client.release();
+    }
+  }
+
+  async exportPostOperationEvidenceSnapshot(
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationEvidenceExportPackage> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      const snapshot =
+        await this.auditEvidenceRepository.getPostOperationEvidenceSnapshotForMission(
+          client,
+          missionId,
+          snapshotId,
+        );
+
+      if (!snapshot) {
+        throw new PostOperationEvidenceSnapshotNotFoundError(snapshotId);
+      }
+
+      return {
+        exportType: "post_operation_completion_evidence",
+        formatVersion: 1,
+        generatedAt: new Date().toISOString(),
+        missionId: snapshot.missionId,
+        snapshotId: snapshot.id,
+        evidenceType: snapshot.evidenceType,
+        lifecycleState: snapshot.lifecycleState,
+        createdBy: snapshot.createdBy,
+        createdAt: snapshot.createdAt,
+        completionSnapshot: snapshot.completionSnapshot,
+      };
     } finally {
       client.release();
     }

@@ -794,4 +794,113 @@ describe("audit evidence snapshots", () => {
       },
     });
   });
+
+  it("exports a post-operation evidence package without mutating audit state", async () => {
+    const { missionId, approvalLink, dispatchLink } =
+      await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export).toMatchObject({
+      exportType: "post_operation_completion_evidence",
+      formatVersion: 1,
+      missionId,
+      snapshotId: snapshotResponse.body.snapshot.id,
+      evidenceType: "post_operation_completion",
+      lifecycleState: "completed",
+      createdBy: "accountable-manager",
+      createdAt: snapshotResponse.body.snapshot.createdAt,
+      completionSnapshot: {
+        missionId,
+        status: "completed",
+        approvalEvent: {
+          details: {
+            decision_evidence_link_id: approvalLink.id,
+          },
+        },
+        launchEvent: {
+          details: {
+            decision_evidence_link_id: dispatchLink.id,
+          },
+        },
+        completionEvent: {
+          type: "mission.completed",
+        },
+        approvalEvidenceLink: {
+          id: approvalLink.id,
+        },
+        dispatchEvidenceLink: {
+          id: dispatchLink.id,
+        },
+        planningApprovalHandoff: {
+          missionDecisionEvidenceLinkId: approvalLink.id,
+        },
+      },
+    });
+    expect(response.body.export.generatedAt).toEqual(expect.any(String));
+    expect(response.body.export.completionSnapshot).toEqual(
+      snapshotResponse.body.snapshot.completionSnapshot,
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("does not export post-operation snapshots from another mission", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+    const secondSnapshot = await request(app)
+      .post(`/missions/${second.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(secondSnapshot.status).toBe(201);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/post-operation/evidence-snapshots/${secondSnapshot.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
+  });
+
+  it("returns 404 for unknown post-operation export missions and snapshots", async () => {
+    const { missionId } = await createCompletedMission();
+    const before = await countRows(missionId);
+
+    const missingSnapshotResponse = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${randomUUID()}/export`,
+    );
+    const missingMissionResponse = await request(app).get(
+      `/missions/${randomUUID()}/post-operation/evidence-snapshots/${randomUUID()}/export`,
+    );
+
+    expect(missingSnapshotResponse.status).toBe(404);
+    expect(missingSnapshotResponse.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(missingMissionResponse.status).toBe(404);
+    expect(missingMissionResponse.body).toMatchObject({
+      error: {
+        type: "mission_not_found",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
 });

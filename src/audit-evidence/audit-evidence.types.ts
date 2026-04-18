@@ -89,3 +89,16 @@ export interface PostOperationEvidenceSnapshot {
   createdBy: string | null;
   createdAt: string;
 }
+
+export interface PostOperationEvidenceExportPackage {
+  exportType: "post_operation_completion_evidence";
+  formatVersion: 1;
+  generatedAt: string;
+  missionId: string;
+  snapshotId: string;
+  evidenceType: PostOperationEvidenceType;
+  lifecycleState: string;
+  createdBy: string | null;
+  createdAt: string;
+  completionSnapshot: PostOperationCompletionSnapshot;
+}
