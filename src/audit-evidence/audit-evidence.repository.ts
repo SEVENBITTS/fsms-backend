@@ -6,6 +6,7 @@ import type {
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PlanningApprovalHandoffEvidence,
+  PostOperationAuditSignoff,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
@@ -93,6 +94,30 @@ interface CreatePostOperationEvidenceSnapshotRow {
   createdBy: string | null;
 }
 
+interface PostOperationAuditSignoffRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  post_operation_evidence_snapshot_id: string;
+  accountable_manager_name: string;
+  accountable_manager_role: string;
+  review_decision: PostOperationAuditSignoff["reviewDecision"];
+  signed_at: Date;
+  signature_reference: string | null;
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface CreatePostOperationAuditSignoffRow {
+  missionId: string;
+  postOperationEvidenceSnapshotId: string;
+  accountableManagerName: string;
+  accountableManagerRole: string;
+  reviewDecision: PostOperationAuditSignoff["reviewDecision"];
+  signedAt: string;
+  signatureReference: string | null;
+  createdBy: string | null;
+}
+
 const toAuditEvidenceSnapshot = (
   row: AuditEvidenceSnapshotRow,
 ): AuditEvidenceSnapshot => ({
@@ -156,6 +181,21 @@ const toPostOperationEvidenceSnapshot = (
   evidenceType: row.evidence_type,
   lifecycleState: row.lifecycle_state,
   completionSnapshot: row.completion_snapshot,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
+const toPostOperationAuditSignoff = (
+  row: PostOperationAuditSignoffRow,
+): PostOperationAuditSignoff => ({
+  id: row.id,
+  missionId: row.mission_id,
+  postOperationEvidenceSnapshotId: row.post_operation_evidence_snapshot_id,
+  accountableManagerName: row.accountable_manager_name,
+  accountableManagerRole: row.accountable_manager_role,
+  reviewDecision: row.review_decision,
+  signedAt: row.signed_at.toISOString(),
+  signatureReference: row.signature_reference,
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
 });
@@ -466,6 +506,58 @@ export class AuditEvidenceRepository {
     return result.rows[0]
       ? toPostOperationEvidenceSnapshot(result.rows[0])
       : null;
+  }
+
+  async postOperationAuditSignoffExistsForSnapshot(
+    tx: PoolClient,
+    snapshotId: string,
+  ): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from post_operation_audit_signoffs
+      where post_operation_evidence_snapshot_id = $1
+      `,
+      [snapshotId],
+    );
+
+    return result.rowCount === 1;
+  }
+
+  async insertPostOperationAuditSignoff(
+    tx: PoolClient,
+    input: CreatePostOperationAuditSignoffRow,
+  ): Promise<PostOperationAuditSignoff> {
+    const result = await tx.query<PostOperationAuditSignoffRow>(
+      `
+      insert into post_operation_audit_signoffs (
+        id,
+        mission_id,
+        post_operation_evidence_snapshot_id,
+        accountable_manager_name,
+        accountable_manager_role,
+        review_decision,
+        signed_at,
+        signature_reference,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        input.postOperationEvidenceSnapshotId,
+        input.accountableManagerName,
+        input.accountableManagerRole,
+        input.reviewDecision,
+        input.signedAt,
+        input.signatureReference,
+        input.createdBy,
+      ],
+    );
+
+    return toPostOperationAuditSignoff(result.rows[0]);
   }
 
   async decisionEvidenceLinkReferencesReadinessSnapshot(

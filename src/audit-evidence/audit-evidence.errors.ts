@@ -40,3 +40,14 @@ export class PostOperationEvidenceSnapshotNotFoundError extends Error {
     super(`Post-operation evidence snapshot not found for mission: ${snapshotId}`);
   }
 }
+
+export class PostOperationAuditSignoffAlreadyExistsError extends Error {
+  readonly statusCode = 409;
+  readonly code = "POST_OPERATION_AUDIT_SIGNOFF_ALREADY_EXISTS";
+
+  constructor(snapshotId: string) {
+    super(
+      `Post-operation audit sign-off already exists for snapshot: ${snapshotId}`,
+    );
+  }
+}

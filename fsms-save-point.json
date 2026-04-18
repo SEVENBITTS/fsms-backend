@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed accountable-manager sign-off creation endpoint so formal post-operation PDF approvals can be recorded.",
+ "nextBuildStep": "Connect stored accountable-manager sign-offs into rendered and PDF post-operation audit reports.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

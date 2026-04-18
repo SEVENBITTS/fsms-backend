@@ -169,4 +169,22 @@ export class AuditEvidenceController {
       next(error);
     }
   };
+
+  createPostOperationAuditSignoff = async (
+    req: Request<PostOperationSnapshotParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const signoff =
+        await this.auditEvidenceService.createPostOperationAuditSignoff(
+          req.params.missionId,
+          req.params.snapshotId,
+          req.body,
+        );
+      res.status(201).json({ signoff });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
