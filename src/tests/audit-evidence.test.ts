@@ -972,6 +972,22 @@ describe("audit evidence snapshots", () => {
               { label: "Launch site", value: "51.5074, -0.1278" },
             ]),
           },
+          {
+            heading: "Accountable manager sign-off",
+            fields: [
+              {
+                label: "Accountable manager name",
+                value: "Pending sign-off",
+              },
+              { label: "Role/title", value: "Pending sign-off" },
+              { label: "Signature", value: "Pending sign-off" },
+              { label: "Signed date/time", value: "Pending sign-off" },
+              {
+                label: "Review decision/status",
+                value: "Pending sign-off",
+              },
+            ],
+          },
         ],
       },
     });
@@ -981,6 +997,12 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       `Dispatch evidence link ID: ${dispatchLink.id}`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Review decision/status: Pending sign-off",
     );
     expect(await countRows(missionId)).toEqual(before);
   });
@@ -1065,6 +1087,21 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.toString("latin1")).toContain(
       `Dispatch evidence link ID: ${dispatchLink.id}`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Accountable manager name: Pending sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Signature: Pending sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Signed date/time: Pending sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Review decision/status: Pending sign-off",
     );
     expect(await countRows(missionId)).toEqual(before);
   });

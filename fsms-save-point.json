@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add accountable-manager signature block to post-operation audit PDF reports for formal review sign-off.",
+ "nextBuildStep": "Add accountable-manager sign-off record migration so formal post-operation PDF approvals can be stored and audited.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

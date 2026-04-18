@@ -469,6 +469,16 @@ export class AuditEvidenceService {
           },
         ],
       },
+      {
+        heading: "Accountable manager sign-off",
+        fields: [
+          { label: "Accountable manager name", value: "Pending sign-off" },
+          { label: "Role/title", value: "Pending sign-off" },
+          { label: "Signature", value: "Pending sign-off" },
+          { label: "Signed date/time", value: "Pending sign-off" },
+          { label: "Review decision/status", value: "Pending sign-off" },
+        ],
+      },
     ];
   }
 
