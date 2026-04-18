@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission planning draft endpoints so operators can create mission plans with platform, pilot, risk, and airspace placeholders.",
+ "nextBuildStep": "Add mission planning draft update endpoints so operators can progressively fill platform, pilot, risk, and airspace placeholders.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

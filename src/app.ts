@@ -46,6 +46,10 @@ import { AuditEvidenceRepository } from "./audit-evidence/audit-evidence.reposit
 import { AuditEvidenceService } from "./audit-evidence/audit-evidence.service";
 import { AuditEvidenceController } from "./audit-evidence/audit-evidence.controller";
 import { createAuditEvidenceRouter } from "./audit-evidence/audit-evidence.routes";
+import { MissionPlanningRepository } from "./mission-planning/mission-planning.repository";
+import { MissionPlanningService } from "./mission-planning/mission-planning.service";
+import { MissionPlanningController } from "./mission-planning/mission-planning.controller";
+import { createMissionPlanningRouter } from "./mission-planning/mission-planning.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -144,7 +148,18 @@ const auditEvidenceService = new AuditEvidenceService(
 const auditEvidenceController = new AuditEvidenceController(
   auditEvidenceService,
 );
+const missionPlanningRepository = new MissionPlanningRepository();
+const missionPlanningService = new MissionPlanningService(
+  pool,
+  missionPlanningRepository,
+  missionRiskRepository,
+  airspaceComplianceRepository,
+);
+const missionPlanningController = new MissionPlanningController(
+  missionPlanningService,
+);
 
+app.use("/mission-plans", createMissionPlanningRouter(missionPlanningController));
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
