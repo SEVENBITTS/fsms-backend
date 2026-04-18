@@ -13,6 +13,7 @@ const parseBinaryResponse = (res: NodeJS.ReadableStream, callback: (error: Error
 };
 
 const clearTables = async () => {
+  await pool.query("delete from post_operation_audit_signoffs");
   await pool.query("delete from post_operation_evidence_snapshots");
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
@@ -276,6 +277,7 @@ const countRows = async (missionId: string) => {
       (select status from missions where id = $1) as mission_status,
       (select count(*)::int from audit_evidence_snapshots where mission_id = $1) as snapshot_count,
       (select count(*)::int from post_operation_evidence_snapshots where mission_id = $1) as post_operation_snapshot_count,
+      (select count(*)::int from post_operation_audit_signoffs where mission_id = $1) as post_operation_signoff_count,
       (select count(*)::int from mission_decision_evidence_links where mission_id = $1) as decision_link_count,
       (select count(*)::int from mission_events where mission_id = $1) as mission_event_count,
       (select count(*)::int from mission_risk_inputs where mission_id = $1) as risk_input_count,
@@ -289,6 +291,7 @@ const countRows = async (missionId: string) => {
     mission_status: string;
     snapshot_count: number;
     post_operation_snapshot_count: number;
+    post_operation_signoff_count: number;
     decision_link_count: number;
     mission_event_count: number;
     risk_input_count: number;
@@ -1154,6 +1157,167 @@ describe("audit evidence snapshots", () => {
         type: "mission_not_found",
       },
     });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("stores accountable-manager sign-off records against post-operation evidence snapshots", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+    const signoffId = randomUUID();
+
+    await pool.query(
+      `
+      insert into post_operation_audit_signoffs (
+        id,
+        mission_id,
+        post_operation_evidence_snapshot_id,
+        accountable_manager_name,
+        accountable_manager_role,
+        review_decision,
+        signed_at,
+        signature_reference,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `,
+      [
+        signoffId,
+        missionId,
+        snapshotResponse.body.snapshot.id,
+        "Alex Accountable",
+        "Accountable Manager",
+        "approved",
+        "2026-04-18T18:00:00.000Z",
+        "signature://accountable-manager/alex",
+        "audit-admin",
+      ],
+    );
+
+    const result = await pool.query(
+      `
+      select
+        id,
+        mission_id,
+        post_operation_evidence_snapshot_id,
+        accountable_manager_name,
+        accountable_manager_role,
+        review_decision,
+        signed_at,
+        signature_reference,
+        created_by,
+        created_at
+      from post_operation_audit_signoffs
+      where id = $1
+      `,
+      [signoffId],
+    );
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      id: signoffId,
+      mission_id: missionId,
+      post_operation_evidence_snapshot_id: snapshotResponse.body.snapshot.id,
+      accountable_manager_name: "Alex Accountable",
+      accountable_manager_role: "Accountable Manager",
+      review_decision: "approved",
+      signature_reference: "signature://accountable-manager/alex",
+      created_by: "audit-admin",
+    });
+    expect(result.rows[0].signed_at.toISOString()).toBe(
+      "2026-04-18T18:00:00.000Z",
+    );
+    expect(result.rows[0].created_at).toBeInstanceOf(Date);
+    expect(await countRows(missionId)).toEqual({
+      ...before,
+      post_operation_signoff_count: before.post_operation_signoff_count + 1,
+    });
+  });
+
+  it("rejects accountable-manager sign-off records that reference another mission's snapshot", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+    const secondSnapshot = await request(app)
+      .post(`/missions/${second.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(secondSnapshot.status).toBe(201);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into post_operation_audit_signoffs (
+          id,
+          mission_id,
+          post_operation_evidence_snapshot_id,
+          accountable_manager_name,
+          accountable_manager_role,
+          review_decision,
+          signed_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7)
+        `,
+        [
+          randomUUID(),
+          first.missionId,
+          secondSnapshot.body.snapshot.id,
+          "Alex Accountable",
+          "Accountable Manager",
+          "approved",
+          "2026-04-18T18:00:00.000Z",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23503",
+    });
+
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
+  });
+
+  it("rejects unsupported accountable-manager sign-off review decisions", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into post_operation_audit_signoffs (
+          id,
+          mission_id,
+          post_operation_evidence_snapshot_id,
+          accountable_manager_name,
+          accountable_manager_role,
+          review_decision,
+          signed_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7)
+        `,
+        [
+          randomUUID(),
+          missionId,
+          snapshotResponse.body.snapshot.id,
+          "Alex Accountable",
+          "Accountable Manager",
+          "maybe",
+          "2026-04-18T18:00:00.000Z",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23514",
+    });
+
     expect(await countRows(missionId)).toEqual(before);
   });
 });
