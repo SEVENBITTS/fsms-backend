@@ -42,6 +42,10 @@ import { AirspaceComplianceRepository } from "./airspace-compliance/airspace-com
 import { AirspaceComplianceService } from "./airspace-compliance/airspace-compliance.service";
 import { AirspaceComplianceController } from "./airspace-compliance/airspace-compliance.controller";
 import { createAirspaceComplianceRouter } from "./airspace-compliance/airspace-compliance.routes";
+import { AuditEvidenceRepository } from "./audit-evidence/audit-evidence.repository";
+import { AuditEvidenceService } from "./audit-evidence/audit-evidence.service";
+import { AuditEvidenceController } from "./audit-evidence/audit-evidence.controller";
+import { createAuditEvidenceRouter } from "./audit-evidence/audit-evidence.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -130,10 +134,20 @@ const missionService = new MissionService(
   airspaceComplianceService,
 );
 const missionController = new MissionController(missionService);
+const auditEvidenceRepository = new AuditEvidenceRepository();
+const auditEvidenceService = new AuditEvidenceService(
+  pool,
+  auditEvidenceRepository,
+  missionService,
+);
+const auditEvidenceController = new AuditEvidenceController(
+  auditEvidenceService,
+);
 
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
+app.use("/missions", createAuditEvidenceRouter(auditEvidenceController));
 app.use("/missions", createMissionReplayRouter(missionReplayController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/missions", createAlertRouter(alertController));

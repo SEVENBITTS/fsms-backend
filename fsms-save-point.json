@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add audit evidence snapshots so mission gates can preserve readiness decisions as reviewable records.",
+ "nextBuildStep": "Add audit evidence approval linkage migration so readiness snapshots can be tied to mission approval and dispatch decisions.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

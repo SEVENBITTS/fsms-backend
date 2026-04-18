@@ -1,0 +1,13 @@
+export class AuditEvidenceValidationError extends Error {
+  readonly statusCode = 400;
+  readonly code = "AUDIT_EVIDENCE_VALIDATION_FAILED";
+}
+
+export class AuditEvidenceMissionNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "MISSION_NOT_FOUND";
+
+  constructor(missionId: string) {
+    super(`Mission not found: ${missionId}`);
+  }
+}
