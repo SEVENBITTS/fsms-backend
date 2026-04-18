@@ -9,6 +9,7 @@ import {
 import { AuditEvidenceRepository } from "./audit-evidence.repository";
 import type {
   AuditEvidenceSnapshot,
+  AuditReportSection,
   CreateAuditEvidenceSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
   CreatePostOperationEvidenceSnapshotInput,
@@ -16,6 +17,7 @@ import type {
   MissionLifecycleEvidenceEvent,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceExportPackage,
+  PostOperationEvidenceRenderedReport,
   PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
 import {
@@ -264,6 +266,29 @@ export class AuditEvidenceService {
     }
   }
 
+  async renderPostOperationEvidenceSnapshot(
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationEvidenceRenderedReport> {
+    const evidenceExport = await this.exportPostOperationEvidenceSnapshot(
+      missionId,
+      snapshotId,
+    );
+    const sections = this.buildPostOperationReportSections(evidenceExport);
+
+    return {
+      renderType: "post_operation_completion_evidence_report",
+      formatVersion: 1,
+      generatedAt: new Date().toISOString(),
+      sourceExport: evidenceExport,
+      report: {
+        title: `Post-operation completion evidence for mission ${evidenceExport.missionId}`,
+        sections,
+        plainText: this.renderSectionsAsPlainText(sections),
+      },
+    };
+  }
+
   private async buildPostOperationCompletionSnapshot(
     client: Awaited<ReturnType<Pool["connect"]>>,
     mission: { missionId: string; missionPlanId: string | null; status: string },
@@ -331,5 +356,142 @@ export class AuditEvidenceService {
     return typeof linkId === "string" && linkId.trim().length > 0
       ? linkId
       : null;
+  }
+
+  private buildPostOperationReportSections(
+    evidenceExport: PostOperationEvidenceExportPackage,
+  ): AuditReportSection[] {
+    const snapshot = evidenceExport.completionSnapshot;
+
+    return [
+      {
+        heading: "Evidence package",
+        fields: [
+          { label: "Mission ID", value: evidenceExport.missionId },
+          { label: "Snapshot ID", value: evidenceExport.snapshotId },
+          { label: "Evidence type", value: evidenceExport.evidenceType },
+          { label: "Lifecycle state", value: evidenceExport.lifecycleState },
+          { label: "Snapshot created by", value: evidenceExport.createdBy },
+          { label: "Snapshot created at", value: evidenceExport.createdAt },
+          { label: "Export generated at", value: evidenceExport.generatedAt },
+        ],
+      },
+      {
+        heading: "Mission completion",
+        fields: [
+          { label: "Mission plan ID", value: snapshot.missionPlanId },
+          { label: "Completion status", value: snapshot.status },
+          { label: "Evidence captured at", value: snapshot.capturedAt },
+          {
+            label: "Completion event sequence",
+            value: snapshot.completionEvent?.sequence ?? null,
+          },
+          {
+            label: "Completion event summary",
+            value: snapshot.completionEvent?.summary ?? null,
+          },
+        ],
+      },
+      {
+        heading: "Approval evidence",
+        fields: [
+          {
+            label: "Approval event sequence",
+            value: snapshot.approvalEvent?.sequence ?? null,
+          },
+          {
+            label: "Approval event actor",
+            value: snapshot.approvalEvent?.actorId ?? null,
+          },
+          {
+            label: "Approval evidence link ID",
+            value: snapshot.approvalEvidenceLink?.id ?? null,
+          },
+          {
+            label: "Planning handoff ID",
+            value: snapshot.planningApprovalHandoff?.id ?? null,
+          },
+          {
+            label: "Planning handoff ready",
+            value:
+              typeof snapshot.planningApprovalHandoff?.planningReview
+                .readyForApproval === "boolean"
+                ? snapshot.planningApprovalHandoff.planningReview
+                    .readyForApproval
+                : null,
+          },
+        ],
+      },
+      {
+        heading: "Dispatch and launch evidence",
+        fields: [
+          {
+            label: "Launch event sequence",
+            value: snapshot.launchEvent?.sequence ?? null,
+          },
+          {
+            label: "Launch event actor",
+            value: snapshot.launchEvent?.actorId ?? null,
+          },
+          {
+            label: "Dispatch evidence link ID",
+            value: snapshot.dispatchEvidenceLink?.id ?? null,
+          },
+          {
+            label: "Vehicle ID",
+            value: this.getStringDetail(snapshot.launchEvent, "vehicle_id"),
+          },
+          {
+            label: "Launch site",
+            value: this.renderLaunchSite(snapshot.launchEvent),
+          },
+        ],
+      },
+    ];
+  }
+
+  private renderSectionsAsPlainText(
+    sections: AuditReportSection[],
+  ): string {
+    return sections
+      .map((section) => {
+        const fields = section.fields
+          .map((field) => `${field.label}: ${field.value ?? "Not recorded"}`)
+          .join("\n");
+
+        return `${section.heading}\n${fields}`;
+      })
+      .join("\n\n");
+  }
+
+  private getStringDetail(
+    event: MissionLifecycleEvidenceEvent | null,
+    key: string,
+  ): string | null {
+    const value = event?.details[key];
+    return typeof value === "string" ? value : null;
+  }
+
+  private renderLaunchSite(
+    event: MissionLifecycleEvidenceEvent | null,
+  ): string | null {
+    const launchSite = event?.details.launch_site;
+
+    if (
+      !launchSite ||
+      typeof launchSite !== "object" ||
+      !("lat" in launchSite) ||
+      !("lng" in launchSite)
+    ) {
+      return null;
+    }
+
+    const site = launchSite as { lat?: unknown; lng?: unknown };
+
+    if (typeof site.lat !== "number" || typeof site.lng !== "number") {
+      return null;
+    }
+
+    return `${site.lat}, ${site.lng}`;
   }
 }

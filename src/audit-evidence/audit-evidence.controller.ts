@@ -127,4 +127,21 @@ export class AuditEvidenceController {
       next(error);
     }
   };
+
+  renderPostOperationEvidenceSnapshot = async (
+    req: Request<PostOperationSnapshotParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const report =
+        await this.auditEvidenceService.renderPostOperationEvidenceSnapshot(
+          req.params.missionId,
+          req.params.snapshotId,
+        );
+      res.status(200).json({ report });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

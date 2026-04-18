@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add post-operation audit export rendering endpoint so completion evidence packages can be delivered as regulator-ready reports.",
+ "nextBuildStep": "Add post-operation audit PDF generation endpoint so rendered completion reports can be downloaded for regulator review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

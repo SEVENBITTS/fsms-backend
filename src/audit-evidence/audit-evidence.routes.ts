@@ -34,6 +34,10 @@ export function createAuditEvidenceRouter(
     "/:missionId/post-operation/evidence-snapshots/:snapshotId/export",
     controller.exportPostOperationEvidenceSnapshot,
   );
+  router.get(
+    "/:missionId/post-operation/evidence-snapshots/:snapshotId/export/render",
+    controller.renderPostOperationEvidenceSnapshot,
+  );
 
   return router;
 }

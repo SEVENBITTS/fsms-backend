@@ -903,4 +903,128 @@ describe("audit evidence snapshots", () => {
     });
     expect(await countRows(missionId)).toEqual(before);
   });
+
+  it("renders a regulator-ready post-operation report without mutating audit state", async () => {
+    const { missionId, approvalLink, dispatchLink } =
+      await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report).toMatchObject({
+      renderType: "post_operation_completion_evidence_report",
+      formatVersion: 1,
+      sourceExport: {
+        exportType: "post_operation_completion_evidence",
+        missionId,
+        snapshotId: snapshotResponse.body.snapshot.id,
+        completionSnapshot: snapshotResponse.body.snapshot.completionSnapshot,
+      },
+      report: {
+        title: `Post-operation completion evidence for mission ${missionId}`,
+        sections: [
+          {
+            heading: "Evidence package",
+            fields: expect.arrayContaining([
+              { label: "Mission ID", value: missionId },
+              {
+                label: "Snapshot ID",
+                value: snapshotResponse.body.snapshot.id,
+              },
+              { label: "Lifecycle state", value: "completed" },
+            ]),
+          },
+          {
+            heading: "Mission completion",
+            fields: expect.arrayContaining([
+              { label: "Completion status", value: "completed" },
+              { label: "Completion event summary", value: "Mission completed" },
+            ]),
+          },
+          {
+            heading: "Approval evidence",
+            fields: expect.arrayContaining([
+              { label: "Approval evidence link ID", value: approvalLink.id },
+              { label: "Planning handoff ready", value: true },
+            ]),
+          },
+          {
+            heading: "Dispatch and launch evidence",
+            fields: expect.arrayContaining([
+              { label: "Dispatch evidence link ID", value: dispatchLink.id },
+              { label: "Vehicle ID", value: "uav-1" },
+              { label: "Launch site", value: "51.5074, -0.1278" },
+            ]),
+          },
+        ],
+      },
+    });
+    expect(response.body.report.generatedAt).toEqual(expect.any(String));
+    expect(response.body.report.report.plainText).toContain(
+      `Mission ID: ${missionId}`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Dispatch evidence link ID: ${dispatchLink.id}`,
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("does not render post-operation reports for snapshots from another mission", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+    const secondSnapshot = await request(app)
+      .post(`/missions/${second.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(secondSnapshot.status).toBe(201);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/post-operation/evidence-snapshots/${secondSnapshot.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
+  });
+
+  it("returns 404 for unknown post-operation report missions and snapshots", async () => {
+    const { missionId } = await createCompletedMission();
+    const before = await countRows(missionId);
+
+    const missingSnapshotResponse = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${randomUUID()}/export/render`,
+    );
+    const missingMissionResponse = await request(app).get(
+      `/missions/${randomUUID()}/post-operation/evidence-snapshots/${randomUUID()}/export/render`,
+    );
+
+    expect(missingSnapshotResponse.status).toBe(404);
+    expect(missingSnapshotResponse.body).toMatchObject({
+      error: {
+        type: "post_operation_evidence_snapshot_not_found",
+      },
+    });
+    expect(missingMissionResponse.status).toBe(404);
+    expect(missingMissionResponse.body).toMatchObject({
+      error: {
+        type: "mission_not_found",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
 });
