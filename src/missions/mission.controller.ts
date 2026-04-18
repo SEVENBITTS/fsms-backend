@@ -123,6 +123,7 @@ export class MissionController {
           (req as any).user?.id ?? req.body.reviewerId,
           "reviewerId",
         ),
+        decisionEvidenceLinkId: this.optionalString(req.body.decisionEvidenceLinkId),
         notes: this.optionalString(req.body.notes),
         requestId: this.optionalString(req.headers["x-request-id"]),
         correlationId: this.optionalString(req.headers["x-correlation-id"]),

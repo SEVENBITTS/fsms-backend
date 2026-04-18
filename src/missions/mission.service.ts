@@ -12,6 +12,7 @@ import { PilotNotFoundError } from "../pilots/pilot.errors";
 import { PilotService } from "../pilots/pilot.service";
 import { MissionRiskService } from "../mission-risk/mission-risk.service";
 import { AirspaceComplianceService } from "../airspace-compliance/airspace-compliance.service";
+import { AuditEvidenceRepository } from "../audit-evidence/audit-evidence.repository";
 import type {
   MissionReadinessCheck,
   MissionReadinessReason,
@@ -20,6 +21,10 @@ import type {
 import type { PilotReadinessResult } from "../pilots/pilot.types";
 import type { MissionRiskResult } from "../mission-risk/mission-risk.types";
 import type { AirspaceComplianceResult } from "../airspace-compliance/airspace-compliance.types";
+import {
+  InvalidMissionApprovalEvidenceError,
+  MissionApprovalEvidenceRequiredError,
+} from "./errors";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
@@ -60,6 +65,7 @@ export class MissionService {
     private readonly pilotService?: PilotService,
     private readonly missionRiskService?: MissionRiskService,
     private readonly airspaceComplianceService?: AirspaceComplianceService,
+    private readonly auditEvidenceRepository?: AuditEvidenceRepository,
   ) {}
 
   async submitMission(params: {
@@ -97,6 +103,7 @@ export class MissionService {
   async approveMission(params: {
   missionId: string;
   reviewerId: string;
+  decisionEvidenceLinkId?: string;
   notes?: string;
   requestId?: string;
   correlationId?: string;
@@ -105,6 +112,12 @@ export class MissionService {
     const mission = await this.missionRepo.getForUpdate(tx, params.missionId);
 
     assertMissionActionAllowed(mission.status, "approve");
+
+    await this.assertApprovalEvidenceLinked(
+      tx,
+      mission.id,
+      params.decisionEvidenceLinkId,
+    );
 
     await this.missionRepo.updateStatus(tx, params.missionId, "approved");
 
@@ -119,6 +132,7 @@ export class MissionService {
       summary: "Mission approved",
       details: {
         decision: "approved",
+        decision_evidence_link_id: params.decisionEvidenceLinkId,
         notes: params.notes ?? null,
       },
       source: "mission-review-service",
@@ -127,6 +141,54 @@ export class MissionService {
     });
   });
 } 
+
+  private async assertApprovalEvidenceLinked(
+    tx: any,
+    missionId: string,
+    decisionEvidenceLinkId?: string,
+  ): Promise<void> {
+    if (!decisionEvidenceLinkId) {
+      throw new MissionApprovalEvidenceRequiredError();
+    }
+
+    if (!this.auditEvidenceRepository) {
+      throw new InvalidMissionApprovalEvidenceError(
+        "Mission approval evidence repository is not available",
+      );
+    }
+
+    const link =
+      await this.auditEvidenceRepository.getDecisionEvidenceLinkForMission(
+        tx,
+        missionId,
+        decisionEvidenceLinkId,
+      );
+
+    if (!link) {
+      throw new InvalidMissionApprovalEvidenceError(
+        "Mission approval evidence link was not found for this mission",
+      );
+    }
+
+    if (link.decisionType !== "approval") {
+      throw new InvalidMissionApprovalEvidenceError(
+        "Mission approval requires an approval evidence link",
+      );
+    }
+
+    const referencesReadinessSnapshot =
+      await this.auditEvidenceRepository.decisionEvidenceLinkReferencesReadinessSnapshot(
+        tx,
+        missionId,
+        decisionEvidenceLinkId,
+      );
+
+    if (!referencesReadinessSnapshot) {
+      throw new InvalidMissionApprovalEvidenceError(
+        "Mission approval evidence must reference a readiness snapshot",
+      );
+    }
+  }
 
   async launchMission(params: {
     missionId: string;

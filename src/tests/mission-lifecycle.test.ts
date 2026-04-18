@@ -81,12 +81,64 @@ const countMissionEventsByType = async (
   return result.rows[0].count as number;
 };
 
+const createDecisionEvidenceLink = async (
+  missionId: string,
+  decisionType: "approval" | "dispatch",
+) => {
+  const snapshotResponse = await request(app)
+    .post(`/missions/${missionId}/readiness/audit-snapshots`)
+    .send({});
+
+  expect(snapshotResponse.status).toBe(201);
+
+  const linkResponse = await request(app)
+    .post(`/missions/${missionId}/decision-evidence-links`)
+    .send({
+      snapshotId: snapshotResponse.body.snapshot.id,
+      decisionType,
+      createdBy: "reviewer-1",
+    });
+
+  expect(linkResponse.status).toBe(201);
+
+  return linkResponse.body.link as { id: string };
+};
+
+const createApprovalEvidenceLink = async (missionId: string) =>
+  createDecisionEvidenceLink(missionId, "approval");
+
+const getAuditEvidenceState = async (missionId: string) => {
+  const result = await pool.query(
+    `
+    select
+      (select count(*)::int from audit_evidence_snapshots where mission_id = $1) as snapshot_count,
+      (select count(*)::int from mission_decision_evidence_links where mission_id = $1) as decision_link_count,
+      (
+        select readiness_snapshot
+        from audit_evidence_snapshots
+        where mission_id = $1
+        order by created_at desc, id desc
+        limit 1
+      ) as latest_snapshot
+    `,
+    [missionId],
+  );
+
+  return result.rows[0] as {
+    snapshot_count: number;
+    decision_link_count: number;
+    latest_snapshot: Record<string, unknown> | null;
+  };
+};
+
 type DuplicateTransitionCase = {
   name: string;
   route: (missionId: string) => string;
   initialStatus: string;
   expectedStatusAfterFirstCall: string;
-  requestBody: Record<string, unknown>;
+  requestBody:
+    | Record<string, unknown>
+    | ((missionId: string) => Promise<Record<string, unknown>>);
   expectedErrorMessage: string;
   eventType: string;
 };
@@ -108,9 +160,14 @@ const runDuplicateTransitionTest = ({
       status: initialStatus,
     });
 
+    const resolvedRequestBody =
+      typeof requestBody === "function"
+        ? await requestBody(missionId)
+        : requestBody;
+
     const firstResponse = await request(app)
       .post(route(missionId))
-      .send(requestBody);
+      .send(resolvedRequestBody);
 
     expect(firstResponse.status).toBe(204);
 
@@ -129,7 +186,7 @@ const runDuplicateTransitionTest = ({
 
     const secondResponse = await request(app)
       .post(route(missionId))
-      .send(requestBody);
+      .send(resolvedRequestBody);
 
     expect(secondResponse.status).toBe(409);
 
@@ -178,9 +235,14 @@ describe("mission integration", () => {
     route: (missionId) => `/missions/${missionId}/approve`,
     initialStatus: "submitted",
     expectedStatusAfterFirstCall: "approved",
-    requestBody: {
-      reviewerId: "reviewer-1",
-      notes: "first approval",
+    requestBody: async (missionId) => {
+      const link = await createApprovalEvidenceLink(missionId);
+
+      return {
+        reviewerId: "reviewer-1",
+        decisionEvidenceLinkId: link.id,
+        notes: "first approval",
+      };
     },
     expectedErrorMessage: "Mission cannot be approved from status approved",
     eventType: "mission.approved",
@@ -259,6 +321,109 @@ describe("mission integration", () => {
 
     expect(await getMissionEvents(missionId)).toEqual([]);
     expect(await countMissionEventsByType(missionId, "mission.approved")).toBe(0);
+  });
+
+  it("POST /missions/:missionId/approve rejects submitted approval without linked readiness evidence", async () => {
+    const missionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "submitted",
+    });
+    const auditBefore = await getAuditEvidenceState(missionId);
+
+    const approveResponse = await request(app)
+      .post(`/missions/${missionId}/approve`)
+      .send({
+        reviewerId: "reviewer-1",
+        notes: "should fail without evidence",
+      });
+
+    expect(approveResponse.status).toBe(400);
+    expect(approveResponse.body).toMatchObject({
+      error: {
+        type: "mission_approval_evidence_required",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "submitted",
+      last_event_sequence_no: 0,
+    });
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await getAuditEvidenceState(missionId)).toEqual(auditBefore);
+  });
+
+  it("POST /missions/:missionId/approve rejects dispatch evidence links", async () => {
+    const missionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "submitted",
+    });
+    const dispatchLink = await createDecisionEvidenceLink(missionId, "dispatch");
+    const auditBefore = await getAuditEvidenceState(missionId);
+
+    const approveResponse = await request(app)
+      .post(`/missions/${missionId}/approve`)
+      .send({
+        reviewerId: "reviewer-1",
+        decisionEvidenceLinkId: dispatchLink.id,
+        notes: "should fail with dispatch evidence",
+      });
+
+    expect(approveResponse.status).toBe(409);
+    expect(approveResponse.body).toMatchObject({
+      error: {
+        type: "invalid_mission_approval_evidence",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "submitted",
+      last_event_sequence_no: 0,
+    });
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await getAuditEvidenceState(missionId)).toEqual(auditBefore);
+  });
+
+  it("POST /missions/:missionId/approve rejects approval evidence from another mission", async () => {
+    const missionId = randomUUID();
+    const otherMissionId = randomUUID();
+
+    await insertMission({
+      id: missionId,
+      status: "submitted",
+    });
+    await insertMission({
+      id: otherMissionId,
+      status: "submitted",
+    });
+    const otherLink = await createApprovalEvidenceLink(otherMissionId);
+    const auditBefore = await getAuditEvidenceState(missionId);
+    const otherAuditBefore = await getAuditEvidenceState(otherMissionId);
+
+    const approveResponse = await request(app)
+      .post(`/missions/${missionId}/approve`)
+      .send({
+        reviewerId: "reviewer-1",
+        decisionEvidenceLinkId: otherLink.id,
+      });
+
+    expect(approveResponse.status).toBe(409);
+    expect(approveResponse.body).toMatchObject({
+      error: {
+        type: "invalid_mission_approval_evidence",
+      },
+    });
+
+    expect(await getMissionState(missionId)).toEqual({
+      status: "submitted",
+      last_event_sequence_no: 0,
+    });
+    expect(await getMissionEvents(missionId)).toEqual([]);
+    expect(await getAuditEvidenceState(missionId)).toEqual(auditBefore);
+    expect(await getAuditEvidenceState(otherMissionId)).toEqual(otherAuditBefore);
   });
 
   it("POST /missions/:missionId/complete rejects complete before launch and does not append mission.completed", async () => {
@@ -708,10 +873,13 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
 
     expect(submitResponse.status).toBe(204);
 
+    const approvalEvidenceLink = await createApprovalEvidenceLink(missionId);
+
     const approveResponse = await request(app)
       .post(`/missions/${missionId}/approve`)
       .send({
         reviewerId: "reviewer-1",
+        decisionEvidenceLinkId: approvalEvidenceLink.id,
         notes: "approved in lifecycle test",
       });
 
@@ -795,6 +963,7 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
       summary: "Mission approved",
       details: {
         decision: "approved",
+        decision_evidence_link_id: approvalEvidenceLink.id,
         notes: "approved in lifecycle test",
       },
     });

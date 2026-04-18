@@ -124,6 +124,7 @@ const airspaceComplianceService = new AirspaceComplianceService(
 const airspaceComplianceController = new AirspaceComplianceController(
   airspaceComplianceService,
 );
+const auditEvidenceRepository = new AuditEvidenceRepository();
 const missionService = new MissionService(
   db,
   missionRepo,
@@ -132,9 +133,9 @@ const missionService = new MissionService(
   pilotService,
   missionRiskService,
   airspaceComplianceService,
+  auditEvidenceRepository,
 );
 const missionController = new MissionController(missionService);
-const auditEvidenceRepository = new AuditEvidenceRepository();
 const auditEvidenceService = new AuditEvidenceService(
   pool,
   auditEvidenceRepository,
