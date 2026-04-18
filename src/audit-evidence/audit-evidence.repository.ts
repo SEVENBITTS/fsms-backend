@@ -201,4 +201,45 @@ export class AuditEvidenceRepository {
 
     return result.rows.map(toMissionDecisionEvidenceLink);
   }
+
+  async getDecisionEvidenceLinkForMission(
+    tx: PoolClient,
+    missionId: string,
+    linkId: string,
+  ): Promise<MissionDecisionEvidenceLink | null> {
+    const result = await tx.query<MissionDecisionEvidenceLinkRow>(
+      `
+      select *
+      from mission_decision_evidence_links
+      where mission_id = $1
+        and id = $2
+      limit 1
+      `,
+      [missionId, linkId],
+    );
+
+    return result.rows[0] ? toMissionDecisionEvidenceLink(result.rows[0]) : null;
+  }
+
+  async decisionEvidenceLinkReferencesReadinessSnapshot(
+    tx: PoolClient,
+    missionId: string,
+    linkId: string,
+  ): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from mission_decision_evidence_links links
+      inner join audit_evidence_snapshots snapshots
+        on snapshots.mission_id = links.mission_id
+       and snapshots.id = links.audit_evidence_snapshot_id
+      where links.mission_id = $1
+        and links.id = $2
+        and snapshots.evidence_type = 'mission_readiness_gate'
+      `,
+      [missionId, linkId],
+    );
+
+    return result.rowCount === 1;
+  }
 }

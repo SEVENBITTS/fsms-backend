@@ -77,6 +77,26 @@ const countMissionEventsByType = async (
   return result.rows[0].count as number;
 };
 
+const createApprovalEvidenceLink = async (missionId: string) => {
+  const snapshotResponse = await request(app)
+    .post(`/missions/${missionId}/readiness/audit-snapshots`)
+    .send({});
+
+  expect(snapshotResponse.status).toBe(201);
+
+  const linkResponse = await request(app)
+    .post(`/missions/${missionId}/decision-evidence-links`)
+    .send({
+      snapshotId: snapshotResponse.body.snapshot.id,
+      decisionType: "approval",
+      createdBy: "reviewer-1",
+    });
+
+  expect(linkResponse.status).toBe(201);
+
+  return linkResponse.body.link as { id: string };
+};
+
 type TransitionCase = {
   name: string;
   route: (missionId: string) => string;
@@ -276,10 +296,16 @@ describe("mission transition matrix integration", () => {
 
       const stateBefore = await getMissionState(missionId);
       const eventsBefore = await getMissionEvents(missionId);
+      const requestBody = { ...testCase.requestBody };
+
+      if (testCase.expectedEventType === "mission.approved" && testCase.allowed) {
+        const link = await createApprovalEvidenceLink(missionId);
+        requestBody.decisionEvidenceLinkId = link.id;
+      }
 
       const response = await request(app)
         .post(testCase.route(missionId))
-        .send(testCase.requestBody);
+        .send(requestBody);
 
       if (testCase.allowed) {
         expect(response.status).toBe(204);

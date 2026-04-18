@@ -6,3 +6,21 @@ export class InvalidMissionTransitionError extends HttpError {
     this.name = "InvalidMissionTransitionError";
   }
 }
+
+export class MissionApprovalEvidenceRequiredError extends HttpError {
+  constructor() {
+    super(
+      400,
+      "Mission approval requires a linked readiness evidence snapshot",
+      "mission_approval_evidence_required",
+    );
+    this.name = "MissionApprovalEvidenceRequiredError";
+  }
+}
+
+export class InvalidMissionApprovalEvidenceError extends HttpError {
+  constructor(message: string) {
+    super(409, message, "invalid_mission_approval_evidence");
+    this.name = "InvalidMissionApprovalEvidenceError";
+  }
+}
