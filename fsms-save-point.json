@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add post-operation audit export endpoint so reviewable completion snapshots can be packaged for operators, accountable managers, or regulators.",
+ "nextBuildStep": "Add migration-backed post-operation audit export endpoint so reviewable completion snapshots can be packaged for operators, accountable managers, or regulators.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
