@@ -47,3 +47,21 @@ export class SafetyEventAgendaLinkNotFoundError extends Error {
     super(`Safety event agenda link not found: ${agendaLinkId}`);
   }
 }
+
+export class SafetyActionProposalNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "SAFETY_ACTION_PROPOSAL_NOT_FOUND";
+
+  constructor(proposalId: string) {
+    super(`Safety action proposal not found: ${proposalId}`);
+  }
+}
+
+export class SafetyActionDecisionTransitionError extends Error {
+  readonly statusCode = 409;
+  readonly code = "SAFETY_ACTION_DECISION_TRANSITION_INVALID";
+
+  constructor(message: string) {
+    super(message);
+  }
+}

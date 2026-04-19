@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed safety action approval workflow so proposed SOP, training, and maintenance actions can be accepted, rejected, or completed.",
+ "nextBuildStep": "Add migration-backed safety action implementation evidence so completed SOP, training, and maintenance actions can store reviewable closure records.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

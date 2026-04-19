@@ -127,4 +127,40 @@ export class SafetyEventController {
       next(error);
     }
   };
+
+  createSafetyActionDecision = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const result = await this.safetyEventService.createSafetyActionDecision(
+        req.params.eventId,
+        req.params.agendaLinkId,
+        req.params.proposalId,
+        req.body,
+      );
+      res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listSafetyActionDecisions = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const decisions =
+        await this.safetyEventService.listSafetyActionDecisions(
+          req.params.eventId,
+          req.params.agendaLinkId,
+          req.params.proposalId,
+        );
+      res.status(200).json({ decisions });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

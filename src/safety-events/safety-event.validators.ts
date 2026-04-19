@@ -1,9 +1,11 @@
 import { SafetyEventValidationError } from "./safety-event.errors";
 import type {
   AssessSafetyEventMeetingTriggerInput,
+  CreateSafetyActionDecisionInput,
   CreateSafetyActionProposalInput,
   CreateSafetyEventAgendaLinkInput,
   CreateSafetyEventInput,
+  SafetyActionDecisionType,
   SafetyActionProposalStatus,
   SafetyActionProposalType,
   SafetyEventSeverity,
@@ -47,6 +49,12 @@ const ACTION_PROPOSAL_TYPES = new Set<SafetyActionProposalType>([
 
 const ACTION_PROPOSAL_STATUSES = new Set<SafetyActionProposalStatus>([
   "proposed",
+  "accepted",
+  "rejected",
+  "completed",
+]);
+
+const ACTION_DECISIONS = new Set<SafetyActionDecisionType>([
   "accepted",
   "rejected",
   "completed",
@@ -240,6 +248,18 @@ export function validateSafetyEventAgendaLinkId(value: unknown): string {
   return normalized;
 }
 
+export function validateSafetyActionProposalId(value: unknown): string {
+  const normalized = requiredTrimmed(value, "safetyActionProposalId");
+
+  if (!UUID_RE.test(normalized)) {
+    throw new SafetyEventValidationError(
+      "safetyActionProposalId must be a valid UUID",
+    );
+  }
+
+  return normalized;
+}
+
 export function validateAssessMeetingTriggerInput(
   input: AssessSafetyEventMeetingTriggerInput | undefined,
 ) {
@@ -302,5 +322,24 @@ export function validateCreateSafetyActionProposalInput(
     proposedOwner: optionalTrimmed(input.proposedOwner, "proposedOwner"),
     proposedDueAt: optionalDate(input.proposedDueAt, "proposedDueAt"),
     createdBy: optionalTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+export function validateCreateSafetyActionDecisionInput(
+  input: CreateSafetyActionDecisionInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new SafetyEventValidationError("Request body must be an object");
+  }
+
+  const decision = input.decision;
+  if (!decision || !ACTION_DECISIONS.has(decision)) {
+    throw new SafetyEventValidationError("decision is required and supported");
+  }
+
+  return {
+    decision,
+    decidedBy: optionalTrimmed(input.decidedBy, "decidedBy"),
+    decisionNotes: optionalTrimmed(input.decisionNotes, "decisionNotes"),
   };
 }

@@ -23,6 +23,14 @@ export function createSafetyEventRouter(
     "/:eventId/agenda-links/:agendaLinkId/action-proposals",
     controller.listSafetyActionProposals,
   );
+  router.post(
+    "/:eventId/agenda-links/:agendaLinkId/action-proposals/:proposalId/decisions",
+    controller.createSafetyActionDecision,
+  );
+  router.get(
+    "/:eventId/agenda-links/:agendaLinkId/action-proposals/:proposalId/decisions",
+    controller.listSafetyActionDecisions,
+  );
 
   return router;
 }

@@ -4,6 +4,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from safety_action_decisions");
   await pool.query("delete from safety_action_proposals");
   await pool.query("delete from safety_event_agenda_links");
   await pool.query("delete from safety_event_meeting_triggers");

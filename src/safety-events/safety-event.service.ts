@@ -2,6 +2,8 @@ import type { Pool } from "pg";
 import {
   SafetyEventAgendaLinkConflictError,
   SafetyEventAgendaLinkNotFoundError,
+  SafetyActionDecisionTransitionError,
+  SafetyActionProposalNotFoundError,
   SafetyEventMeetingTriggerNotFoundError,
   SafetyEventNotFoundError,
   SafetyEventReferenceNotFoundError,
@@ -9,9 +11,12 @@ import {
 import { SafetyEventRepository } from "./safety-event.repository";
 import type {
   AssessSafetyEventMeetingTriggerInput,
+  CreateSafetyActionDecisionInput,
   CreateSafetyActionProposalInput,
+  SafetyActionDecision,
   CreateSafetyEventAgendaLinkInput,
   CreateSafetyEventInput,
+  SafetyActionDecisionType,
   SafetyActionProposal,
   SafetyEvent,
   SafetyEventAgendaLink,
@@ -21,9 +26,11 @@ import type {
 } from "./safety-event.types";
 import {
   validateAssessMeetingTriggerInput,
+  validateCreateSafetyActionDecisionInput,
   validateCreateSafetyActionProposalInput,
   validateCreateAgendaLinkInput,
   validateCreateSafetyEventInput,
+  validateSafetyActionProposalId,
   validateSafetyEventAgendaLinkId,
   validateSafetyEventId,
   validateSafetyEventMeetingTriggerId,
@@ -259,6 +266,82 @@ export class SafetyEventService {
     }
   }
 
+  async createSafetyActionDecision(
+    eventIdInput: unknown,
+    agendaLinkIdInput: unknown,
+    proposalIdInput: unknown,
+    input: CreateSafetyActionDecisionInput | undefined,
+  ): Promise<{
+    decision: SafetyActionDecision;
+    proposal: SafetyActionProposal;
+  }> {
+    const eventId = validateSafetyEventId(eventIdInput);
+    const agendaLinkId = validateSafetyEventAgendaLinkId(agendaLinkIdInput);
+    const proposalId = validateSafetyActionProposalId(proposalIdInput);
+    const validated = validateCreateSafetyActionDecisionInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+      const proposal = await this.getValidatedProposal(
+        client,
+        eventId,
+        agendaLinkId,
+        proposalId,
+      );
+      this.validateDecisionTransition(proposal, validated.decision);
+
+      const decision =
+        await this.safetyEventRepository.insertSafetyActionDecision(client, {
+          safetyActionProposalId: proposal.id,
+          safetyEventAgendaLinkId: proposal.safetyEventAgendaLinkId,
+          safetyEventId: proposal.safetyEventId,
+          safetyEventMeetingTriggerId: proposal.safetyEventMeetingTriggerId,
+          airSafetyMeetingId: proposal.airSafetyMeetingId,
+          decision: validated.decision,
+          decidedBy: validated.decidedBy,
+          decisionNotes: validated.decisionNotes,
+        });
+      const updatedProposal =
+        await this.safetyEventRepository.updateSafetyActionProposalStatus(
+          client,
+          proposal.id,
+          validated.decision,
+        );
+      await client.query("commit");
+
+      return {
+        decision,
+        proposal: updatedProposal,
+      };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSafetyActionDecisions(
+    eventIdInput: unknown,
+    agendaLinkIdInput: unknown,
+    proposalIdInput: unknown,
+  ): Promise<SafetyActionDecision[]> {
+    const eventId = validateSafetyEventId(eventIdInput);
+    const agendaLinkId = validateSafetyEventAgendaLinkId(agendaLinkIdInput);
+    const proposalId = validateSafetyActionProposalId(proposalIdInput);
+    const client = await this.pool.connect();
+
+    try {
+      await this.getValidatedProposal(client, eventId, agendaLinkId, proposalId);
+
+      return await this.safetyEventRepository
+        .listSafetyActionDecisionsByProposal(client, proposalId);
+    } finally {
+      client.release();
+    }
+  }
+
   private buildMeetingTriggerAssessment(event: SafetyEvent): {
     meetingRequired: boolean;
     recommendedMeetingType: SafetyEventMeetingType | null;
@@ -447,5 +530,50 @@ export class SafetyEventService {
     }
 
     return agendaLink;
+  }
+
+  private async getValidatedProposal(
+    client: Awaited<ReturnType<Pool["connect"]>>,
+    eventId: string,
+    agendaLinkId: string,
+    proposalId: string,
+  ): Promise<SafetyActionProposal> {
+    await this.getValidatedAgendaLink(client, eventId, agendaLinkId);
+
+    const proposal =
+      await this.safetyEventRepository.getSafetyActionProposalById(
+        client,
+        proposalId,
+      );
+
+    if (
+      !proposal ||
+      proposal.safetyEventId !== eventId ||
+      proposal.safetyEventAgendaLinkId !== agendaLinkId
+    ) {
+      throw new SafetyActionProposalNotFoundError(proposalId);
+    }
+
+    return proposal;
+  }
+
+  private validateDecisionTransition(
+    proposal: SafetyActionProposal,
+    decision: SafetyActionDecisionType,
+  ): void {
+    if (
+      (decision === "accepted" || decision === "rejected") &&
+      proposal.status === "proposed"
+    ) {
+      return;
+    }
+
+    if (decision === "completed" && proposal.status === "accepted") {
+      return;
+    }
+
+    throw new SafetyActionDecisionTransitionError(
+      `Cannot mark safety action proposal ${proposal.id} as ${decision} from ${proposal.status}`,
+    );
   }
 }

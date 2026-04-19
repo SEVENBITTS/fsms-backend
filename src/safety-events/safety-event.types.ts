@@ -151,3 +151,25 @@ export interface SafetyActionProposal {
   createdAt: string;
   updatedAt: string;
 }
+
+export type SafetyActionDecisionType = "accepted" | "rejected" | "completed";
+
+export interface CreateSafetyActionDecisionInput {
+  decision?: SafetyActionDecisionType;
+  decidedBy?: string | null;
+  decisionNotes?: string | null;
+}
+
+export interface SafetyActionDecision {
+  id: string;
+  safetyActionProposalId: string;
+  safetyEventAgendaLinkId: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  decision: SafetyActionDecisionType;
+  decidedBy: string | null;
+  decisionNotes: string | null;
+  decidedAt: string;
+  createdAt: string;
+}
