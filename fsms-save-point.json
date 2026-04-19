@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed safety event agenda linkage so triggered safety events can be connected to air safety meeting agenda records.",
+ "nextBuildStep": "Add migration-backed safety action proposal records so agenda-linked safety events can generate SOP, training, and maintenance follow-up actions.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

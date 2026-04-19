@@ -1,6 +1,7 @@
 import { SafetyEventValidationError } from "./safety-event.errors";
 import type {
   AssessSafetyEventMeetingTriggerInput,
+  CreateSafetyEventAgendaLinkInput,
   CreateSafetyEventInput,
   SafetyEventSeverity,
   SafetyEventStatus,
@@ -178,6 +179,21 @@ export function validateSafetyEventId(value: unknown): string {
   return normalized;
 }
 
+export function validateSafetyEventMeetingTriggerId(value: unknown): string {
+  const normalized = requiredTrimmed(
+    value,
+    "safetyEventMeetingTriggerId",
+  );
+
+  if (!UUID_RE.test(normalized)) {
+    throw new SafetyEventValidationError(
+      "safetyEventMeetingTriggerId must be a valid UUID",
+    );
+  }
+
+  return normalized;
+}
+
 export function validateAssessMeetingTriggerInput(
   input: AssessSafetyEventMeetingTriggerInput | undefined,
 ) {
@@ -193,5 +209,22 @@ export function validateAssessMeetingTriggerInput(
 
   return {
     assessedBy: optionalTrimmed(input.assessedBy, "assessedBy"),
+  };
+}
+
+export function validateCreateAgendaLinkInput(
+  input: CreateSafetyEventAgendaLinkInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new SafetyEventValidationError("Request body must be an object");
+  }
+
+  return {
+    airSafetyMeetingId: optionalUuid(
+      input.airSafetyMeetingId,
+      "airSafetyMeetingId",
+    ) ?? requiredTrimmed(input.airSafetyMeetingId, "airSafetyMeetingId"),
+    agendaItem: requiredTrimmed(input.agendaItem, "agendaItem"),
+    linkedBy: optionalTrimmed(input.linkedBy, "linkedBy"),
   };
 }
