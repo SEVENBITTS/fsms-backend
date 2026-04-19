@@ -11,6 +11,7 @@ import { AuditEvidenceRepository } from "./audit-evidence.repository";
 import type {
   AuditEvidenceSnapshot,
   AuditReportSection,
+  AuditReportSmsControlMapping,
   CreateAuditEvidenceSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
   CreatePostOperationAuditSignoffInput,
@@ -283,9 +284,11 @@ export class AuditEvidenceService {
       evidenceExport.missionId,
       evidenceExport.snapshotId,
     );
+    const smsControlMappings = await this.getSmsControlMappingsForAuditReport();
     const sections = this.buildPostOperationReportSections(
       evidenceExport,
       signoff,
+      smsControlMappings,
     );
 
     return {
@@ -417,6 +420,20 @@ export class AuditEvidenceService {
     }
   }
 
+  private async getSmsControlMappingsForAuditReport(): Promise<
+    AuditReportSmsControlMapping[]
+  > {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.auditEvidenceRepository.listSmsControlMappingsForAuditReport(
+        client,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
   private async buildPostOperationCompletionSnapshot(
     client: Awaited<ReturnType<Pool["connect"]>>,
     mission: { missionId: string; missionPlanId: string | null; status: string },
@@ -489,6 +506,7 @@ export class AuditEvidenceService {
   private buildPostOperationReportSections(
     evidenceExport: PostOperationEvidenceExportPackage,
     signoff: PostOperationAuditSignoff | null,
+    smsControlMappings: AuditReportSmsControlMapping[],
   ): AuditReportSection[] {
     const snapshot = evidenceExport.completionSnapshot;
     const pendingSignoff = "Pending sign-off";
@@ -613,6 +631,24 @@ export class AuditEvidenceService {
             value: signoff?.createdAt ?? pendingSignoff,
           },
         ],
+      },
+      {
+        heading: "SMS assurance context",
+        fields:
+          smsControlMappings.length > 0
+            ? smsControlMappings.map((mapping) => ({
+                label: mapping.title,
+                value:
+                  mapping.smsElements.length > 0
+                    ? mapping.smsElements.join("; ")
+                    : "No SMS element mapping recorded",
+              }))
+            : [
+                {
+                  label: "SMS control mappings",
+                  value: "No SMS control mappings recorded",
+                },
+              ],
       },
     ];
   }

@@ -3,6 +3,7 @@ import type { PoolClient, QueryResultRow } from "pg";
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
 import type {
   AuditEvidenceSnapshot,
+  AuditReportSmsControlMapping,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PlanningApprovalHandoffEvidence,
@@ -118,6 +119,13 @@ interface CreatePostOperationAuditSignoffRow {
   createdBy: string | null;
 }
 
+interface AuditReportSmsControlMappingRow extends QueryResultRow {
+  code: string;
+  title: string;
+  control_area: string;
+  sms_elements: string[] | null;
+}
+
 const toAuditEvidenceSnapshot = (
   row: AuditEvidenceSnapshotRow,
 ): AuditEvidenceSnapshot => ({
@@ -198,6 +206,15 @@ const toPostOperationAuditSignoff = (
   signatureReference: row.signature_reference,
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
+});
+
+const toAuditReportSmsControlMapping = (
+  row: AuditReportSmsControlMappingRow,
+): AuditReportSmsControlMapping => ({
+  code: row.code,
+  title: row.title,
+  controlArea: row.control_area,
+  smsElements: row.sms_elements ?? [],
 });
 
 export class AuditEvidenceRepository {
@@ -579,6 +596,50 @@ export class AuditEvidenceRepository {
     return result.rows[0]
       ? toPostOperationAuditSignoff(result.rows[0])
       : null;
+  }
+
+  async listSmsControlMappingsForAuditReport(
+    tx: PoolClient,
+  ): Promise<AuditReportSmsControlMapping[]> {
+    const result = await tx.query<AuditReportSmsControlMappingRow>(
+      `
+      select
+        controls.code,
+        controls.title,
+        controls.control_area,
+        coalesce(
+          array_agg(
+            elements.element_number || ' ' || elements.title
+            order by mappings.display_order asc
+          ) filter (where elements.code is not null),
+          array[]::text[]
+        ) as sms_elements
+      from sms_controls controls
+      left join sms_control_element_mappings mappings
+        on mappings.control_code = controls.code
+      left join sms_elements elements
+        on elements.code = mappings.element_code
+      where controls.code in (
+        'PLATFORM_READINESS_MAINTENANCE',
+        'PILOT_READINESS',
+        'MISSION_RISK_ASSESSMENT',
+        'AIRSPACE_COMPLIANCE',
+        'MISSION_READINESS_GATE',
+        'MISSION_APPROVAL_GUARD',
+        'MISSION_DISPATCH_GUARD',
+        'AUDIT_EVIDENCE_SNAPSHOTS',
+        'POST_OPERATION_REPORT_SIGNOFF'
+      )
+      group by
+        controls.code,
+        controls.title,
+        controls.control_area,
+        controls.display_order
+      order by controls.display_order asc
+      `,
+    );
+
+    return result.rows.map(toAuditReportSmsControlMapping);
   }
 
   async decisionEvidenceLinkReferencesReadinessSnapshot(

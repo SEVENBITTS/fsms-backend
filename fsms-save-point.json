@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed SMS control mapping context to audit evidence outputs so generated reports show which SMS elements each FSMS assurance control supports.",
+ "nextBuildStep": "Add SMS control mapping context to mission readiness audit snapshots so planning and approval evidence can show supported SMS elements.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
