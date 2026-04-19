@@ -1,5 +1,6 @@
 import { SafetyEventValidationError } from "./safety-event.errors";
 import type {
+  AssessSafetyEventMeetingTriggerInput,
   CreateSafetyEventInput,
   SafetyEventSeverity,
   SafetyEventStatus,
@@ -164,5 +165,33 @@ export function validateCreateSafetyEventInput(
       input.regulatorReportableReviewRequired,
       "regulatorReportableReviewRequired",
     ),
+  };
+}
+
+export function validateSafetyEventId(value: unknown): string {
+  const normalized = requiredTrimmed(value, "eventId");
+
+  if (!UUID_RE.test(normalized)) {
+    throw new SafetyEventValidationError("eventId must be a valid UUID");
+  }
+
+  return normalized;
+}
+
+export function validateAssessMeetingTriggerInput(
+  input: AssessSafetyEventMeetingTriggerInput | undefined,
+) {
+  if (input === undefined || input === null) {
+    return {
+      assessedBy: null,
+    };
+  }
+
+  if (typeof input !== "object") {
+    throw new SafetyEventValidationError("Request body must be an object");
+  }
+
+  return {
+    assessedBy: optionalTrimmed(input.assessedBy, "assessedBy"),
   };
 }

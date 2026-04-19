@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed safety event meeting trigger logic so serious events, SOP breaches, training needs, and maintenance concerns can require flight safety review.",
+ "nextBuildStep": "Add migration-backed safety event agenda linkage so triggered safety events can be connected to air safety meeting agenda records.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

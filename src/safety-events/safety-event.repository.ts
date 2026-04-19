@@ -2,6 +2,9 @@ import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
   SafetyEvent,
+  SafetyEventMeetingTrigger,
+  SafetyEventMeetingTriggerReviewFlags,
+  SafetyEventMeetingType,
   SafetyEventSeverity,
   SafetyEventStatus,
   SafetyEventType,
@@ -57,6 +60,27 @@ interface CreateSafetyEventRow {
   regulatorReportableReviewRequired: boolean;
 }
 
+interface SafetyEventMeetingTriggerRow extends QueryResultRow {
+  id: string;
+  safety_event_id: string;
+  meeting_required: boolean;
+  recommended_meeting_type: SafetyEventMeetingType | null;
+  trigger_reasons: string[];
+  review_flags: SafetyEventMeetingTriggerReviewFlags;
+  assessed_by: string | null;
+  assessed_at: Date;
+  created_at: Date;
+}
+
+interface CreateSafetyEventMeetingTriggerRow {
+  safetyEventId: string;
+  meetingRequired: boolean;
+  recommendedMeetingType: SafetyEventMeetingType | null;
+  triggerReasons: string[];
+  reviewFlags: SafetyEventMeetingTriggerReviewFlags;
+  assessedBy: string | null;
+}
+
 const toSafetyEvent = (row: SafetyEventRow): SafetyEvent => ({
   id: row.id,
   eventType: row.event_type,
@@ -82,6 +106,20 @@ const toSafetyEvent = (row: SafetyEventRow): SafetyEvent => ({
   regulatorReportableReviewRequired: row.regulator_reportable_review_required,
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
+});
+
+const toSafetyEventMeetingTrigger = (
+  row: SafetyEventMeetingTriggerRow,
+): SafetyEventMeetingTrigger => ({
+  id: row.id,
+  safetyEventId: row.safety_event_id,
+  meetingRequired: row.meeting_required,
+  recommendedMeetingType: row.recommended_meeting_type,
+  triggerReasons: row.trigger_reasons,
+  reviewFlags: row.review_flags,
+  assessedBy: row.assessed_by,
+  assessedAt: row.assessed_at.toISOString(),
+  createdAt: row.created_at.toISOString(),
 });
 
 export class SafetyEventRepository {
@@ -158,6 +196,71 @@ export class SafetyEventRepository {
     );
 
     return result.rows.map(toSafetyEvent);
+  }
+
+  async getSafetyEventById(
+    tx: PoolClient,
+    eventId: string,
+  ): Promise<SafetyEvent | null> {
+    const result = await tx.query<SafetyEventRow>(
+      `
+      select *
+      from safety_events
+      where id = $1
+      `,
+      [eventId],
+    );
+
+    return result.rows[0] ? toSafetyEvent(result.rows[0]) : null;
+  }
+
+  async insertSafetyEventMeetingTrigger(
+    tx: PoolClient,
+    input: CreateSafetyEventMeetingTriggerRow,
+  ): Promise<SafetyEventMeetingTrigger> {
+    const result = await tx.query<SafetyEventMeetingTriggerRow>(
+      `
+      insert into safety_event_meeting_triggers (
+        id,
+        safety_event_id,
+        meeting_required,
+        recommended_meeting_type,
+        trigger_reasons,
+        review_flags,
+        assessed_by
+      )
+      values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.safetyEventId,
+        input.meetingRequired,
+        input.recommendedMeetingType,
+        JSON.stringify(input.triggerReasons),
+        JSON.stringify(input.reviewFlags),
+        input.assessedBy,
+      ],
+    );
+
+    return toSafetyEventMeetingTrigger(result.rows[0]);
+  }
+
+  async listSafetyEventMeetingTriggers(
+    tx: PoolClient,
+    eventId: string,
+  ): Promise<SafetyEventMeetingTrigger[]> {
+    const result = await tx.query<SafetyEventMeetingTriggerRow>(
+      `
+      select *
+      from safety_event_meeting_triggers
+      where safety_event_id = $1
+      order by assessed_at desc, created_at desc, id desc
+      `,
+      [eventId],
+    );
+
+    return result.rows.map(toSafetyEventMeetingTrigger);
   }
 
   async referenceExists(

@@ -29,4 +29,35 @@ export class SafetyEventController {
       next(error);
     }
   };
+
+  assessMeetingTrigger = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const trigger = await this.safetyEventService.assessMeetingTrigger(
+        req.params.eventId,
+        req.body,
+      );
+      res.status(201).json({ trigger });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listMeetingTriggers = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const triggers = await this.safetyEventService.listMeetingTriggers(
+        req.params.eventId,
+      );
+      res.status(200).json({ triggers });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

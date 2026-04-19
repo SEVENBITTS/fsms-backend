@@ -63,3 +63,34 @@ export interface SafetyEvent {
   createdAt: string;
   updatedAt: string;
 }
+
+export type SafetyEventMeetingType =
+  | "event_triggered_safety_review"
+  | "sop_breach_review"
+  | "training_review"
+  | "maintenance_safety_review"
+  | "accountable_manager_review";
+
+export interface AssessSafetyEventMeetingTriggerInput {
+  assessedBy?: string | null;
+}
+
+export interface SafetyEventMeetingTriggerReviewFlags {
+  sopReviewRequired: boolean;
+  trainingRequired: boolean;
+  maintenanceReviewRequired: boolean;
+  accountableManagerReviewRequired: boolean;
+  regulatorReportableReviewRequired: boolean;
+}
+
+export interface SafetyEventMeetingTrigger {
+  id: string;
+  safetyEventId: string;
+  meetingRequired: boolean;
+  recommendedMeetingType: SafetyEventMeetingType | null;
+  triggerReasons: string[];
+  reviewFlags: SafetyEventMeetingTriggerReviewFlags;
+  assessedBy: string | null;
+  assessedAt: string;
+  createdAt: string;
+}
