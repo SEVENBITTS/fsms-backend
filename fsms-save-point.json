@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add SMS control mapping context to mission approval and dispatch evidence responses so operational gates expose supported SMS elements from linked readiness snapshots.",
+ "nextBuildStep": "Add migration-backed safety event capture records so SOP breaches, training needs, maintenance concerns, and post-operation findings can trigger safety review workflows.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

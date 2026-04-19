@@ -54,6 +54,10 @@ import { SmsFrameworkRepository } from "./sms-framework/sms-framework.repository
 import { SmsFrameworkService } from "./sms-framework/sms-framework.service";
 import { SmsFrameworkController } from "./sms-framework/sms-framework.controller";
 import { createSmsFrameworkRouter } from "./sms-framework/sms-framework.routes";
+import { AirSafetyMeetingRepository } from "./air-safety-meetings/air-safety-meeting.repository";
+import { AirSafetyMeetingService } from "./air-safety-meetings/air-safety-meeting.service";
+import { AirSafetyMeetingController } from "./air-safety-meetings/air-safety-meeting.controller";
+import { createAirSafetyMeetingRouter } from "./air-safety-meetings/air-safety-meeting.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -169,9 +173,21 @@ const smsFrameworkService = new SmsFrameworkService(
   smsFrameworkRepository,
 );
 const smsFrameworkController = new SmsFrameworkController(smsFrameworkService);
+const airSafetyMeetingRepository = new AirSafetyMeetingRepository();
+const airSafetyMeetingService = new AirSafetyMeetingService(
+  pool,
+  airSafetyMeetingRepository,
+);
+const airSafetyMeetingController = new AirSafetyMeetingController(
+  airSafetyMeetingService,
+);
 
 app.use("/mission-plans", createMissionPlanningRouter(missionPlanningController));
 app.use("/sms", createSmsFrameworkRouter(smsFrameworkController));
+app.use(
+  "/air-safety-meetings",
+  createAirSafetyMeetingRouter(airSafetyMeetingController),
+);
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
