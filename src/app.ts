@@ -50,6 +50,10 @@ import { MissionPlanningRepository } from "./mission-planning/mission-planning.r
 import { MissionPlanningService } from "./mission-planning/mission-planning.service";
 import { MissionPlanningController } from "./mission-planning/mission-planning.controller";
 import { createMissionPlanningRouter } from "./mission-planning/mission-planning.routes";
+import { SmsFrameworkRepository } from "./sms-framework/sms-framework.repository";
+import { SmsFrameworkService } from "./sms-framework/sms-framework.service";
+import { SmsFrameworkController } from "./sms-framework/sms-framework.controller";
+import { createSmsFrameworkRouter } from "./sms-framework/sms-framework.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -159,8 +163,15 @@ const missionPlanningService = new MissionPlanningService(
 const missionPlanningController = new MissionPlanningController(
   missionPlanningService,
 );
+const smsFrameworkRepository = new SmsFrameworkRepository();
+const smsFrameworkService = new SmsFrameworkService(
+  pool,
+  smsFrameworkRepository,
+);
+const smsFrameworkController = new SmsFrameworkController(smsFrameworkService);
 
 app.use("/mission-plans", createMissionPlanningRouter(missionPlanningController));
+app.use("/sms", createSmsFrameworkRouter(smsFrameworkController));
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
