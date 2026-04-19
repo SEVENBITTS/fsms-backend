@@ -101,6 +101,21 @@ const countRows = async (missionId?: string) => {
   };
 };
 
+const countSmsMappingRows = async () => {
+  const result = await pool.query(
+    `
+    select
+      (select count(*)::int from sms_controls) as control_count,
+      (select count(*)::int from sms_control_element_mappings) as mapping_count
+    `,
+  );
+
+  return result.rows[0] as {
+    control_count: number;
+    mapping_count: number;
+  };
+};
+
 const getMissionStatus = async (missionId: string) => {
   const result = await pool.query<{ status: string }>(
     "select status from missions where id = $1",
@@ -344,6 +359,7 @@ describe("mission planning drafts", () => {
       `/mission-plans/drafts/${createResponse.body.draft.missionId}/review`,
     );
     const beforeCounts = await countRows(createResponse.body.draft.missionId);
+    const beforeSmsMappings = await countSmsMappingRows();
     const handoffResponse = await request(app)
       .post(
         `/mission-plans/drafts/${createResponse.body.draft.missionId}/approval-handoff`,
@@ -370,6 +386,26 @@ describe("mission planning drafts", () => {
       decisionType: "approval",
       createdBy: "planning lead",
     });
+    expect(handoffResponse.body.handoff.smsControlMappings).toEqual(
+      handoffResponse.body.handoff.snapshot.readinessSnapshot.smsControlMappings,
+    );
+    expect(handoffResponse.body.handoff.smsControlMappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "PLATFORM_READINESS_MAINTENANCE",
+          title: "Platform readiness and maintenance controls",
+          smsElements: expect.arrayContaining([
+            "3.1 Monitoring and Measurement of Safety Performance",
+          ]),
+        }),
+        expect.objectContaining({
+          code: "MISSION_READINESS_GATE",
+          title: "Mission readiness gate controls",
+          smsElements: expect.arrayContaining(["1.5 SMS documentation"]),
+        }),
+      ]),
+    );
+    expect(handoffResponse.body.handoff.smsControlMappings).toHaveLength(9);
     expect(afterReview.body.review).toEqual(beforeReview.body.review);
     expect(afterCounts).toEqual({
       ...beforeCounts,
@@ -377,6 +413,7 @@ describe("mission planning drafts", () => {
       planning_handoff_count: beforeCounts.planning_handoff_count + 1,
       decision_link_count: beforeCounts.decision_link_count + 1,
     });
+    expect(await countSmsMappingRows()).toEqual(beforeSmsMappings);
     expect(afterCounts.mission_event_count).toBe(0);
     expect(await getMissionStatus(createResponse.body.draft.missionId)).toBe(
       "draft",

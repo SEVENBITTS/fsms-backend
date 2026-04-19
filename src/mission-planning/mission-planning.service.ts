@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { AirspaceComplianceRepository } from "../airspace-compliance/airspace-compliance.repository";
 import { validateCreateAirspaceComplianceInput } from "../airspace-compliance/airspace-compliance.validators";
 import { AuditEvidenceService } from "../audit-evidence/audit-evidence.service";
+import type { AuditReportSmsControlMapping } from "../audit-evidence/audit-evidence.types";
 import { MissionRiskRepository } from "../mission-risk/mission-risk.repository";
 import { validateCreateMissionRiskInput } from "../mission-risk/mission-risk.validators";
 import {
@@ -272,7 +273,15 @@ export class MissionPlanningService {
       review,
       snapshot,
       approvalEvidenceLink,
+      smsControlMappings:
+        this.getSmsControlMappingsFromReadinessSnapshot(snapshot),
     };
+  }
+
+  private getSmsControlMappingsFromReadinessSnapshot(
+    snapshot: MissionPlanningApprovalHandoff["snapshot"],
+  ): AuditReportSmsControlMapping[] {
+    return snapshot.readinessSnapshot.smsControlMappings ?? [];
   }
 
   private async recordApprovalHandoffTrace(input: {
