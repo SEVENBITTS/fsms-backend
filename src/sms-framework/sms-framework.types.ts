@@ -29,3 +29,22 @@ export interface SmsFramework {
   sources: SmsFrameworkSource[];
   pillars: SmsPillar[];
 }
+
+export interface SmsControlMappedElement {
+  code: string;
+  pillarCode: string;
+  pillarTitle: string;
+  elementNumber: string;
+  title: string;
+  displayOrder: number;
+  rationale: string;
+}
+
+export interface SmsControlMapping {
+  code: string;
+  title: string;
+  controlArea: string;
+  description: string;
+  displayOrder: number;
+  elements: SmsControlMappedElement[];
+}

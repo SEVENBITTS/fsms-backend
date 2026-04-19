@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add SMS control mapping records so FSMS platform, pilot, risk, airspace, mission gate, and audit controls can be linked to SMS elements.",
+ "nextBuildStep": "Add SMS control mapping context to audit evidence outputs so generated reports show which SMS elements each FSMS assurance control supports.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

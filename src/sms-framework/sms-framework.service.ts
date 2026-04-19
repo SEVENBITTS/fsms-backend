@@ -1,6 +1,9 @@
 import type { Pool } from "pg";
 import { SmsFrameworkRepository } from "./sms-framework.repository";
-import type { SmsFramework } from "./sms-framework.types";
+import type {
+  SmsControlMapping,
+  SmsFramework,
+} from "./sms-framework.types";
 
 export class SmsFrameworkService {
   constructor(
@@ -19,6 +22,16 @@ export class SmsFrameworkService {
         sources,
         pillars,
       };
+    } finally {
+      client.release();
+    }
+  }
+
+  async listControlMappings(): Promise<SmsControlMapping[]> {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.smsFrameworkRepository.listControlMappings(client);
     } finally {
       client.release();
     }

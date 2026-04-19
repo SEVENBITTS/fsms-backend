@@ -7,6 +7,7 @@ export function createSmsFrameworkRouter(
   const router = Router();
 
   router.get("/framework", controller.getFramework);
+  router.get("/control-mappings", controller.listControlMappings);
 
   return router;
 }
