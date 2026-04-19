@@ -1,6 +1,9 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
+  SafetyActionProposal,
+  SafetyActionProposalStatus,
+  SafetyActionProposalType,
   SafetyEvent,
   SafetyEventAgendaLink,
   SafetyEventMeetingTrigger,
@@ -101,6 +104,37 @@ interface CreateSafetyEventAgendaLinkRow {
   linkedBy: string | null;
 }
 
+interface SafetyActionProposalRow extends QueryResultRow {
+  id: string;
+  safety_event_agenda_link_id: string;
+  safety_event_id: string;
+  safety_event_meeting_trigger_id: string;
+  air_safety_meeting_id: string;
+  proposal_type: SafetyActionProposalType;
+  status: SafetyActionProposalStatus;
+  summary: string;
+  rationale: string | null;
+  proposed_owner: string | null;
+  proposed_due_at: Date | null;
+  created_by: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface CreateSafetyActionProposalRow {
+  safetyEventAgendaLinkId: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  proposalType: SafetyActionProposalType;
+  status: SafetyActionProposalStatus;
+  summary: string;
+  rationale: string | null;
+  proposedOwner: string | null;
+  proposedDueAt: Date | null;
+  createdBy: string | null;
+}
+
 const toSafetyEvent = (row: SafetyEventRow): SafetyEvent => ({
   id: row.id,
   eventType: row.event_type,
@@ -153,6 +187,25 @@ const toSafetyEventAgendaLink = (
   linkedBy: row.linked_by,
   linkedAt: row.linked_at.toISOString(),
   createdAt: row.created_at.toISOString(),
+});
+
+const toSafetyActionProposal = (
+  row: SafetyActionProposalRow,
+): SafetyActionProposal => ({
+  id: row.id,
+  safetyEventAgendaLinkId: row.safety_event_agenda_link_id,
+  safetyEventId: row.safety_event_id,
+  safetyEventMeetingTriggerId: row.safety_event_meeting_trigger_id,
+  airSafetyMeetingId: row.air_safety_meeting_id,
+  proposalType: row.proposal_type,
+  status: row.status,
+  summary: row.summary,
+  rationale: row.rationale,
+  proposedOwner: row.proposed_owner,
+  proposedDueAt: row.proposed_due_at?.toISOString() ?? null,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+  updatedAt: row.updated_at.toISOString(),
 });
 
 export class SafetyEventRepository {
@@ -357,6 +410,81 @@ export class SafetyEventRepository {
     );
 
     return result.rows.map(toSafetyEventAgendaLink);
+  }
+
+  async getSafetyEventAgendaLinkById(
+    tx: PoolClient,
+    agendaLinkId: string,
+  ): Promise<SafetyEventAgendaLink | null> {
+    const result = await tx.query<SafetyEventAgendaLinkRow>(
+      `
+      select *
+      from safety_event_agenda_links
+      where id = $1
+      `,
+      [agendaLinkId],
+    );
+
+    return result.rows[0] ? toSafetyEventAgendaLink(result.rows[0]) : null;
+  }
+
+  async insertSafetyActionProposal(
+    tx: PoolClient,
+    input: CreateSafetyActionProposalRow,
+  ): Promise<SafetyActionProposal> {
+    const result = await tx.query<SafetyActionProposalRow>(
+      `
+      insert into safety_action_proposals (
+        id,
+        safety_event_agenda_link_id,
+        safety_event_id,
+        safety_event_meeting_trigger_id,
+        air_safety_meeting_id,
+        proposal_type,
+        status,
+        summary,
+        rationale,
+        proposed_owner,
+        proposed_due_at,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.safetyEventAgendaLinkId,
+        input.safetyEventId,
+        input.safetyEventMeetingTriggerId,
+        input.airSafetyMeetingId,
+        input.proposalType,
+        input.status,
+        input.summary,
+        input.rationale,
+        input.proposedOwner,
+        input.proposedDueAt,
+        input.createdBy,
+      ],
+    );
+
+    return toSafetyActionProposal(result.rows[0]);
+  }
+
+  async listSafetyActionProposalsByAgendaLink(
+    tx: PoolClient,
+    agendaLinkId: string,
+  ): Promise<SafetyActionProposal[]> {
+    const result = await tx.query<SafetyActionProposalRow>(
+      `
+      select *
+      from safety_action_proposals
+      where safety_event_agenda_link_id = $1
+      order by created_at desc, id desc
+      `,
+      [agendaLinkId],
+    );
+
+    return result.rows.map(toSafetyActionProposal);
   }
 
   async referenceExists(

@@ -38,3 +38,12 @@ export class SafetyEventAgendaLinkConflictError extends Error {
     super("Safety event meeting trigger is already linked to this meeting");
   }
 }
+
+export class SafetyEventAgendaLinkNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "SAFETY_EVENT_AGENDA_LINK_NOT_FOUND";
+
+  constructor(agendaLinkId: string) {
+    super(`Safety event agenda link not found: ${agendaLinkId}`);
+  }
+}

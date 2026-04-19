@@ -1,8 +1,11 @@
 import { SafetyEventValidationError } from "./safety-event.errors";
 import type {
   AssessSafetyEventMeetingTriggerInput,
+  CreateSafetyActionProposalInput,
   CreateSafetyEventAgendaLinkInput,
   CreateSafetyEventInput,
+  SafetyActionProposalStatus,
+  SafetyActionProposalType,
   SafetyEventSeverity,
   SafetyEventStatus,
   SafetyEventType,
@@ -32,6 +35,21 @@ const STATUSES = new Set<SafetyEventStatus>([
   "open",
   "under_review",
   "closed",
+]);
+
+const ACTION_PROPOSAL_TYPES = new Set<SafetyActionProposalType>([
+  "sop_change",
+  "training_action",
+  "maintenance_action",
+  "accountable_manager_review",
+  "general_safety_action",
+]);
+
+const ACTION_PROPOSAL_STATUSES = new Set<SafetyActionProposalStatus>([
+  "proposed",
+  "accepted",
+  "rejected",
+  "completed",
 ]);
 
 const UUID_RE =
@@ -82,6 +100,22 @@ function requiredDate(value: unknown, fieldName: string): Date {
   }
 
   return new Date(value);
+}
+
+function optionalDate(value: unknown, fieldName: string): Date | null {
+  const normalized = optionalTrimmed(value, fieldName);
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (Number.isNaN(Date.parse(normalized))) {
+    throw new SafetyEventValidationError(
+      `${fieldName} must be a valid ISO timestamp`,
+    );
+  }
+
+  return new Date(normalized);
 }
 
 function optionalBoolean(value: unknown, fieldName: string): boolean {
@@ -194,6 +228,18 @@ export function validateSafetyEventMeetingTriggerId(value: unknown): string {
   return normalized;
 }
 
+export function validateSafetyEventAgendaLinkId(value: unknown): string {
+  const normalized = requiredTrimmed(value, "safetyEventAgendaLinkId");
+
+  if (!UUID_RE.test(normalized)) {
+    throw new SafetyEventValidationError(
+      "safetyEventAgendaLinkId must be a valid UUID",
+    );
+  }
+
+  return normalized;
+}
+
 export function validateAssessMeetingTriggerInput(
   input: AssessSafetyEventMeetingTriggerInput | undefined,
 ) {
@@ -226,5 +272,35 @@ export function validateCreateAgendaLinkInput(
     ) ?? requiredTrimmed(input.airSafetyMeetingId, "airSafetyMeetingId"),
     agendaItem: requiredTrimmed(input.agendaItem, "agendaItem"),
     linkedBy: optionalTrimmed(input.linkedBy, "linkedBy"),
+  };
+}
+
+export function validateCreateSafetyActionProposalInput(
+  input: CreateSafetyActionProposalInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new SafetyEventValidationError("Request body must be an object");
+  }
+
+  const proposalType = input.proposalType;
+  if (!proposalType || !ACTION_PROPOSAL_TYPES.has(proposalType)) {
+    throw new SafetyEventValidationError(
+      "proposalType is required and supported",
+    );
+  }
+
+  const status = input.status ?? "proposed";
+  if (!ACTION_PROPOSAL_STATUSES.has(status)) {
+    throw new SafetyEventValidationError("status is not supported");
+  }
+
+  return {
+    proposalType,
+    status,
+    summary: requiredTrimmed(input.summary, "summary"),
+    rationale: optionalTrimmed(input.rationale, "rationale"),
+    proposedOwner: optionalTrimmed(input.proposedOwner, "proposedOwner"),
+    proposedDueAt: optionalDate(input.proposedDueAt, "proposedDueAt"),
+    createdBy: optionalTrimmed(input.createdBy, "createdBy"),
   };
 }

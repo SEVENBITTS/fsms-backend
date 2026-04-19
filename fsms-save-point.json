@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed safety action proposal records so agenda-linked safety events can generate SOP, training, and maintenance follow-up actions.",
+ "nextBuildStep": "Add migration-backed safety action approval workflow so proposed SOP, training, and maintenance actions can be accepted, rejected, or completed.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

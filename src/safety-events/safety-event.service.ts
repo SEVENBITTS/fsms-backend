@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import {
   SafetyEventAgendaLinkConflictError,
+  SafetyEventAgendaLinkNotFoundError,
   SafetyEventMeetingTriggerNotFoundError,
   SafetyEventNotFoundError,
   SafetyEventReferenceNotFoundError,
@@ -8,8 +9,10 @@ import {
 import { SafetyEventRepository } from "./safety-event.repository";
 import type {
   AssessSafetyEventMeetingTriggerInput,
+  CreateSafetyActionProposalInput,
   CreateSafetyEventAgendaLinkInput,
   CreateSafetyEventInput,
+  SafetyActionProposal,
   SafetyEvent,
   SafetyEventAgendaLink,
   SafetyEventMeetingTrigger,
@@ -18,8 +21,10 @@ import type {
 } from "./safety-event.types";
 import {
   validateAssessMeetingTriggerInput,
+  validateCreateSafetyActionProposalInput,
   validateCreateAgendaLinkInput,
   validateCreateSafetyEventInput,
+  validateSafetyEventAgendaLinkId,
   validateSafetyEventId,
   validateSafetyEventMeetingTriggerId,
 } from "./safety-event.validators";
@@ -198,6 +203,62 @@ export class SafetyEventService {
     }
   }
 
+  async createSafetyActionProposal(
+    eventIdInput: unknown,
+    agendaLinkIdInput: unknown,
+    input: CreateSafetyActionProposalInput | undefined,
+  ): Promise<SafetyActionProposal> {
+    const eventId = validateSafetyEventId(eventIdInput);
+    const agendaLinkId = validateSafetyEventAgendaLinkId(agendaLinkIdInput);
+    const validated = validateCreateSafetyActionProposalInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const agendaLink = await this.getValidatedAgendaLink(
+        client,
+        eventId,
+        agendaLinkId,
+      );
+
+      return await this.safetyEventRepository.insertSafetyActionProposal(
+        client,
+        {
+          safetyEventAgendaLinkId: agendaLink.id,
+          safetyEventId: agendaLink.safetyEventId,
+          safetyEventMeetingTriggerId: agendaLink.safetyEventMeetingTriggerId,
+          airSafetyMeetingId: agendaLink.airSafetyMeetingId,
+          proposalType: validated.proposalType,
+          status: validated.status,
+          summary: validated.summary,
+          rationale: validated.rationale,
+          proposedOwner: validated.proposedOwner,
+          proposedDueAt: validated.proposedDueAt,
+          createdBy: validated.createdBy,
+        },
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSafetyActionProposals(
+    eventIdInput: unknown,
+    agendaLinkIdInput: unknown,
+  ): Promise<SafetyActionProposal[]> {
+    const eventId = validateSafetyEventId(eventIdInput);
+    const agendaLinkId = validateSafetyEventAgendaLinkId(agendaLinkIdInput);
+    const client = await this.pool.connect();
+
+    try {
+      await this.getValidatedAgendaLink(client, eventId, agendaLinkId);
+
+      return await this.safetyEventRepository
+        .listSafetyActionProposalsByAgendaLink(client, agendaLinkId);
+    } finally {
+      client.release();
+    }
+  }
+
   private buildMeetingTriggerAssessment(event: SafetyEvent): {
     meetingRequired: boolean;
     recommendedMeetingType: SafetyEventMeetingType | null;
@@ -359,5 +420,32 @@ export class SafetyEventService {
       "code" in error &&
       (error as { code?: unknown }).code === "23505"
     );
+  }
+
+  private async getValidatedAgendaLink(
+    client: Awaited<ReturnType<Pool["connect"]>>,
+    eventId: string,
+    agendaLinkId: string,
+  ): Promise<SafetyEventAgendaLink> {
+    const event = await this.safetyEventRepository.getSafetyEventById(
+      client,
+      eventId,
+    );
+
+    if (!event) {
+      throw new SafetyEventNotFoundError(eventId);
+    }
+
+    const agendaLink =
+      await this.safetyEventRepository.getSafetyEventAgendaLinkById(
+        client,
+        agendaLinkId,
+      );
+
+    if (!agendaLink || agendaLink.safetyEventId !== eventId) {
+      throw new SafetyEventAgendaLinkNotFoundError(agendaLinkId);
+    }
+
+    return agendaLink;
   }
 }

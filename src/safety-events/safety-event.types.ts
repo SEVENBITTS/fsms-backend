@@ -111,3 +111,43 @@ export interface SafetyEventAgendaLink {
   linkedAt: string;
   createdAt: string;
 }
+
+export type SafetyActionProposalType =
+  | "sop_change"
+  | "training_action"
+  | "maintenance_action"
+  | "accountable_manager_review"
+  | "general_safety_action";
+
+export type SafetyActionProposalStatus =
+  | "proposed"
+  | "accepted"
+  | "rejected"
+  | "completed";
+
+export interface CreateSafetyActionProposalInput {
+  proposalType?: SafetyActionProposalType;
+  status?: SafetyActionProposalStatus;
+  summary?: string;
+  rationale?: string | null;
+  proposedOwner?: string | null;
+  proposedDueAt?: string | null;
+  createdBy?: string | null;
+}
+
+export interface SafetyActionProposal {
+  id: string;
+  safetyEventAgendaLinkId: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  proposalType: SafetyActionProposalType;
+  status: SafetyActionProposalStatus;
+  summary: string;
+  rationale: string | null;
+  proposedOwner: string | null;
+  proposedDueAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
