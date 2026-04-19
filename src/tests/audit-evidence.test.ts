@@ -331,6 +331,7 @@ describe("audit evidence snapshots", () => {
   it("captures the current mission readiness gate as reviewable evidence", async () => {
     const { missionId, platformId, pilotId } = await createReadyMission();
     const before = await countRows(missionId);
+    const beforeMappings = await countSmsMappingRows();
 
     const response = await request(app)
       .post(`/missions/${missionId}/readiness/audit-snapshots`)
@@ -371,15 +372,52 @@ describe("audit evidence snapshots", () => {
         airspaceCompliance: {
           result: "pass",
         },
+        smsControlMappings: expect.arrayContaining([
+          expect.objectContaining({
+            code: "PLATFORM_READINESS_MAINTENANCE",
+            title: "Platform readiness and maintenance controls",
+            smsElements: expect.arrayContaining([
+              "3.1 Monitoring and Measurement of Safety Performance",
+            ]),
+          }),
+          expect.objectContaining({
+            code: "PILOT_READINESS",
+            title: "Pilot readiness controls",
+            smsElements: expect.arrayContaining(["4.1 Training and education"]),
+          }),
+          expect.objectContaining({
+            code: "MISSION_RISK_ASSESSMENT",
+            title: "Mission risk controls",
+            smsElements: expect.arrayContaining([
+              "2.1 Risk/hazard detection and identification",
+            ]),
+          }),
+          expect.objectContaining({
+            code: "AIRSPACE_COMPLIANCE",
+            title: "Airspace compliance controls",
+            smsElements: expect.arrayContaining([
+              "2.1 Risk/hazard detection and identification",
+            ]),
+          }),
+          expect.objectContaining({
+            code: "MISSION_READINESS_GATE",
+            title: "Mission readiness gate controls",
+            smsElements: expect.arrayContaining(["1.5 SMS documentation"]),
+          }),
+        ]),
       },
     });
     expect(response.body.snapshot.id).toEqual(expect.any(String));
     expect(response.body.snapshot.createdAt).toEqual(expect.any(String));
+    expect(response.body.snapshot.readinessSnapshot.smsControlMappings).toHaveLength(
+      9,
+    );
 
     expect(await countRows(missionId)).toEqual({
       ...before,
       snapshot_count: before.snapshot_count + 1,
     });
+    expect(await countSmsMappingRows()).toEqual(beforeMappings);
   });
 
   it("keeps snapshots immutable when later source inputs change", async () => {
@@ -426,6 +464,12 @@ describe("audit evidence snapshots", () => {
         airspaceCompliance: {
           result: "pass",
         },
+        smsControlMappings: expect.arrayContaining([
+          expect.objectContaining({
+            code: "MISSION_READINESS_GATE",
+            smsElements: expect.arrayContaining(["1.5 SMS documentation"]),
+          }),
+        ]),
       },
     });
   });

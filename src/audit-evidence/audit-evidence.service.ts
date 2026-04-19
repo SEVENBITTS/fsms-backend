@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
 import { MissionService } from "../missions/mission.service";
 import {
   AuditEvidenceMissionNotCompletedError,
@@ -10,6 +11,7 @@ import {
 import { AuditEvidenceRepository } from "./audit-evidence.repository";
 import type {
   AuditEvidenceSnapshot,
+  AuditEvidenceReadinessSnapshot,
   AuditReportSection,
   AuditReportSmsControlMapping,
   CreateAuditEvidenceSnapshotInput,
@@ -44,12 +46,21 @@ export class AuditEvidenceService {
     input: CreateAuditEvidenceSnapshotInput | undefined,
   ): Promise<AuditEvidenceSnapshot> {
     const validated = validateCreateAuditEvidenceSnapshotInput(input);
-    const readinessSnapshot = await this.missionService.checkMissionReadiness({
+    const readinessCheck = await this.missionService.checkMissionReadiness({
       missionId,
     });
     const client = await this.pool.connect();
 
     try {
+      const smsControlMappings =
+        await this.auditEvidenceRepository.listSmsControlMappingsForAuditReport(
+          client,
+        );
+      const readinessSnapshot = this.buildReadinessEvidenceSnapshot(
+        readinessCheck,
+        smsControlMappings,
+      );
+
       return await this.auditEvidenceRepository.insertReadinessSnapshot(client, {
         missionId,
         readinessSnapshot,
@@ -432,6 +443,16 @@ export class AuditEvidenceService {
     } finally {
       client.release();
     }
+  }
+
+  private buildReadinessEvidenceSnapshot(
+    readinessCheck: MissionReadinessCheck,
+    smsControlMappings: AuditReportSmsControlMapping[],
+  ): AuditEvidenceReadinessSnapshot {
+    return {
+      ...readinessCheck,
+      smsControlMappings,
+    };
   }
 
   private async buildPostOperationCompletionSnapshot(

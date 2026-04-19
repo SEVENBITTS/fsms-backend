@@ -34,6 +34,11 @@ export interface CreateMissionDecisionEvidenceLinkInput {
   createdBy?: string | null;
 }
 
+export interface AuditEvidenceReadinessSnapshot
+  extends MissionReadinessCheck {
+  smsControlMappings: AuditReportSmsControlMapping[];
+}
+
 export interface AuditEvidenceSnapshot {
   id: string;
   missionId: string;
@@ -43,7 +48,7 @@ export interface AuditEvidenceSnapshot {
   blocksApproval: boolean;
   blocksDispatch: boolean;
   requiresReview: boolean;
-  readinessSnapshot: MissionReadinessCheck;
+  readinessSnapshot: AuditEvidenceReadinessSnapshot;
   createdBy: string | null;
   createdAt: string;
 }
