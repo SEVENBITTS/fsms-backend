@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from safety_event_meeting_triggers");
   await pool.query("delete from safety_events");
   await pool.query("delete from post_operation_audit_signoffs");
   await pool.query("delete from post_operation_evidence_snapshots");
@@ -33,6 +34,7 @@ const countRows = async (ids: {
     `
     select
       (select count(*)::int from safety_events) as safety_event_count,
+      (select count(*)::int from safety_event_meeting_triggers) as safety_event_trigger_count,
       (select count(*)::int from missions where ($1::uuid is null or id = $1)) as mission_count,
       (select count(*)::int from platforms where ($2::uuid is null or id = $2)) as platform_count,
       (select count(*)::int from pilots where ($3::uuid is null or id = $3)) as pilot_count,
@@ -49,6 +51,7 @@ const countRows = async (ids: {
 
   return result.rows[0] as {
     safety_event_count: number;
+    safety_event_trigger_count: number;
     mission_count: number;
     platform_count: number;
     pilot_count: number;
@@ -200,6 +203,138 @@ describe("safety events", () => {
     expect(listResponse.body.events[0]).toEqual(response.body.event);
   });
 
+  it("stores meeting trigger decisions for serious safety events", async () => {
+    const response = await request(app).post("/safety-events").send({
+      eventType: "near_miss",
+      severity: "high",
+      eventOccurredAt: "2026-04-13T09:00:00.000Z",
+      reportedBy: "safety-manager",
+      summary: "Loss of separation during recovery",
+    });
+
+    expect(response.status).toBe(201);
+
+    const triggerResponse = await request(app)
+      .post(`/safety-events/${response.body.event.id}/meeting-trigger`)
+      .send({
+        assessedBy: " accountable manager ",
+      });
+
+    expect(triggerResponse.status).toBe(201);
+    expect(triggerResponse.body.trigger).toMatchObject({
+      safetyEventId: response.body.event.id,
+      meetingRequired: true,
+      recommendedMeetingType: "event_triggered_safety_review",
+      triggerReasons: ["severity:high"],
+      reviewFlags: {
+        sopReviewRequired: false,
+        trainingRequired: false,
+        maintenanceReviewRequired: false,
+        accountableManagerReviewRequired: false,
+        regulatorReportableReviewRequired: false,
+      },
+      assessedBy: "accountable manager",
+    });
+    expect(triggerResponse.body.trigger.id).toEqual(expect.any(String));
+    expect(triggerResponse.body.trigger.assessedAt).toEqual(expect.any(String));
+
+    const listResponse = await request(app).get(
+      `/safety-events/${response.body.event.id}/meeting-triggers`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.triggers).toHaveLength(1);
+    expect(listResponse.body.triggers[0]).toEqual(
+      triggerResponse.body.trigger,
+    );
+  });
+
+  it("stores SOP breach, training, and maintenance trigger decisions", async () => {
+    const cases = [
+      {
+        eventType: "sop_breach",
+        severity: "low",
+        summary: "Dispatch checklist missed",
+        recommendedMeetingType: "sop_breach_review",
+        triggerReason: "event_type:sop_breach",
+        reviewFlag: "sopReviewRequired",
+      },
+      {
+        eventType: "training_need",
+        severity: "medium",
+        summary: "Manual mode recovery refresher required",
+        recommendedMeetingType: "training_review",
+        triggerReason: "event_type:training_need",
+        reviewFlag: "trainingRequired",
+      },
+      {
+        eventType: "maintenance_concern",
+        severity: "medium",
+        summary: "Motor bearing noise after landing",
+        recommendedMeetingType: "maintenance_safety_review",
+        triggerReason: "event_type:maintenance_concern",
+        reviewFlag: "maintenanceReviewRequired",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const response = await request(app).post("/safety-events").send({
+        eventType: testCase.eventType,
+        severity: testCase.severity,
+        eventOccurredAt: "2026-04-13T10:00:00.000Z",
+        summary: testCase.summary,
+      });
+
+      expect(response.status).toBe(201);
+
+      const triggerResponse = await request(app)
+        .post(`/safety-events/${response.body.event.id}/meeting-trigger`)
+        .send({});
+
+      expect(triggerResponse.status).toBe(201);
+      expect(triggerResponse.body.trigger).toMatchObject({
+        safetyEventId: response.body.event.id,
+        meetingRequired: true,
+        recommendedMeetingType: testCase.recommendedMeetingType,
+        triggerReasons: [testCase.triggerReason],
+      });
+      expect(triggerResponse.body.trigger.reviewFlags[testCase.reviewFlag]).toBe(
+        true,
+      );
+    }
+  });
+
+  it("stores non-triggering low-risk event decisions without requiring meetings", async () => {
+    const response = await request(app).post("/safety-events").send({
+      eventType: "mission_planning_issue",
+      severity: "low",
+      eventOccurredAt: "2026-04-13T11:00:00.000Z",
+      summary: "Minor planning note corrected before review",
+    });
+
+    expect(response.status).toBe(201);
+
+    const triggerResponse = await request(app)
+      .post(`/safety-events/${response.body.event.id}/meeting-trigger`)
+      .send({});
+
+    expect(triggerResponse.status).toBe(201);
+    expect(triggerResponse.body.trigger).toMatchObject({
+      safetyEventId: response.body.event.id,
+      meetingRequired: false,
+      recommendedMeetingType: null,
+      triggerReasons: [],
+      reviewFlags: {
+        sopReviewRequired: false,
+        trainingRequired: false,
+        maintenanceReviewRequired: false,
+        accountableManagerReviewRequired: false,
+        regulatorReportableReviewRequired: false,
+      },
+      assessedBy: null,
+    });
+  });
+
   it("captures linked post-operation safety findings without mutating linked records", async () => {
     const platform = await createPlatform();
     const pilot = await createPilot();
@@ -253,6 +388,62 @@ describe("safety events", () => {
     })).toEqual({
       ...before,
       safety_event_count: before.safety_event_count + 1,
+    });
+  });
+
+  it("assesses linked safety events without mutating linked records", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const meeting = await createAirSafetyMeeting();
+    const safetyEvent = await request(app).post("/safety-events").send({
+      eventType: "maintenance_concern",
+      severity: "critical",
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      airSafetyMeetingId: meeting.id,
+      eventOccurredAt: "2026-04-13T12:00:00.000Z",
+      summary: "Propeller damage found during post-flight inspection",
+    });
+
+    expect(safetyEvent.status).toBe(201);
+
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    });
+
+    const triggerResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-trigger`)
+      .send({});
+
+    expect(triggerResponse.status).toBe(201);
+    expect(triggerResponse.body.trigger).toMatchObject({
+      safetyEventId: safetyEvent.body.event.id,
+      meetingRequired: true,
+      recommendedMeetingType: "accountable_manager_review",
+      triggerReasons: [
+        "severity:critical",
+        "event_type:maintenance_concern",
+      ],
+      reviewFlags: {
+        maintenanceReviewRequired: true,
+      },
+    });
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    })).toEqual({
+      ...before,
+      safety_event_trigger_count: before.safety_event_trigger_count + 1,
     });
   });
 
@@ -331,6 +522,27 @@ describe("safety events", () => {
     expect(response.status).toBe(404);
     expect(response.body.error).toMatchObject({
       type: "safety_event_reference_not_found",
+    });
+    expect(await countRows({})).toEqual(before);
+  });
+
+  it("rejects meeting trigger assessment for invalid or missing safety events", async () => {
+    const invalidId = await request(app)
+      .post("/safety-events/not-a-uuid/meeting-trigger")
+      .send({});
+    const missingId = randomUUID();
+    const before = await countRows({});
+    const missingEvent = await request(app)
+      .post(`/safety-events/${missingId}/meeting-trigger`)
+      .send({});
+
+    expect(invalidId.status).toBe(400);
+    expect(invalidId.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+    expect(missingEvent.status).toBe(404);
+    expect(missingEvent.body.error).toMatchObject({
+      type: "safety_event_not_found",
     });
     expect(await countRows({})).toEqual(before);
   });

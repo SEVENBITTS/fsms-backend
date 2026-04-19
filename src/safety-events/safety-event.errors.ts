@@ -11,3 +11,12 @@ export class SafetyEventReferenceNotFoundError extends Error {
     super(message);
   }
 }
+
+export class SafetyEventNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "SAFETY_EVENT_NOT_FOUND";
+
+  constructor(eventId: string) {
+    super(`Safety event not found: ${eventId}`);
+  }
+}
