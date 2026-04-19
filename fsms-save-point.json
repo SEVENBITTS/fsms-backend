@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add immutable post-operation audit report archive records so generated regulator-ready reports can be retained and traced after sign-off.",
+ "nextBuildStep": "Add SMS control mapping records so FSMS platform, pilot, risk, airspace, mission gate, and audit controls can be linked to SMS elements.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
