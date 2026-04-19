@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add SMS control mapping context to mission planning approval handoff responses so approval evidence can display supported SMS elements from the linked readiness snapshot.",
+ "nextBuildStep": "Add SMS control mapping context to mission approval and dispatch evidence responses so operational gates expose supported SMS elements from linked readiness snapshots.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

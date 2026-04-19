@@ -1,6 +1,7 @@
 import type { CreateAirspaceComplianceInput } from "../airspace-compliance/airspace-compliance.types";
 import type {
   AuditEvidenceSnapshot,
+  AuditReportSmsControlMapping,
   MissionDecisionEvidenceLink,
 } from "../audit-evidence/audit-evidence.types";
 import type { CreateMissionRiskInput } from "../mission-risk/mission-risk.types";
@@ -62,4 +63,5 @@ export interface MissionPlanningApprovalHandoff {
   review: MissionPlanningReview;
   snapshot: AuditEvidenceSnapshot;
   approvalEvidenceLink: MissionDecisionEvidenceLink;
+  smsControlMappings: AuditReportSmsControlMapping[];
 }
