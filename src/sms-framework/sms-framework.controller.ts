@@ -16,4 +16,17 @@ export class SmsFrameworkController {
       next(error);
     }
   };
+
+  listControlMappings = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const mappings = await this.smsFrameworkService.listControlMappings();
+      res.status(200).json({ mappings });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

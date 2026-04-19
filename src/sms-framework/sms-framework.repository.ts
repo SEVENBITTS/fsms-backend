@@ -1,5 +1,7 @@
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
+  SmsControlMappedElement,
+  SmsControlMapping,
   SmsElement,
   SmsFrameworkSource,
   SmsPillar,
@@ -31,6 +33,26 @@ interface SmsElementRow extends QueryResultRow {
   source_code: string;
 }
 
+interface SmsControlRow extends QueryResultRow {
+  code: string;
+  title: string;
+  control_area: string;
+  description: string;
+  display_order: number;
+}
+
+interface SmsControlMappedElementRow extends QueryResultRow {
+  control_code: string;
+  element_code: string;
+  pillar_code: string;
+  pillar_title: string;
+  element_number: string;
+  element_title: string;
+  element_display_order: number;
+  rationale: string;
+  mapping_display_order: number;
+}
+
 const toSource = (row: SmsFrameworkSourceRow): SmsFrameworkSource => ({
   code: row.code,
   title: row.title,
@@ -56,6 +78,30 @@ const toElement = (row: SmsElementRow): SmsElement => ({
   title: row.title,
   displayOrder: row.display_order,
   sourceCode: row.source_code,
+});
+
+const toMappedElement = (
+  row: SmsControlMappedElementRow,
+): SmsControlMappedElement => ({
+  code: row.element_code,
+  pillarCode: row.pillar_code,
+  pillarTitle: row.pillar_title,
+  elementNumber: row.element_number,
+  title: row.element_title,
+  displayOrder: row.element_display_order,
+  rationale: row.rationale,
+});
+
+const toControlMapping = (
+  row: SmsControlRow,
+  elements: SmsControlMappedElement[],
+): SmsControlMapping => ({
+  code: row.code,
+  title: row.title,
+  controlArea: row.control_area,
+  description: row.description,
+  displayOrder: row.display_order,
+  elements,
 });
 
 export class SmsFrameworkRepository {
@@ -99,5 +145,44 @@ export class SmsFrameworkRepository {
     );
 
     return result.rows.map(toElement);
+  }
+
+  async listControlMappings(tx: PoolClient): Promise<SmsControlMapping[]> {
+    const controls = await tx.query<SmsControlRow>(
+      `
+      select *
+      from sms_controls
+      order by display_order asc
+      `,
+    );
+    const mappedElements = await tx.query<SmsControlMappedElementRow>(
+      `
+      select
+        mappings.control_code,
+        mappings.element_code,
+        elements.pillar_code,
+        pillars.title as pillar_title,
+        elements.element_number,
+        elements.title as element_title,
+        elements.display_order as element_display_order,
+        mappings.rationale,
+        mappings.display_order as mapping_display_order
+      from sms_control_element_mappings mappings
+      inner join sms_elements elements
+        on elements.code = mappings.element_code
+      inner join sms_pillars pillars
+        on pillars.code = elements.pillar_code
+      order by mappings.control_code asc, mappings.display_order asc
+      `,
+    );
+
+    return controls.rows.map((control) =>
+      toControlMapping(
+        control,
+        mappedElements.rows
+          .filter((element) => element.control_code === control.code)
+          .map(toMappedElement),
+      ),
+    );
   }
 }

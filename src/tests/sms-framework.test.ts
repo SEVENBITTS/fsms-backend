@@ -9,7 +9,9 @@ const countFrameworkRows = async () => {
     select
       (select count(*)::int from sms_framework_sources) as source_count,
       (select count(*)::int from sms_pillars) as pillar_count,
-      (select count(*)::int from sms_elements) as element_count
+      (select count(*)::int from sms_elements) as element_count,
+      (select count(*)::int from sms_controls) as control_count,
+      (select count(*)::int from sms_control_element_mappings) as mapping_count
     `,
   );
 
@@ -17,6 +19,8 @@ const countFrameworkRows = async () => {
     source_count: number;
     pillar_count: number;
     element_count: number;
+    control_count: number;
+    mapping_count: number;
   };
 };
 
@@ -158,5 +162,116 @@ describe("SMS framework reference data", () => {
         sourceCode: "CAA_CAP_722A_2022",
       }),
     );
+  });
+
+  it("lists seeded FSMS control mappings with SMS pillar and element context", async () => {
+    const before = await countFrameworkRows();
+
+    const response = await request(app).get("/sms/control-mappings");
+
+    expect(response.status).toBe(200);
+    expect(
+      response.body.mappings.map(
+        (mapping: { code: string }) => mapping.code,
+      ),
+    ).toEqual([
+      "PLATFORM_READINESS_MAINTENANCE",
+      "PILOT_READINESS",
+      "MISSION_RISK_ASSESSMENT",
+      "AIRSPACE_COMPLIANCE",
+      "MISSION_READINESS_GATE",
+      "MISSION_APPROVAL_GUARD",
+      "MISSION_DISPATCH_GUARD",
+      "AUDIT_EVIDENCE_SNAPSHOTS",
+      "POST_OPERATION_REPORT_SIGNOFF",
+    ]);
+    expect(response.body.mappings).toContainEqual(
+      expect.objectContaining({
+        code: "PLATFORM_READINESS_MAINTENANCE",
+        controlArea: "platform",
+        elements: expect.arrayContaining([
+          expect.objectContaining({
+            code: "RISK_ASSESSMENT_AND_MITIGATION",
+            pillarCode: "SAFETY_RISK_MANAGEMENT",
+            pillarTitle: "Safety Risk Management",
+          }),
+          expect.objectContaining({
+            code: "SAFETY_PERFORMANCE_MONITORING",
+            pillarCode: "SAFETY_ASSURANCE",
+            pillarTitle: "Safety Assurance",
+          }),
+        ]),
+      }),
+    );
+    expect(response.body.mappings).toContainEqual(
+      expect.objectContaining({
+        code: "POST_OPERATION_REPORT_SIGNOFF",
+        controlArea: "audit",
+        elements: expect.arrayContaining([
+          expect.objectContaining({
+            code: "ULTIMATE_SAFETY_RESPONSIBILITY",
+            pillarCode: "SAFETY_POLICY_AND_GOALS",
+          }),
+          expect.objectContaining({
+            code: "SMS_DOCUMENTATION",
+            pillarCode: "SAFETY_POLICY_AND_GOALS",
+          }),
+          expect.objectContaining({
+            code: "SMS_CONTINUOUS_IMPROVEMENT",
+            pillarCode: "SAFETY_ASSURANCE",
+          }),
+        ]),
+      }),
+    );
+    expect(await countFrameworkRows()).toEqual(before);
+  });
+
+  it("seeds control mappings for platform, pilot, risk, airspace, gate, and audit controls", async () => {
+    const response = await request(app).get("/sms/control-mappings");
+
+    expect(response.status).toBe(200);
+    expect(response.body.mappings).toEqual([
+      expect.objectContaining({ controlArea: "platform" }),
+      expect.objectContaining({ controlArea: "pilot" }),
+      expect.objectContaining({ controlArea: "risk" }),
+      expect.objectContaining({ controlArea: "airspace" }),
+      expect.objectContaining({ controlArea: "mission_gate" }),
+      expect.objectContaining({ controlArea: "mission_gate" }),
+      expect.objectContaining({ controlArea: "mission_gate" }),
+      expect.objectContaining({ controlArea: "audit" }),
+      expect.objectContaining({ controlArea: "audit" }),
+    ]);
+    expect(
+      response.body.mappings.every(
+        (mapping: { elements: unknown[] }) => mapping.elements.length > 0,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects broken SMS control mapping element links", async () => {
+    const before = await countFrameworkRows();
+
+    await expect(
+      pool.query(
+        `
+        insert into sms_control_element_mappings (
+          control_code,
+          element_code,
+          rationale,
+          display_order
+        )
+        values ($1, $2, $3, $4)
+        `,
+        [
+          "PLATFORM_READINESS_MAINTENANCE",
+          "UNKNOWN_SMS_ELEMENT",
+          "This should fail because the SMS element does not exist.",
+          99,
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23503",
+    });
+    expect(await countFrameworkRows()).toEqual(before);
   });
 });
