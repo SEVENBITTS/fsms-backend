@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from safety_action_proposals");
   await pool.query("delete from safety_event_agenda_links");
   await pool.query("delete from safety_event_meeting_triggers");
   await pool.query("delete from safety_events");
@@ -37,6 +38,7 @@ const countRows = async (ids: {
       (select count(*)::int from safety_events) as safety_event_count,
       (select count(*)::int from safety_event_meeting_triggers) as safety_event_trigger_count,
       (select count(*)::int from safety_event_agenda_links) as safety_event_agenda_link_count,
+      (select count(*)::int from safety_action_proposals) as safety_action_proposal_count,
       (select count(*)::int from missions where ($1::uuid is null or id = $1)) as mission_count,
       (select count(*)::int from platforms where ($2::uuid is null or id = $2)) as platform_count,
       (select count(*)::int from pilots where ($3::uuid is null or id = $3)) as pilot_count,
@@ -55,6 +57,7 @@ const countRows = async (ids: {
     safety_event_count: number;
     safety_event_trigger_count: number;
     safety_event_agenda_link_count: number;
+    safety_action_proposal_count: number;
     mission_count: number;
     platform_count: number;
     pilot_count: number;
@@ -171,6 +174,32 @@ const createTriggeredSafetyEvent = async (params?: {
   return {
     event: eventResponse.body.event as { id: string },
     trigger: triggerResponse.body.trigger as { id: string },
+  };
+};
+
+const createAgendaLinkedSafetyEvent = async (params?: {
+  eventType?: string;
+  severity?: string;
+  summary?: string;
+  agendaItem?: string;
+}) => {
+  const meeting = await createAirSafetyMeeting();
+  const { event, trigger } = await createTriggeredSafetyEvent(params);
+  const linkResponse = await request(app)
+    .post(`/safety-events/${event.id}/meeting-triggers/${trigger.id}/agenda-links`)
+    .send({
+      airSafetyMeetingId: meeting.id,
+      agendaItem: params?.agendaItem ?? "Review safety event follow-up",
+      linkedBy: "safety-coordinator",
+    });
+
+  expect(linkResponse.status).toBe(201);
+
+  return {
+    meeting,
+    event,
+    trigger,
+    agendaLink: linkResponse.body.link as { id: string },
   };
 };
 
@@ -486,6 +515,156 @@ describe("safety events", () => {
     });
   });
 
+  it("creates SOP, training, and maintenance action proposals from agenda links", async () => {
+    const cases = [
+      {
+        eventType: "sop_breach",
+        proposalType: "sop_change",
+        summary: "Update launch checklist confirmation wording",
+      },
+      {
+        eventType: "training_need",
+        proposalType: "training_action",
+        summary: "Schedule manual recovery refresher",
+      },
+      {
+        eventType: "maintenance_concern",
+        proposalType: "maintenance_action",
+        summary: "Inspect propulsion system before next dispatch",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { event, trigger, meeting, agendaLink } =
+        await createAgendaLinkedSafetyEvent({
+          eventType: testCase.eventType,
+          severity: "medium",
+          summary: testCase.summary,
+        });
+
+      const response = await request(app)
+        .post(`/safety-events/${event.id}/agenda-links/${agendaLink.id}/action-proposals`)
+        .send({
+          proposalType: testCase.proposalType,
+          summary: ` ${testCase.summary} `,
+          rationale: "Required by safety meeting review.",
+          proposedOwner: " Safety Manager ",
+          proposedDueAt: "2026-05-01T10:00:00.000Z",
+          createdBy: " accountable-manager ",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.proposal).toMatchObject({
+        safetyEventAgendaLinkId: agendaLink.id,
+        safetyEventId: event.id,
+        safetyEventMeetingTriggerId: trigger.id,
+        airSafetyMeetingId: meeting.id,
+        proposalType: testCase.proposalType,
+        status: "proposed",
+        summary: testCase.summary,
+        rationale: "Required by safety meeting review.",
+        proposedOwner: "Safety Manager",
+        proposedDueAt: "2026-05-01T10:00:00.000Z",
+        createdBy: "accountable-manager",
+      });
+      expect(response.body.proposal.id).toEqual(expect.any(String));
+      expect(response.body.proposal.createdAt).toEqual(expect.any(String));
+    }
+  });
+
+  it("lists multiple action proposals from one agenda-linked safety event", async () => {
+    const { event, agendaLink } = await createAgendaLinkedSafetyEvent({
+      eventType: "sop_breach",
+      severity: "high",
+      summary: "Repeated dispatch briefing SOP breach",
+    });
+
+    const first = await request(app)
+      .post(`/safety-events/${event.id}/agenda-links/${agendaLink.id}/action-proposals`)
+      .send({
+        proposalType: "sop_change",
+        summary: "Clarify dispatch briefing SOP",
+      });
+    const second = await request(app)
+      .post(`/safety-events/${event.id}/agenda-links/${agendaLink.id}/action-proposals`)
+      .send({
+        proposalType: "training_action",
+        summary: "Brief flight team on dispatch changes",
+      });
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/safety-events/${event.id}/agenda-links/${agendaLink.id}/action-proposals`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.proposals).toHaveLength(2);
+    expect(listResponse.body.proposals.map((proposal: { id: string }) => proposal.id))
+      .toEqual(expect.arrayContaining([
+        first.body.proposal.id,
+        second.body.proposal.id,
+      ]));
+  });
+
+  it("rejects invalid safety action proposal input", async () => {
+    const { event, agendaLink } = await createAgendaLinkedSafetyEvent();
+
+    const badType = await request(app)
+      .post(`/safety-events/${event.id}/agenda-links/${agendaLink.id}/action-proposals`)
+      .send({
+        proposalType: "unsupported",
+        summary: "Bad type",
+      });
+    const badStatus = await request(app)
+      .post(`/safety-events/${event.id}/agenda-links/${agendaLink.id}/action-proposals`)
+      .send({
+        proposalType: "general_safety_action",
+        status: "started",
+        summary: "Bad status",
+      });
+    const badDate = await request(app)
+      .post(`/safety-events/${event.id}/agenda-links/${agendaLink.id}/action-proposals`)
+      .send({
+        proposalType: "general_safety_action",
+        summary: "Bad date",
+        proposedDueAt: "not-a-date",
+      });
+
+    expect(badType.status).toBe(400);
+    expect(badType.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+    expect(badStatus.status).toBe(400);
+    expect(badStatus.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+    expect(badDate.status).toBe(400);
+    expect(badDate.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+  });
+
+  it("rejects safety action proposals for missing agenda links", async () => {
+    const { event } = await createAgendaLinkedSafetyEvent();
+    const missingAgendaLinkId = randomUUID();
+    const before = await countRows({});
+
+    const response = await request(app)
+      .post(`/safety-events/${event.id}/agenda-links/${missingAgendaLinkId}/action-proposals`)
+      .send({
+        proposalType: "general_safety_action",
+        summary: "Missing agenda link",
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toMatchObject({
+      type: "safety_event_agenda_link_not_found",
+    });
+    expect(await countRows({})).toEqual(before);
+  });
+
   it("captures linked post-operation safety findings without mutating linked records", async () => {
     const platform = await createPlatform();
     const pilot = await createPilot();
@@ -648,6 +827,68 @@ describe("safety events", () => {
       ...before,
       safety_event_agenda_link_count:
         before.safety_event_agenda_link_count + 1,
+    });
+  });
+
+  it("creates action proposals without mutating source safety records", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const meeting = await createAirSafetyMeeting();
+    const safetyEvent = await request(app).post("/safety-events").send({
+      eventType: "maintenance_concern",
+      severity: "critical",
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      eventOccurredAt: "2026-04-15T12:00:00.000Z",
+      summary: "Motor vibration exceeded limit",
+    });
+
+    expect(safetyEvent.status).toBe(201);
+
+    const triggerResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-trigger`)
+      .send({});
+
+    expect(triggerResponse.status).toBe(201);
+
+    const agendaLinkResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-triggers/${triggerResponse.body.trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review vibration exceedance",
+      });
+
+    expect(agendaLinkResponse.status).toBe(201);
+
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    });
+
+    const proposalResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals`)
+      .send({
+        proposalType: "maintenance_action",
+        summary: "Inspect motor mounts before next flight",
+      });
+
+    expect(proposalResponse.status).toBe(201);
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    })).toEqual({
+      ...before,
+      safety_action_proposal_count:
+        before.safety_action_proposal_count + 1,
     });
   });
 

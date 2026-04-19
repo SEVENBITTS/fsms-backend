@@ -15,6 +15,14 @@ export function createSafetyEventRouter(
     controller.createAgendaLink,
   );
   router.get("/:eventId/agenda-links", controller.listAgendaLinks);
+  router.post(
+    "/:eventId/agenda-links/:agendaLinkId/action-proposals",
+    controller.createSafetyActionProposal,
+  );
+  router.get(
+    "/:eventId/agenda-links/:agendaLinkId/action-proposals",
+    controller.listSafetyActionProposals,
+  );
 
   return router;
 }
