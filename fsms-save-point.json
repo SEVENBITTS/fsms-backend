@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed safety event capture records so SOP breaches, training needs, maintenance concerns, and post-operation findings can trigger safety review workflows.",
+ "nextBuildStep": "Add migration-backed safety event meeting trigger logic so serious events, SOP breaches, training needs, and maintenance concerns can require flight safety review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

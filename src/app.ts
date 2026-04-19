@@ -58,6 +58,10 @@ import { AirSafetyMeetingRepository } from "./air-safety-meetings/air-safety-mee
 import { AirSafetyMeetingService } from "./air-safety-meetings/air-safety-meeting.service";
 import { AirSafetyMeetingController } from "./air-safety-meetings/air-safety-meeting.controller";
 import { createAirSafetyMeetingRouter } from "./air-safety-meetings/air-safety-meeting.routes";
+import { SafetyEventRepository } from "./safety-events/safety-event.repository";
+import { SafetyEventService } from "./safety-events/safety-event.service";
+import { SafetyEventController } from "./safety-events/safety-event.controller";
+import { createSafetyEventRouter } from "./safety-events/safety-event.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -181,6 +185,9 @@ const airSafetyMeetingService = new AirSafetyMeetingService(
 const airSafetyMeetingController = new AirSafetyMeetingController(
   airSafetyMeetingService,
 );
+const safetyEventRepository = new SafetyEventRepository();
+const safetyEventService = new SafetyEventService(pool, safetyEventRepository);
+const safetyEventController = new SafetyEventController(safetyEventService);
 
 app.use("/mission-plans", createMissionPlanningRouter(missionPlanningController));
 app.use("/sms", createSmsFrameworkRouter(smsFrameworkController));
@@ -188,6 +195,7 @@ app.use(
   "/air-safety-meetings",
   createAirSafetyMeetingRouter(airSafetyMeetingController),
 );
+app.use("/safety-events", createSafetyEventRouter(safetyEventController));
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
