@@ -1,8 +1,8 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
-import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
 import type {
   AuditEvidenceSnapshot,
+  AuditEvidenceReadinessSnapshot,
   AuditReportSmsControlMapping,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
@@ -21,14 +21,14 @@ interface AuditEvidenceSnapshotRow extends QueryResultRow {
   blocks_approval: boolean;
   blocks_dispatch: boolean;
   requires_review: boolean;
-  readiness_snapshot: MissionReadinessCheck;
+  readiness_snapshot: AuditEvidenceReadinessSnapshot;
   created_by: string | null;
   created_at: Date;
 }
 
 interface CreateAuditEvidenceSnapshotRow {
   missionId: string;
-  readinessSnapshot: MissionReadinessCheck;
+  readinessSnapshot: AuditEvidenceReadinessSnapshot;
   createdBy: string | null;
 }
 
