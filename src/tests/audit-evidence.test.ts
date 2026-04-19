@@ -977,7 +977,7 @@ describe("audit evidence snapshots", () => {
           },
           {
             heading: "Accountable manager sign-off",
-            fields: [
+            fields: expect.arrayContaining([
               {
                 label: "Accountable manager name",
                 value: "Pending sign-off",
@@ -989,7 +989,10 @@ describe("audit evidence snapshots", () => {
                 label: "Review decision/status",
                 value: "Pending sign-off",
               },
-            ],
+              { label: "Sign-off record ID", value: "Pending sign-off" },
+              { label: "Sign-off recorded by", value: "Pending sign-off" },
+              { label: "Sign-off recorded at", value: "Pending sign-off" },
+            ]),
           },
         ],
       },
@@ -1008,6 +1011,109 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders stored accountable-manager sign-offs without mutating audit state", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+
+    const signoffResponse = await request(app)
+      .post(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Alex Accountable",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+        signatureReference: "signature://accountable-manager/alex",
+        createdBy: "audit-admin",
+      });
+
+    expect(signoffResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Accountable manager sign-off",
+      fields: expect.arrayContaining([
+        { label: "Accountable manager name", value: "Alex Accountable" },
+        { label: "Role/title", value: "Accountable Manager" },
+        {
+          label: "Signature",
+          value: "signature://accountable-manager/alex",
+        },
+        { label: "Signed date/time", value: "2026-04-18T18:00:00.000Z" },
+        { label: "Review decision/status", value: "approved" },
+        { label: "Sign-off record ID", value: signoffResponse.body.signoff.id },
+        { label: "Sign-off recorded by", value: "audit-admin" },
+        {
+          label: "Sign-off recorded at",
+          value: signoffResponse.body.signoff.createdAt,
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager name: Alex Accountable",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Review decision/status: approved",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Sign-off record ID: ${signoffResponse.body.signoff.id}`,
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("does not leak stored sign-offs from other post-operation snapshots", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+    const firstSnapshot = await request(app)
+      .post(`/missions/${first.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+    const secondSnapshot = await request(app)
+      .post(`/missions/${second.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(firstSnapshot.status).toBe(201);
+    expect(secondSnapshot.status).toBe(201);
+
+    const signoffResponse = await request(app)
+      .post(
+        `/missions/${second.missionId}/post-operation/evidence-snapshots/${secondSnapshot.body.snapshot.id}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Second Manager",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+      });
+
+    expect(signoffResponse.status).toBe(201);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/post-operation/evidence-snapshots/${firstSnapshot.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager name: Pending sign-off",
+    );
+    expect(response.body.report.report.plainText).not.toContain(
+      "Second Manager",
+    );
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
   });
 
   it("does not render post-operation reports for snapshots from another mission", async () => {
@@ -1105,6 +1211,53 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.toString("latin1")).toContain(
       "Review decision/status: Pending sign-off",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("includes stored accountable-manager sign-offs in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+
+    const signoffResponse = await request(app)
+      .post(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Alex Accountable",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+        signatureReference: "signature://accountable-manager/alex",
+        createdBy: "audit-admin",
+      });
+
+    expect(signoffResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+    const pdfText = response.body.toString("latin1");
+
+    expect(response.status).toBe(200);
+    expect(pdfText).toContain("Accountable manager sign-off");
+    expect(pdfText).toContain("Accountable manager name: Alex Accountable");
+    expect(pdfText).toContain("Role/title: Accountable Manager");
+    expect(pdfText).toContain(
+      "Signature: signature://accountable-manager/alex",
+    );
+    expect(pdfText).toContain("Signed date/time: 2026-04-18T18:00:00.000Z");
+    expect(pdfText).toContain("Review decision/status: approved");
+    expect(pdfText).toContain(
+      `Sign-off record ID: ${signoffResponse.body.signoff.id}`,
     );
     expect(await countRows(missionId)).toEqual(before);
   });

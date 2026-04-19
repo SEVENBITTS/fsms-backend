@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Connect stored accountable-manager sign-offs into rendered and PDF post-operation audit reports.",
+ "nextBuildStep": "Add immutable post-operation audit report archive records so generated regulator-ready reports can be retained and traced after sign-off.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
