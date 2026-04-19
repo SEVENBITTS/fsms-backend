@@ -279,7 +279,14 @@ export class AuditEvidenceService {
       missionId,
       snapshotId,
     );
-    const sections = this.buildPostOperationReportSections(evidenceExport);
+    const signoff = await this.getPostOperationAuditSignoff(
+      evidenceExport.missionId,
+      evidenceExport.snapshotId,
+    );
+    const sections = this.buildPostOperationReportSections(
+      evidenceExport,
+      signoff,
+    );
 
     return {
       renderType: "post_operation_completion_evidence_report",
@@ -393,6 +400,23 @@ export class AuditEvidenceService {
     );
   }
 
+  private async getPostOperationAuditSignoff(
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationAuditSignoff | null> {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.auditEvidenceRepository.getPostOperationAuditSignoffForSnapshot(
+        client,
+        missionId,
+        snapshotId,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
   private async buildPostOperationCompletionSnapshot(
     client: Awaited<ReturnType<Pool["connect"]>>,
     mission: { missionId: string; missionPlanId: string | null; status: string },
@@ -464,8 +488,10 @@ export class AuditEvidenceService {
 
   private buildPostOperationReportSections(
     evidenceExport: PostOperationEvidenceExportPackage,
+    signoff: PostOperationAuditSignoff | null,
   ): AuditReportSection[] {
     const snapshot = evidenceExport.completionSnapshot;
+    const pendingSignoff = "Pending sign-off";
 
     return [
       {
@@ -554,11 +580,38 @@ export class AuditEvidenceService {
       {
         heading: "Accountable manager sign-off",
         fields: [
-          { label: "Accountable manager name", value: "Pending sign-off" },
-          { label: "Role/title", value: "Pending sign-off" },
-          { label: "Signature", value: "Pending sign-off" },
-          { label: "Signed date/time", value: "Pending sign-off" },
-          { label: "Review decision/status", value: "Pending sign-off" },
+          {
+            label: "Accountable manager name",
+            value: signoff?.accountableManagerName ?? pendingSignoff,
+          },
+          {
+            label: "Role/title",
+            value: signoff?.accountableManagerRole ?? pendingSignoff,
+          },
+          {
+            label: "Signature",
+            value: signoff?.signatureReference ?? pendingSignoff,
+          },
+          {
+            label: "Signed date/time",
+            value: signoff?.signedAt ?? pendingSignoff,
+          },
+          {
+            label: "Review decision/status",
+            value: signoff?.reviewDecision ?? pendingSignoff,
+          },
+          {
+            label: "Sign-off record ID",
+            value: signoff?.id ?? pendingSignoff,
+          },
+          {
+            label: "Sign-off recorded by",
+            value: signoff?.createdBy ?? pendingSignoff,
+          },
+          {
+            label: "Sign-off recorded at",
+            value: signoff?.createdAt ?? pendingSignoff,
+          },
         ],
       },
     ];

@@ -560,6 +560,27 @@ export class AuditEvidenceRepository {
     return toPostOperationAuditSignoff(result.rows[0]);
   }
 
+  async getPostOperationAuditSignoffForSnapshot(
+    tx: PoolClient,
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationAuditSignoff | null> {
+    const result = await tx.query<PostOperationAuditSignoffRow>(
+      `
+      select *
+      from post_operation_audit_signoffs
+      where mission_id = $1
+        and post_operation_evidence_snapshot_id = $2
+      limit 1
+      `,
+      [missionId, snapshotId],
+    );
+
+    return result.rows[0]
+      ? toPostOperationAuditSignoff(result.rows[0])
+      : null;
+  }
+
   async decisionEvidenceLinkReferencesReadinessSnapshot(
     tx: PoolClient,
     missionId: string,
