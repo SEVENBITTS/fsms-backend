@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
+  SafetyActionDecision,
+  SafetyActionDecisionType,
   SafetyActionProposal,
   SafetyActionProposalStatus,
   SafetyActionProposalType,
@@ -135,6 +137,31 @@ interface CreateSafetyActionProposalRow {
   createdBy: string | null;
 }
 
+interface SafetyActionDecisionRow extends QueryResultRow {
+  id: string;
+  safety_action_proposal_id: string;
+  safety_event_agenda_link_id: string;
+  safety_event_id: string;
+  safety_event_meeting_trigger_id: string;
+  air_safety_meeting_id: string;
+  decision: SafetyActionDecisionType;
+  decided_by: string | null;
+  decision_notes: string | null;
+  decided_at: Date;
+  created_at: Date;
+}
+
+interface CreateSafetyActionDecisionRow {
+  safetyActionProposalId: string;
+  safetyEventAgendaLinkId: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  decision: SafetyActionDecisionType;
+  decidedBy: string | null;
+  decisionNotes: string | null;
+}
+
 const toSafetyEvent = (row: SafetyEventRow): SafetyEvent => ({
   id: row.id,
   eventType: row.event_type,
@@ -206,6 +233,22 @@ const toSafetyActionProposal = (
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
+});
+
+const toSafetyActionDecision = (
+  row: SafetyActionDecisionRow,
+): SafetyActionDecision => ({
+  id: row.id,
+  safetyActionProposalId: row.safety_action_proposal_id,
+  safetyEventAgendaLinkId: row.safety_event_agenda_link_id,
+  safetyEventId: row.safety_event_id,
+  safetyEventMeetingTriggerId: row.safety_event_meeting_trigger_id,
+  airSafetyMeetingId: row.air_safety_meeting_id,
+  decision: row.decision,
+  decidedBy: row.decided_by,
+  decisionNotes: row.decision_notes,
+  decidedAt: row.decided_at.toISOString(),
+  createdAt: row.created_at.toISOString(),
 });
 
 export class SafetyEventRepository {
@@ -485,6 +528,94 @@ export class SafetyEventRepository {
     );
 
     return result.rows.map(toSafetyActionProposal);
+  }
+
+  async getSafetyActionProposalById(
+    tx: PoolClient,
+    proposalId: string,
+  ): Promise<SafetyActionProposal | null> {
+    const result = await tx.query<SafetyActionProposalRow>(
+      `
+      select *
+      from safety_action_proposals
+      where id = $1
+      `,
+      [proposalId],
+    );
+
+    return result.rows[0] ? toSafetyActionProposal(result.rows[0]) : null;
+  }
+
+  async updateSafetyActionProposalStatus(
+    tx: PoolClient,
+    proposalId: string,
+    status: SafetyActionProposalStatus,
+  ): Promise<SafetyActionProposal> {
+    const result = await tx.query<SafetyActionProposalRow>(
+      `
+      update safety_action_proposals
+      set status = $2,
+          updated_at = now()
+      where id = $1
+      returning *
+      `,
+      [proposalId, status],
+    );
+
+    return toSafetyActionProposal(result.rows[0]);
+  }
+
+  async insertSafetyActionDecision(
+    tx: PoolClient,
+    input: CreateSafetyActionDecisionRow,
+  ): Promise<SafetyActionDecision> {
+    const result = await tx.query<SafetyActionDecisionRow>(
+      `
+      insert into safety_action_decisions (
+        id,
+        safety_action_proposal_id,
+        safety_event_agenda_link_id,
+        safety_event_id,
+        safety_event_meeting_trigger_id,
+        air_safety_meeting_id,
+        decision,
+        decided_by,
+        decision_notes
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.safetyActionProposalId,
+        input.safetyEventAgendaLinkId,
+        input.safetyEventId,
+        input.safetyEventMeetingTriggerId,
+        input.airSafetyMeetingId,
+        input.decision,
+        input.decidedBy,
+        input.decisionNotes,
+      ],
+    );
+
+    return toSafetyActionDecision(result.rows[0]);
+  }
+
+  async listSafetyActionDecisionsByProposal(
+    tx: PoolClient,
+    proposalId: string,
+  ): Promise<SafetyActionDecision[]> {
+    const result = await tx.query<SafetyActionDecisionRow>(
+      `
+      select *
+      from safety_action_decisions
+      where safety_action_proposal_id = $1
+      order by decided_at desc, created_at desc, id desc
+      `,
+      [proposalId],
+    );
+
+    return result.rows.map(toSafetyActionDecision);
   }
 
   async referenceExists(

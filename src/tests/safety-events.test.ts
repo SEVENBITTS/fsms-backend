@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from safety_action_decisions");
   await pool.query("delete from safety_action_proposals");
   await pool.query("delete from safety_event_agenda_links");
   await pool.query("delete from safety_event_meeting_triggers");
@@ -39,6 +40,7 @@ const countRows = async (ids: {
       (select count(*)::int from safety_event_meeting_triggers) as safety_event_trigger_count,
       (select count(*)::int from safety_event_agenda_links) as safety_event_agenda_link_count,
       (select count(*)::int from safety_action_proposals) as safety_action_proposal_count,
+      (select count(*)::int from safety_action_decisions) as safety_action_decision_count,
       (select count(*)::int from missions where ($1::uuid is null or id = $1)) as mission_count,
       (select count(*)::int from platforms where ($2::uuid is null or id = $2)) as platform_count,
       (select count(*)::int from pilots where ($3::uuid is null or id = $3)) as pilot_count,
@@ -58,6 +60,7 @@ const countRows = async (ids: {
     safety_event_trigger_count: number;
     safety_event_agenda_link_count: number;
     safety_action_proposal_count: number;
+    safety_action_decision_count: number;
     mission_count: number;
     platform_count: number;
     pilot_count: number;
@@ -200,6 +203,27 @@ const createAgendaLinkedSafetyEvent = async (params?: {
     event,
     trigger,
     agendaLink: linkResponse.body.link as { id: string },
+  };
+};
+
+const createSafetyActionProposal = async (params?: {
+  proposalType?: string;
+  summary?: string;
+}) => {
+  const source = await createAgendaLinkedSafetyEvent();
+  const proposalResponse = await request(app)
+    .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals`)
+    .send({
+      proposalType: params?.proposalType ?? "general_safety_action",
+      summary: params?.summary ?? "Review safety follow-up",
+      createdBy: "safety-manager",
+    });
+
+  expect(proposalResponse.status).toBe(201);
+
+  return {
+    ...source,
+    proposal: proposalResponse.body.proposal as { id: string; status: string },
   };
 };
 
@@ -665,6 +689,139 @@ describe("safety events", () => {
     expect(await countRows({})).toEqual(before);
   });
 
+  it("accepts and rejects safety action proposals with decision records", async () => {
+    const acceptedSource = await createSafetyActionProposal({
+      proposalType: "sop_change",
+      summary: "Update launch SOP",
+    });
+    const rejectedSource = await createSafetyActionProposal({
+      proposalType: "training_action",
+      summary: "Training action not required",
+    });
+
+    const acceptResponse = await request(app)
+      .post(`/safety-events/${acceptedSource.event.id}/agenda-links/${acceptedSource.agendaLink.id}/action-proposals/${acceptedSource.proposal.id}/decisions`)
+      .send({
+        decision: "accepted",
+        decidedBy: " accountable-manager ",
+        decisionNotes: " Accepted for implementation. ",
+      });
+    const rejectResponse = await request(app)
+      .post(`/safety-events/${rejectedSource.event.id}/agenda-links/${rejectedSource.agendaLink.id}/action-proposals/${rejectedSource.proposal.id}/decisions`)
+      .send({
+        decision: "rejected",
+        decidedBy: "safety-manager",
+        decisionNotes: "Covered by existing controls.",
+      });
+
+    expect(acceptResponse.status).toBe(201);
+    expect(acceptResponse.body.decision).toMatchObject({
+      safetyActionProposalId: acceptedSource.proposal.id,
+      safetyEventAgendaLinkId: acceptedSource.agendaLink.id,
+      safetyEventId: acceptedSource.event.id,
+      safetyEventMeetingTriggerId: acceptedSource.trigger.id,
+      airSafetyMeetingId: acceptedSource.meeting.id,
+      decision: "accepted",
+      decidedBy: "accountable-manager",
+      decisionNotes: "Accepted for implementation.",
+    });
+    expect(acceptResponse.body.proposal).toMatchObject({
+      id: acceptedSource.proposal.id,
+      status: "accepted",
+    });
+
+    expect(rejectResponse.status).toBe(201);
+    expect(rejectResponse.body.decision).toMatchObject({
+      safetyActionProposalId: rejectedSource.proposal.id,
+      decision: "rejected",
+      decidedBy: "safety-manager",
+      decisionNotes: "Covered by existing controls.",
+    });
+    expect(rejectResponse.body.proposal).toMatchObject({
+      id: rejectedSource.proposal.id,
+      status: "rejected",
+    });
+  });
+
+  it("completes accepted safety action proposals and lists decisions", async () => {
+    const source = await createSafetyActionProposal({
+      proposalType: "maintenance_action",
+      summary: "Inspect motor mounts",
+    });
+
+    const acceptResponse = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/decisions`)
+      .send({
+        decision: "accepted",
+        decidedBy: "maintenance-lead",
+      });
+    const completeResponse = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/decisions`)
+      .send({
+        decision: "completed",
+        decidedBy: "maintenance-lead",
+        decisionNotes: "Inspection completed and recorded.",
+      });
+
+    expect(acceptResponse.status).toBe(201);
+    expect(completeResponse.status).toBe(201);
+    expect(completeResponse.body.proposal).toMatchObject({
+      id: source.proposal.id,
+      status: "completed",
+    });
+
+    const listResponse = await request(app).get(
+      `/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/decisions`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.decisions).toHaveLength(2);
+    expect(listResponse.body.decisions.map((decision: { decision: string }) => decision.decision))
+      .toEqual(expect.arrayContaining(["accepted", "completed"]));
+  });
+
+  it("rejects invalid safety action decision input and invalid transitions", async () => {
+    const source = await createSafetyActionProposal();
+
+    const badDecision = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/decisions`)
+      .send({
+        decision: "paused",
+      });
+    const prematureComplete = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/decisions`)
+      .send({
+        decision: "completed",
+      });
+
+    expect(badDecision.status).toBe(400);
+    expect(badDecision.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+    expect(prematureComplete.status).toBe(409);
+    expect(prematureComplete.body.error).toMatchObject({
+      type: "safety_action_decision_transition_invalid",
+    });
+  });
+
+  it("rejects safety action decisions for missing proposals", async () => {
+    const source = await createSafetyActionProposal();
+    const missingProposalId = randomUUID();
+    const before = await countRows({});
+
+    const response = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${missingProposalId}/decisions`)
+      .send({
+        decision: "accepted",
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toMatchObject({
+      type: "safety_action_proposal_not_found",
+    });
+    expect(await countRows({})).toEqual(before);
+  });
+
   it("captures linked post-operation safety findings without mutating linked records", async () => {
     const platform = await createPlatform();
     const pilot = await createPilot();
@@ -889,6 +1046,73 @@ describe("safety events", () => {
       ...before,
       safety_action_proposal_count:
         before.safety_action_proposal_count + 1,
+    });
+  });
+
+  it("creates action decisions without mutating unrelated source safety records", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const meeting = await createAirSafetyMeeting();
+    const safetyEvent = await request(app).post("/safety-events").send({
+      eventType: "training_need",
+      severity: "medium",
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      eventOccurredAt: "2026-04-16T12:00:00.000Z",
+      summary: "Crew training follow-up required",
+    });
+
+    expect(safetyEvent.status).toBe(201);
+
+    const triggerResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-trigger`)
+      .send({});
+    const agendaLinkResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-triggers/${triggerResponse.body.trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review training follow-up",
+      });
+    const proposalResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals`)
+      .send({
+        proposalType: "training_action",
+        summary: "Schedule refresher training",
+      });
+
+    expect(triggerResponse.status).toBe(201);
+    expect(agendaLinkResponse.status).toBe(201);
+    expect(proposalResponse.status).toBe(201);
+
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    });
+
+    const decisionResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals/${proposalResponse.body.proposal.id}/decisions`)
+      .send({
+        decision: "accepted",
+        decidedBy: "training-manager",
+      });
+
+    expect(decisionResponse.status).toBe(201);
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    })).toEqual({
+      ...before,
+      safety_action_decision_count:
+        before.safety_action_decision_count + 1,
     });
   });
 
