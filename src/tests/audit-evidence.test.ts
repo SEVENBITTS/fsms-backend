@@ -300,6 +300,21 @@ const countRows = async (missionId: string) => {
   };
 };
 
+const countSmsMappingRows = async () => {
+  const result = await pool.query(
+    `
+    select
+      (select count(*)::int from sms_controls) as control_count,
+      (select count(*)::int from sms_control_element_mappings) as mapping_count
+    `,
+  );
+
+  return result.rows[0] as {
+    control_count: number;
+    mapping_count: number;
+  };
+};
+
 describe("audit evidence snapshots", () => {
   beforeAll(async () => {
     await runMigrations(pool);
@@ -994,6 +1009,21 @@ describe("audit evidence snapshots", () => {
               { label: "Sign-off recorded at", value: "Pending sign-off" },
             ]),
           },
+          {
+            heading: "SMS assurance context",
+            fields: expect.arrayContaining([
+              expect.objectContaining({
+                label: "Platform readiness and maintenance controls",
+                value: expect.stringContaining(
+                  "2.2 Assessment and mitigation of risks",
+                ),
+              }),
+              expect.objectContaining({
+                label: "Post-operation report and sign-off controls",
+                value: expect.stringContaining("1.2 The ultimate responsibility"),
+              }),
+            ]),
+          },
         ],
       },
     });
@@ -1009,6 +1039,15 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Review decision/status: Pending sign-off",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "SMS assurance context",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Platform readiness and maintenance controls",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Post-operation report and sign-off controls",
     );
     expect(await countRows(missionId)).toEqual(before);
   });
@@ -1071,6 +1110,60 @@ describe("audit evidence snapshots", () => {
       `Sign-off record ID: ${signoffResponse.body.signoff.id}`,
     );
     expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("adds SMS control mapping context to rendered reports without mutating reference data", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const beforeMission = await countRows(missionId);
+    const beforeMappings = await countSmsMappingRows();
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "SMS assurance context",
+      fields: expect.arrayContaining([
+        {
+          label: "Platform readiness and maintenance controls",
+          value: expect.stringContaining(
+            "3.1 Monitoring and Measurement of Safety Performance",
+          ),
+        },
+        {
+          label: "Pilot readiness controls",
+          value: expect.stringContaining("4.1 Training and education"),
+        },
+        {
+          label: "Mission risk controls",
+          value: expect.stringContaining(
+            "2.1 Risk/hazard detection and identification",
+          ),
+        },
+        {
+          label: "Airspace compliance controls",
+          value: expect.stringContaining(
+            "2.1 Risk/hazard detection and identification",
+          ),
+        },
+        {
+          label: "Mission readiness gate controls",
+          value: expect.stringContaining("1.5 SMS documentation"),
+        },
+        {
+          label: "Post-operation report and sign-off controls",
+          value: expect.stringContaining("3.3 Continuous improvement of SMS"),
+        },
+      ]),
+    });
+    expect(await countRows(missionId)).toEqual(beforeMission);
+    expect(await countSmsMappingRows()).toEqual(beforeMappings);
   });
 
   it("does not leak stored sign-offs from other post-operation snapshots", async () => {
@@ -1212,6 +1305,13 @@ describe("audit evidence snapshots", () => {
     expect(response.body.toString("latin1")).toContain(
       "Review decision/status: Pending sign-off",
     );
+    expect(response.body.toString("latin1")).toContain(
+      "SMS assurance context",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Mission readiness gate controls",
+    );
+    expect(response.body.toString("latin1")).toContain("1.5 SMS documentation");
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -1259,6 +1359,9 @@ describe("audit evidence snapshots", () => {
     expect(pdfText).toContain(
       `Sign-off record ID: ${signoffResponse.body.signoff.id}`,
     );
+    expect(pdfText).toContain("SMS assurance context");
+    expect(pdfText).toContain("Post-operation report and sign-off controls");
+    expect(pdfText).toContain("3.3 Continuous improvement of SMS");
     expect(await countRows(missionId)).toEqual(before);
   });
 

@@ -140,6 +140,13 @@ export interface AuditReportSection {
   fields: AuditReportField[];
 }
 
+export interface AuditReportSmsControlMapping {
+  code: string;
+  title: string;
+  controlArea: string;
+  smsElements: string[];
+}
+
 export interface PostOperationEvidenceRenderedReport {
   renderType: "post_operation_completion_evidence_report";
   formatVersion: 1;
