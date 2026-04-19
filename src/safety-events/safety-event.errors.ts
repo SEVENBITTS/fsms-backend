@@ -20,3 +20,21 @@ export class SafetyEventNotFoundError extends Error {
     super(`Safety event not found: ${eventId}`);
   }
 }
+
+export class SafetyEventMeetingTriggerNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "SAFETY_EVENT_MEETING_TRIGGER_NOT_FOUND";
+
+  constructor(triggerId: string) {
+    super(`Safety event meeting trigger not found: ${triggerId}`);
+  }
+}
+
+export class SafetyEventAgendaLinkConflictError extends Error {
+  readonly statusCode = 409;
+  readonly code = "SAFETY_EVENT_AGENDA_LINK_CONFLICT";
+
+  constructor() {
+    super("Safety event meeting trigger is already linked to this meeting");
+  }
+}

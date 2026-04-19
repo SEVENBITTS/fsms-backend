@@ -1,21 +1,27 @@
 import type { Pool } from "pg";
 import {
+  SafetyEventAgendaLinkConflictError,
+  SafetyEventMeetingTriggerNotFoundError,
   SafetyEventNotFoundError,
   SafetyEventReferenceNotFoundError,
 } from "./safety-event.errors";
 import { SafetyEventRepository } from "./safety-event.repository";
 import type {
   AssessSafetyEventMeetingTriggerInput,
+  CreateSafetyEventAgendaLinkInput,
   CreateSafetyEventInput,
   SafetyEvent,
+  SafetyEventAgendaLink,
   SafetyEventMeetingTrigger,
   SafetyEventMeetingTriggerReviewFlags,
   SafetyEventMeetingType,
 } from "./safety-event.types";
 import {
   validateAssessMeetingTriggerInput,
+  validateCreateAgendaLinkInput,
   validateCreateSafetyEventInput,
   validateSafetyEventId,
+  validateSafetyEventMeetingTriggerId,
 } from "./safety-event.validators";
 
 export class SafetyEventService {
@@ -101,6 +107,89 @@ export class SafetyEventService {
       }
 
       return await this.safetyEventRepository.listSafetyEventMeetingTriggers(
+        client,
+        eventId,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async createAgendaLink(
+    eventIdInput: unknown,
+    triggerIdInput: unknown,
+    input: CreateSafetyEventAgendaLinkInput | undefined,
+  ): Promise<SafetyEventAgendaLink> {
+    const eventId = validateSafetyEventId(eventIdInput);
+    const triggerId = validateSafetyEventMeetingTriggerId(triggerIdInput);
+    const validated = validateCreateAgendaLinkInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const event = await this.safetyEventRepository.getSafetyEventById(
+        client,
+        eventId,
+      );
+
+      if (!event) {
+        throw new SafetyEventNotFoundError(eventId);
+      }
+
+      const trigger =
+        await this.safetyEventRepository.getSafetyEventMeetingTriggerById(
+          client,
+          triggerId,
+        );
+
+      if (!trigger || trigger.safetyEventId !== eventId) {
+        throw new SafetyEventMeetingTriggerNotFoundError(triggerId);
+      }
+
+      await this.validateReference(
+        client,
+        "air_safety_meetings",
+        validated.airSafetyMeetingId,
+        "air safety meeting",
+      );
+
+      try {
+        return await this.safetyEventRepository.insertSafetyEventAgendaLink(
+          client,
+          {
+            safetyEventId: event.id,
+            safetyEventMeetingTriggerId: trigger.id,
+            airSafetyMeetingId: validated.airSafetyMeetingId,
+            agendaItem: validated.agendaItem,
+            linkedBy: validated.linkedBy,
+          },
+        );
+      } catch (error) {
+        if (this.isUniqueViolation(error)) {
+          throw new SafetyEventAgendaLinkConflictError();
+        }
+
+        throw error;
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAgendaLinks(eventIdInput: unknown): Promise<SafetyEventAgendaLink[]> {
+    const eventId = validateSafetyEventId(eventIdInput);
+    const client = await this.pool.connect();
+
+    try {
+      const event = await this.safetyEventRepository.getSafetyEventById(
+        client,
+        eventId,
+      );
+
+      if (!event) {
+        throw new SafetyEventNotFoundError(eventId);
+      }
+
+      return await this.safetyEventRepository.listSafetyEventAgendaLinks(
         client,
         eventId,
       );
@@ -261,5 +350,14 @@ export class SafetyEventService {
         `Safety event references missing ${label}: ${id}`,
       );
     }
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "23505"
+    );
   }
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
   SafetyEvent,
+  SafetyEventAgendaLink,
   SafetyEventMeetingTrigger,
   SafetyEventMeetingTriggerReviewFlags,
   SafetyEventMeetingType,
@@ -81,6 +82,25 @@ interface CreateSafetyEventMeetingTriggerRow {
   assessedBy: string | null;
 }
 
+interface SafetyEventAgendaLinkRow extends QueryResultRow {
+  id: string;
+  safety_event_id: string;
+  safety_event_meeting_trigger_id: string;
+  air_safety_meeting_id: string;
+  agenda_item: string;
+  linked_by: string | null;
+  linked_at: Date;
+  created_at: Date;
+}
+
+interface CreateSafetyEventAgendaLinkRow {
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  agendaItem: string;
+  linkedBy: string | null;
+}
+
 const toSafetyEvent = (row: SafetyEventRow): SafetyEvent => ({
   id: row.id,
   eventType: row.event_type,
@@ -119,6 +139,19 @@ const toSafetyEventMeetingTrigger = (
   reviewFlags: row.review_flags,
   assessedBy: row.assessed_by,
   assessedAt: row.assessed_at.toISOString(),
+  createdAt: row.created_at.toISOString(),
+});
+
+const toSafetyEventAgendaLink = (
+  row: SafetyEventAgendaLinkRow,
+): SafetyEventAgendaLink => ({
+  id: row.id,
+  safetyEventId: row.safety_event_id,
+  safetyEventMeetingTriggerId: row.safety_event_meeting_trigger_id,
+  airSafetyMeetingId: row.air_safety_meeting_id,
+  agendaItem: row.agenda_item,
+  linkedBy: row.linked_by,
+  linkedAt: row.linked_at.toISOString(),
   createdAt: row.created_at.toISOString(),
 });
 
@@ -261,6 +294,69 @@ export class SafetyEventRepository {
     );
 
     return result.rows.map(toSafetyEventMeetingTrigger);
+  }
+
+  async getSafetyEventMeetingTriggerById(
+    tx: PoolClient,
+    triggerId: string,
+  ): Promise<SafetyEventMeetingTrigger | null> {
+    const result = await tx.query<SafetyEventMeetingTriggerRow>(
+      `
+      select *
+      from safety_event_meeting_triggers
+      where id = $1
+      `,
+      [triggerId],
+    );
+
+    return result.rows[0] ? toSafetyEventMeetingTrigger(result.rows[0]) : null;
+  }
+
+  async insertSafetyEventAgendaLink(
+    tx: PoolClient,
+    input: CreateSafetyEventAgendaLinkRow,
+  ): Promise<SafetyEventAgendaLink> {
+    const result = await tx.query<SafetyEventAgendaLinkRow>(
+      `
+      insert into safety_event_agenda_links (
+        id,
+        safety_event_id,
+        safety_event_meeting_trigger_id,
+        air_safety_meeting_id,
+        agenda_item,
+        linked_by
+      )
+      values ($1, $2, $3, $4, $5, $6)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.safetyEventId,
+        input.safetyEventMeetingTriggerId,
+        input.airSafetyMeetingId,
+        input.agendaItem,
+        input.linkedBy,
+      ],
+    );
+
+    return toSafetyEventAgendaLink(result.rows[0]);
+  }
+
+  async listSafetyEventAgendaLinks(
+    tx: PoolClient,
+    eventId: string,
+  ): Promise<SafetyEventAgendaLink[]> {
+    const result = await tx.query<SafetyEventAgendaLinkRow>(
+      `
+      select *
+      from safety_event_agenda_links
+      where safety_event_id = $1
+      order by linked_at desc, created_at desc, id desc
+      `,
+      [eventId],
+    );
+
+    return result.rows.map(toSafetyEventAgendaLink);
   }
 
   async referenceExists(

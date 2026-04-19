@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from safety_event_agenda_links");
   await pool.query("delete from safety_event_meeting_triggers");
   await pool.query("delete from safety_events");
   await pool.query("delete from post_operation_audit_signoffs");
@@ -35,6 +36,7 @@ const countRows = async (ids: {
     select
       (select count(*)::int from safety_events) as safety_event_count,
       (select count(*)::int from safety_event_meeting_triggers) as safety_event_trigger_count,
+      (select count(*)::int from safety_event_agenda_links) as safety_event_agenda_link_count,
       (select count(*)::int from missions where ($1::uuid is null or id = $1)) as mission_count,
       (select count(*)::int from platforms where ($2::uuid is null or id = $2)) as platform_count,
       (select count(*)::int from pilots where ($3::uuid is null or id = $3)) as pilot_count,
@@ -52,6 +54,7 @@ const countRows = async (ids: {
   return result.rows[0] as {
     safety_event_count: number;
     safety_event_trigger_count: number;
+    safety_event_agenda_link_count: number;
     mission_count: number;
     platform_count: number;
     pilot_count: number;
@@ -141,6 +144,34 @@ const createAirSafetyMeeting = async () => {
 
   expect(response.status).toBe(201);
   return response.body.meeting as { id: string };
+};
+
+const createTriggeredSafetyEvent = async (params?: {
+  eventType?: string;
+  severity?: string;
+  summary?: string;
+}) => {
+  const eventResponse = await request(app).post("/safety-events").send({
+    eventType: params?.eventType ?? "near_miss",
+    severity: params?.severity ?? "high",
+    eventOccurredAt: "2026-04-14T09:00:00.000Z",
+    summary: params?.summary ?? "Near miss requires safety review",
+  });
+
+  expect(eventResponse.status).toBe(201);
+
+  const triggerResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/meeting-trigger`)
+    .send({
+      assessedBy: "safety-manager",
+    });
+
+  expect(triggerResponse.status).toBe(201);
+
+  return {
+    event: eventResponse.body.event as { id: string },
+    trigger: triggerResponse.body.trigger as { id: string },
+  };
 };
 
 describe("safety events", () => {
@@ -335,6 +366,126 @@ describe("safety events", () => {
     });
   });
 
+  it("links a triggered safety event to an air safety meeting agenda record", async () => {
+    const meeting = await createAirSafetyMeeting();
+    const { event, trigger } = await createTriggeredSafetyEvent();
+
+    const response = await request(app)
+      .post(`/safety-events/${event.id}/meeting-triggers/${trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: " Review near miss recovery actions ",
+        linkedBy: " safety coordinator ",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.link).toMatchObject({
+      safetyEventId: event.id,
+      safetyEventMeetingTriggerId: trigger.id,
+      airSafetyMeetingId: meeting.id,
+      agendaItem: "Review near miss recovery actions",
+      linkedBy: "safety coordinator",
+    });
+    expect(response.body.link.id).toEqual(expect.any(String));
+    expect(response.body.link.linkedAt).toEqual(expect.any(String));
+
+    const listResponse = await request(app).get(
+      `/safety-events/${event.id}/agenda-links`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.links).toHaveLength(1);
+    expect(listResponse.body.links[0]).toEqual(response.body.link);
+  });
+
+  it("links multiple safety event triggers to the same air safety meeting", async () => {
+    const meeting = await createAirSafetyMeeting();
+    const first = await createTriggeredSafetyEvent({
+      eventType: "sop_breach",
+      severity: "low",
+      summary: "Checklist step missed",
+    });
+    const second = await createTriggeredSafetyEvent({
+      eventType: "training_need",
+      severity: "medium",
+      summary: "Manual recovery refresher needed",
+    });
+
+    const firstLink = await request(app)
+      .post(`/safety-events/${first.event.id}/meeting-triggers/${first.trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review SOP breach",
+      });
+    const secondLink = await request(app)
+      .post(`/safety-events/${second.event.id}/meeting-triggers/${second.trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review training action",
+      });
+
+    expect(firstLink.status).toBe(201);
+    expect(secondLink.status).toBe(201);
+    expect(firstLink.body.link.airSafetyMeetingId).toBe(meeting.id);
+    expect(secondLink.body.link.airSafetyMeetingId).toBe(meeting.id);
+    expect(firstLink.body.link.safetyEventId).not.toBe(
+      secondLink.body.link.safetyEventId,
+    );
+  });
+
+  it("rejects agenda linkage for missing trigger or missing meeting", async () => {
+    const meeting = await createAirSafetyMeeting();
+    const { event, trigger } = await createTriggeredSafetyEvent();
+    const missingTrigger = randomUUID();
+    const missingMeeting = randomUUID();
+
+    const missingTriggerResponse = await request(app)
+      .post(`/safety-events/${event.id}/meeting-triggers/${missingTrigger}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review missing trigger",
+      });
+    const missingMeetingResponse = await request(app)
+      .post(`/safety-events/${event.id}/meeting-triggers/${trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: missingMeeting,
+        agendaItem: "Review missing meeting",
+      });
+
+    expect(missingTriggerResponse.status).toBe(404);
+    expect(missingTriggerResponse.body.error).toMatchObject({
+      type: "safety_event_meeting_trigger_not_found",
+    });
+    expect(missingMeetingResponse.status).toBe(404);
+    expect(missingMeetingResponse.body.error).toMatchObject({
+      type: "safety_event_reference_not_found",
+    });
+  });
+
+  it("rejects duplicate agenda linkage for the same trigger and meeting", async () => {
+    const meeting = await createAirSafetyMeeting();
+    const { event, trigger } = await createTriggeredSafetyEvent();
+
+    const firstResponse = await request(app)
+      .post(`/safety-events/${event.id}/meeting-triggers/${trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Initial review",
+      });
+    const duplicateResponse = await request(app)
+      .post(`/safety-events/${event.id}/meeting-triggers/${trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Duplicate review",
+      });
+
+    expect(firstResponse.status).toBe(201);
+    expect(duplicateResponse.status).toBe(409);
+    expect(duplicateResponse.body.error).toMatchObject({
+      type: "safety_event_agenda_link_conflict",
+    });
+  });
+
   it("captures linked post-operation safety findings without mutating linked records", async () => {
     const platform = await createPlatform();
     const pilot = await createPilot();
@@ -444,6 +595,59 @@ describe("safety events", () => {
     })).toEqual({
       ...before,
       safety_event_trigger_count: before.safety_event_trigger_count + 1,
+    });
+  });
+
+  it("links agenda records without mutating safety event, trigger, meeting, or linked records", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const meeting = await createAirSafetyMeeting();
+    const safetyEvent = await request(app).post("/safety-events").send({
+      eventType: "sop_breach",
+      severity: "high",
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      eventOccurredAt: "2026-04-14T12:00:00.000Z",
+      summary: "Dispatch briefing step missed",
+    });
+
+    expect(safetyEvent.status).toBe(201);
+
+    const triggerResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-trigger`)
+      .send({});
+
+    expect(triggerResponse.status).toBe(201);
+
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    });
+
+    const linkResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-triggers/${triggerResponse.body.trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review dispatch briefing SOP breach",
+      });
+
+    expect(linkResponse.status).toBe(201);
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    })).toEqual({
+      ...before,
+      safety_event_agenda_link_count:
+        before.safety_event_agenda_link_count + 1,
     });
   });
 

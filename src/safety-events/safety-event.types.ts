@@ -94,3 +94,20 @@ export interface SafetyEventMeetingTrigger {
   assessedAt: string;
   createdAt: string;
 }
+
+export interface CreateSafetyEventAgendaLinkInput {
+  airSafetyMeetingId?: string;
+  agendaItem?: string;
+  linkedBy?: string | null;
+}
+
+export interface SafetyEventAgendaLink {
+  id: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  agendaItem: string;
+  linkedBy: string | null;
+  linkedAt: string;
+  createdAt: string;
+}

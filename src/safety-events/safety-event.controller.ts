@@ -60,4 +60,36 @@ export class SafetyEventController {
       next(error);
     }
   };
+
+  createAgendaLink = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const link = await this.safetyEventService.createAgendaLink(
+        req.params.eventId,
+        req.params.triggerId,
+        req.body,
+      );
+      res.status(201).json({ link });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listAgendaLinks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const links = await this.safetyEventService.listAgendaLinks(
+        req.params.eventId,
+      );
+      res.status(200).json({ links });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

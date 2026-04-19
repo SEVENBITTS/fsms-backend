@@ -10,6 +10,11 @@ export function createSafetyEventRouter(
   router.get("/", controller.listSafetyEvents);
   router.post("/:eventId/meeting-trigger", controller.assessMeetingTrigger);
   router.get("/:eventId/meeting-triggers", controller.listMeetingTriggers);
+  router.post(
+    "/:eventId/meeting-triggers/:triggerId/agenda-links",
+    controller.createAgendaLink,
+  );
+  router.get("/:eventId/agenda-links", controller.listAgendaLinks);
 
   return router;
 }
