@@ -1826,4 +1826,29 @@ describe("mission planning drafts", () => {
       },
     });
   });
+
+  it("serves the operator mission workspace screen", async () => {
+    const response = await request(app).get("/operator/mission-workspace");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.text).toContain("Operator Mission Workspace");
+    expect(response.text).toContain("Mission Lifecycle Actions");
+    expect(response.text).toContain("/static/operator-mission-workspace.js");
+  });
+
+  it("serves the operator mission workspace javascript bundle", async () => {
+    const response = await request(app).get(
+      "/static/operator-mission-workspace.js",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("javascript");
+    expect(response.text).toContain("/planning-workspace");
+    expect(response.text).toContain("/dispatch-workspace");
+    expect(response.text).toContain("/operations-timeline");
+    expect(response.text).toContain("/transitions/${action}/check");
+    expect(response.text).toContain('["submit", "approve", "launch", "complete", "abort"]');
+    expect(response.text).toContain("/missions/${missionId}/${action}");
+  });
 });

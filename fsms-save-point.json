@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add operator mission workspace UI so planning, dispatch, and operations timeline state can be reviewed from a single mission screen.",
+ "nextBuildStep": "Add operator live operations map view so replay and future live telemetry can be reviewed separately from planning and dispatch workspace controls.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

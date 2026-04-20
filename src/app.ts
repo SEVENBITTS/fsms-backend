@@ -84,6 +84,7 @@ if (process.env.NODE_ENV !== "test") {
 
 const app = express();
 app.use(express.json());
+app.use("/static", express.static(path.resolve(process.cwd(), "static")));
 
 const pool = new Pool({
   host: process.env.PGHOST,
@@ -211,6 +212,16 @@ app.use("/missions", createAlertRouter(alertController));
 app.use("/platforms", createPlatformRouter(platformController));
 app.use("/pilots", createPilotRouter(pilotController));
 app.use("/timeline", createTimelineRouter(timelineService));
+app.get("/operator/mission-workspace", (_req, res) => {
+  res.sendFile(
+    path.resolve(process.cwd(), "static", "operator-mission-workspace.html"),
+  );
+});
+app.get("/operator/missions/:missionId", (_req, res) => {
+  res.sendFile(
+    path.resolve(process.cwd(), "static", "operator-mission-workspace.html"),
+  );
+});
 app.get("/", (_req, res) => {
   res.status(200).send("FSMS backend is running");
 });
