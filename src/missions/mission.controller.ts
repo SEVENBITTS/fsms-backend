@@ -50,6 +50,22 @@ export class MissionController {
     }
   };
 
+  getOperationsTimeline = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireUuid(req.params.missionId, "missionId");
+      const timeline =
+        await this.missionPlanningService.getOperationsTimeline(missionId);
+
+      res.status(200).json({ timeline });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getMissionEvents = async (
     req: Request,
     res: Response,

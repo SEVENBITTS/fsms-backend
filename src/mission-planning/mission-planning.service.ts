@@ -6,6 +6,7 @@ import type { AuditReportSmsControlMapping } from "../audit-evidence/audit-evide
 import { MissionRiskRepository } from "../mission-risk/mission-risk.repository";
 import { validateCreateMissionRiskInput } from "../mission-risk/mission-risk.validators";
 import { MissionService } from "../missions/mission.service";
+import { MissionTelemetryRepository } from "../missions/mission-telemetry.repository";
 import {
   MissionPlanningDraftNotFoundError,
   MissionPlanningMissionNotFoundError,
@@ -17,6 +18,11 @@ import type {
   CreateMissionPlanningApprovalHandoffInput,
   CreateMissionPlanningDraftInput,
   MissionDispatchWorkspace,
+  MissionOperationsTelemetrySummary,
+  MissionOperationsTimeline,
+  MissionOperationsTimelineItem,
+  MissionOperationsTimelinePhase,
+  MissionOperationsTimelinePhaseStatus,
   MissionPlanningApprovalHandoff,
   MissionPlanningApprovalHandoffTrace,
   MissionPlanningDraft,
@@ -81,6 +87,7 @@ export class MissionPlanningService {
     private readonly airspaceComplianceRepository: AirspaceComplianceRepository,
     private readonly auditEvidenceService: AuditEvidenceService,
     private readonly missionService: MissionService,
+    private readonly missionTelemetryRepository: MissionTelemetryRepository,
   ) {}
 
   async createDraft(
@@ -551,6 +558,199 @@ export class MissionPlanningService {
     };
   }
 
+  async getOperationsTimeline(
+    missionId: string,
+  ): Promise<MissionOperationsTimeline> {
+    const context = await this.getMissionWorkspaceContext(missionId);
+    const {
+      mission,
+      decisionEvidenceLinks,
+    } = context;
+    const client = await this.pool.connect();
+
+    try {
+      const lifecycleEvents = await this.missionService.getMissionEvents(
+        missionId,
+        {},
+      );
+      const planningHandoffs =
+        await this.missionPlanningRepository.listApprovalHandoffTraces(
+          client,
+          missionId,
+        );
+      const riskInputs =
+        await this.missionPlanningRepository.listMissionRiskInputTimelineRows(
+          client,
+          missionId,
+        );
+      const airspaceInputs =
+        await this.missionPlanningRepository.listAirspaceInputTimelineRows(
+          client,
+          missionId,
+        );
+      const telemetrySummary =
+        await this.missionTelemetryRepository.getTimelineSummaryByMissionId(
+          missionId,
+          client,
+        );
+      const postOperationSnapshots =
+        await this.auditEvidenceService.listPostOperationEvidenceSnapshots(
+          missionId,
+        );
+
+      const items: MissionOperationsTimelineItem[] = [
+        ...riskInputs.map((input) => ({
+          id: `planning-risk-${input.id}`,
+          phase: "planning" as const,
+          type: "planning_risk_input" as const,
+          occurredAt: input.created_at,
+          source: "mission-risk-service",
+          summary: `Mission risk input recorded (${input.operating_category}/${input.mission_complexity})`,
+          details: {
+            id: input.id,
+            operatingCategory: input.operating_category,
+            missionComplexity: input.mission_complexity,
+            populationExposure: input.population_exposure,
+            airspaceComplexity: input.airspace_complexity,
+            weatherRisk: input.weather_risk,
+            payloadRisk: input.payload_risk,
+            mitigationSummary: input.mitigation_summary,
+          },
+        })),
+        ...airspaceInputs.map((input) => ({
+          id: `planning-airspace-${input.id}`,
+          phase: "planning" as const,
+          type: "planning_airspace_input" as const,
+          occurredAt: input.created_at,
+          source: "airspace-compliance-service",
+          summary: `Airspace input recorded (${input.airspace_class.toUpperCase()} / ${input.permission_status})`,
+          details: {
+            id: input.id,
+            airspaceClass: input.airspace_class,
+            maxAltitudeFt: Number(input.max_altitude_ft),
+            restrictionStatus: input.restriction_status,
+            permissionStatus: input.permission_status,
+            controlledAirspace: input.controlled_airspace,
+            nearbyAerodrome: input.nearby_aerodrome,
+            evidenceRef: input.evidence_ref,
+            notes: input.notes,
+          },
+        })),
+        ...planningHandoffs.map((handoff) => ({
+          id: `planning-handoff-${handoff.id}`,
+          phase: "planning" as const,
+          type: "planning_approval_handoff" as const,
+          occurredAt: handoff.created_at,
+          source: "mission-planning-service",
+          summary: "Planning approval handoff recorded",
+          details: {
+            id: handoff.id,
+            auditEvidenceSnapshotId: handoff.audit_evidence_snapshot_id,
+            missionDecisionEvidenceLinkId: handoff.mission_decision_evidence_link_id,
+            planningReview: handoff.planning_review,
+            createdBy: handoff.created_by,
+          },
+        })),
+        ...decisionEvidenceLinks.map((link) => ({
+          id: `decision-evidence-${link.id}`,
+          phase: link.decisionType === "approval" ? ("approval" as const) : ("dispatch" as const),
+          type: "decision_evidence_link" as const,
+          occurredAt: link.createdAt,
+          source: "audit-evidence-service",
+          summary:
+            link.decisionType === "approval"
+              ? "Approval evidence linked"
+              : "Dispatch evidence linked",
+          details: {
+            id: link.id,
+            decisionType: link.decisionType,
+            auditEvidenceSnapshotId: link.auditEvidenceSnapshotId,
+            createdBy: link.createdBy,
+          },
+        })),
+        ...lifecycleEvents.map((event) => ({
+          id: `mission-event-${event.id}`,
+          phase: this.getLifecyclePhase(event.type),
+          type: "mission_event" as const,
+          occurredAt: event.time,
+          source: event.type,
+          summary: event.summary,
+          details: {
+            id: event.id,
+            sequence: event.sequence,
+            eventType: event.type,
+            actorType: event.actorType,
+            actorId: event.actorId,
+            fromState: event.fromState,
+            toState: event.toState,
+            details: event.details,
+          },
+        })),
+        ...(telemetrySummary.recordCount > 0 && telemetrySummary.lastRecordedAt
+          ? [
+              {
+                id: `telemetry-summary-${mission.id}`,
+                phase: "flight" as const,
+                type: "telemetry_summary" as const,
+                occurredAt: telemetrySummary.lastRecordedAt.toISOString(),
+                source: "mission-telemetry-service",
+                summary: `Telemetry recorded (${telemetrySummary.recordCount} records)`,
+                details: {
+                  recordCount: telemetrySummary.recordCount,
+                  firstRecordedAt:
+                    telemetrySummary.firstRecordedAt?.toISOString() ?? null,
+                  lastRecordedAt:
+                    telemetrySummary.lastRecordedAt?.toISOString() ?? null,
+                  latestRecord: telemetrySummary.latestRecord
+                    ? {
+                        timestamp: telemetrySummary.latestRecord.recordedAt.toISOString(),
+                        lat: telemetrySummary.latestRecord.lat,
+                        lng: telemetrySummary.latestRecord.lng,
+                        altitudeM: telemetrySummary.latestRecord.altitudeM,
+                        speedMps: telemetrySummary.latestRecord.speedMps,
+                        headingDeg: telemetrySummary.latestRecord.headingDeg,
+                        progressPct: telemetrySummary.latestRecord.progressPct,
+                        payload: telemetrySummary.latestRecord.payload,
+                      }
+                    : null,
+                },
+              },
+            ]
+          : []),
+        ...postOperationSnapshots.map((snapshot) => ({
+          id: `post-operation-${snapshot.id}`,
+          phase: "post_operation" as const,
+          type: "post_operation_snapshot" as const,
+          occurredAt: snapshot.createdAt,
+          source: "audit-evidence-service",
+          summary: "Post-operation evidence snapshot recorded",
+          details: {
+            id: snapshot.id,
+            evidenceType: snapshot.evidenceType,
+            lifecycleState: snapshot.lifecycleState,
+            createdBy: snapshot.createdBy,
+            completionSnapshot: snapshot.completionSnapshot,
+          },
+        })),
+      ].sort((left, right) => this.compareTimelineItems(left, right));
+
+      return {
+        mission: {
+          id: mission.id,
+          missionPlanId: mission.mission_plan_id,
+          status: mission.status,
+          platformId: mission.platform_id,
+          pilotId: mission.pilot_id,
+          lastEventSequenceNo: Number(mission.last_event_sequence_no),
+        },
+        phases: this.buildTimelinePhaseStatuses(items, telemetrySummary),
+        items,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   private async getMissionWorkspaceContext(
     missionId: string,
   ): Promise<MissionWorkspaceContext> {
@@ -719,6 +919,102 @@ export class MissionPlanningService {
       createdBy: row.created_by,
       createdAt: row.created_at,
     };
+  }
+
+  private getLifecyclePhase(eventType: string): MissionOperationsTimelinePhase {
+    if (eventType === "mission.approved") {
+      return "approval";
+    }
+
+    if (eventType === "mission.launched" || eventType === "mission.aborted") {
+      return "dispatch";
+    }
+
+    if (eventType === "mission.completed") {
+      return "post_operation";
+    }
+
+    return "approval";
+  }
+
+  private compareTimelineItems(
+    left: MissionOperationsTimelineItem,
+    right: MissionOperationsTimelineItem,
+  ): number {
+    const byTime =
+      new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime();
+
+    if (byTime !== 0) {
+      return byTime;
+    }
+
+    const phaseRank = this.getPhaseRank(left.phase) - this.getPhaseRank(right.phase);
+
+    if (phaseRank !== 0) {
+      return phaseRank;
+    }
+
+    return left.id.localeCompare(right.id);
+  }
+
+  private getPhaseRank(phase: MissionOperationsTimelinePhase): number {
+    switch (phase) {
+      case "planning":
+        return 0;
+      case "approval":
+        return 1;
+      case "dispatch":
+        return 2;
+      case "flight":
+        return 3;
+      case "post_operation":
+        return 4;
+      default:
+        return 99;
+    }
+  }
+
+  private buildTimelinePhaseStatuses(
+    items: MissionOperationsTimelineItem[],
+    telemetrySummary: {
+      recordCount: number;
+      firstRecordedAt: Date | null;
+      lastRecordedAt: Date | null;
+      latestRecord: unknown;
+    },
+  ): MissionOperationsTimelinePhaseStatus[] {
+    return ([
+      "planning",
+      "approval",
+      "dispatch",
+      "flight",
+      "post_operation",
+    ] as MissionOperationsTimelinePhase[]).map((phase) => {
+      const phaseItems = items.filter((item) => item.phase === phase);
+      const latestAt =
+        phaseItems.length > 0
+          ? phaseItems[phaseItems.length - 1].occurredAt
+          : null;
+
+      if (phase === "flight" && telemetrySummary.recordCount === 0 && phaseItems.length === 0) {
+        return {
+          phase,
+          status: "missing",
+          latestAt: null,
+          summary: "No telemetry or flight-phase evidence recorded",
+        };
+      }
+
+      return {
+        phase,
+        status: phaseItems.length > 0 ? "present" : "missing",
+        latestAt,
+        summary:
+          phaseItems.length > 0
+            ? `${phaseItems.length} ${phase.replace("_", " ")} timeline item(s) recorded`
+            : `No ${phase.replace("_", " ")} timeline items recorded`,
+      };
+    });
   }
 
   private getLinkedEntityState(

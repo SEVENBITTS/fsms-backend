@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission operations timeline endpoint combining planning, approval, dispatch, telemetry, and post-operation evidence.",
+ "nextBuildStep": "Add operator mission workspace UI so planning, dispatch, and operations timeline state can be reviewed from a single mission screen.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

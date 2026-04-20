@@ -11,6 +11,7 @@ import type { MissionReadinessCheck } from "../missions/mission-readiness.types"
 import type { Platform } from "../platforms/platform.types";
 import type { Pilot } from "../pilots/pilot.types";
 import type { MissionLifecycleAction } from "../modules/missions/domain/missionLifecycle";
+import type { MissionTelemetryRecordDto } from "../missions/mission-telemetry.types";
 
 export interface CreateMissionPlanningDraftInput {
   missionPlanId?: string | null;
@@ -194,4 +195,55 @@ export interface MissionDispatchWorkspace {
   dispatch: MissionDispatchWorkspaceDispatchStatus;
   blockingReasons: string[];
   nextAllowedActions: MissionPlanningWorkspaceNextAction[];
+}
+
+export type MissionOperationsTimelinePhase =
+  | "planning"
+  | "approval"
+  | "dispatch"
+  | "flight"
+  | "post_operation";
+
+export interface MissionOperationsTimelineItem {
+  id: string;
+  phase: MissionOperationsTimelinePhase;
+  type:
+    | "planning_risk_input"
+    | "planning_airspace_input"
+    | "planning_approval_handoff"
+    | "mission_event"
+    | "decision_evidence_link"
+    | "telemetry_summary"
+    | "post_operation_snapshot";
+  occurredAt: string;
+  source: string;
+  summary: string;
+  details: Record<string, unknown>;
+}
+
+export interface MissionOperationsTimelinePhaseStatus {
+  phase: MissionOperationsTimelinePhase;
+  status: "present" | "missing";
+  latestAt: string | null;
+  summary: string;
+}
+
+export interface MissionOperationsTelemetrySummary {
+  recordCount: number;
+  firstRecordedAt: string;
+  lastRecordedAt: string;
+  latestRecord: MissionTelemetryRecordDto;
+}
+
+export interface MissionOperationsTimeline {
+  mission: {
+    id: string;
+    missionPlanId: string | null;
+    status: string;
+    platformId: string | null;
+    pilotId: string | null;
+    lastEventSequenceNo: number;
+  };
+  phases: MissionOperationsTimelinePhaseStatus[];
+  items: MissionOperationsTimelineItem[];
 }
