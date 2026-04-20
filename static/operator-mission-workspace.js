@@ -5,6 +5,10 @@ const openApiButton = document.getElementById("open-api-btn");
 const connectionStatus = document.getElementById("connection-status");
 const loadedMissionPill = document.getElementById("loaded-mission-pill");
 const overviewMetrics = document.getElementById("overview-metrics");
+const missionSearchInput = document.getElementById("mission-search-input");
+const missionSearchButton = document.getElementById("mission-search-btn");
+const missionBrowserList = document.getElementById("mission-browser-list");
+const missionBrowserDetail = document.getElementById("mission-browser-detail");
 const actionsPanel = document.getElementById("actions-panel");
 const planningPanel = document.getElementById("planning-panel");
 const dispatchPanel = document.getElementById("dispatch-panel");
@@ -71,6 +75,8 @@ const uiState = {
   planningWorkspace: null,
   dispatchWorkspace: null,
   timeline: null,
+  missionList: [],
+  missionQuery: "",
   transitionChecks: {},
   actionStatus: {},
   busyAction: null,
@@ -166,6 +172,9 @@ const renderList = (items, title) => {
 
 const renderBadge = (value) =>
   `<span class="badge ${toneClass(value)}">${escapeHtml(value ?? "Unknown")}</span>`;
+
+const missionDisplayName = (mission) =>
+  mission?.missionPlanId || mission?.id || "Unknown mission";
 
 const setConnectionState = (message, tone = "tone-muted") => {
   connectionStatus.className = `status-pill ${tone}`;
@@ -286,6 +295,136 @@ const applyActionDefaults = () => {
         input.value = value;
       }
     }
+  }
+};
+
+const renderMissionBrowser = () => {
+  const missions = uiState.missionList ?? [];
+
+  if (!missionBrowserList || !missionBrowserDetail) {
+    return;
+  }
+
+  if (missions.length === 0) {
+    missionBrowserList.innerHTML =
+      '<div class="empty-state">No missions match the current filter.</div>';
+    missionBrowserDetail.innerHTML = `
+      <div class="empty-state">
+        Search recent missions or clear the filter to load a mission into the operator workspace.
+      </div>
+    `;
+    return;
+  }
+
+  missionBrowserList.innerHTML = missions
+    .map((mission) => {
+      const loaded = mission.id === uiState.missionId;
+      const lastEvent = mission.latestEventSummary ?? "No lifecycle events yet";
+      const platform =
+        mission.platform?.name ?? mission.platform?.id ?? "Platform not assigned";
+      const pilot =
+        mission.pilot?.displayName ?? mission.pilot?.id ?? "Pilot not assigned";
+
+      return `
+        <article class="mission-row" data-mission-id="${escapeHtml(mission.id)}">
+          <div class="mission-row-title">
+            <div>
+              <strong>${escapeHtml(missionDisplayName(mission))}</strong>
+              <div class="timeline-meta">Mission ID: ${escapeHtml(mission.id)}</div>
+            </div>
+            <div>${renderBadge(mission.status ?? "Unknown")}</div>
+          </div>
+          <div class="mission-row-meta">
+            Platform: ${escapeHtml(platform)}<br />
+            Pilot: ${escapeHtml(pilot)}<br />
+            Last event: ${escapeHtml(lastEvent)}<br />
+            Updated: ${escapeHtml(formatDateTime(mission.latestEventAt ?? mission.updatedAt))}
+          </div>
+          <div style="margin-top: 10px;">
+            <button class="action-button" type="button" data-open-mission="${escapeHtml(
+              mission.id,
+            )}">
+              ${loaded ? "Loaded" : "Open mission"}
+            </button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  missionBrowserList.querySelectorAll("[data-open-mission]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const missionId = button.getAttribute("data-open-mission");
+      if (!missionId) {
+        return;
+      }
+
+      missionIdInput.value = missionId;
+      loadMissionWorkspace(missionId);
+    });
+  });
+
+  const selectedMission =
+    missions.find((mission) => mission.id === uiState.missionId) ?? missions[0];
+
+  missionBrowserDetail.innerHTML = `
+    <section class="summary-block">
+      <h4>Selected Mission</h4>
+      <div class="kv">
+        <div class="k">Mission</div>
+        <div>${escapeHtml(missionDisplayName(selectedMission))}</div>
+        <div class="k">Mission ID</div>
+        <div>${escapeHtml(selectedMission.id)}</div>
+        <div class="k">Status</div>
+        <div>${renderBadge(selectedMission.status ?? "Unknown")}</div>
+        <div class="k">Platform</div>
+        <div>${escapeHtml(
+          selectedMission.platform?.name ??
+            selectedMission.platform?.id ??
+            "Platform not assigned",
+        )}</div>
+        <div class="k">Pilot</div>
+        <div>${escapeHtml(
+          selectedMission.pilot?.displayName ??
+            selectedMission.pilot?.id ??
+            "Pilot not assigned",
+        )}</div>
+        <div class="k">Last event</div>
+        <div>${escapeHtml(selectedMission.latestEventSummary ?? "No lifecycle events yet")}</div>
+        <div class="k">Updated</div>
+        <div>${escapeHtml(formatDateTime(selectedMission.latestEventAt ?? selectedMission.updatedAt))}</div>
+      </div>
+    </section>
+  `;
+};
+
+const loadMissionList = async (query = "") => {
+  uiState.missionQuery = query;
+
+  if (!missionBrowserList || !missionBrowserDetail) {
+    return;
+  }
+
+  missionBrowserList.innerHTML =
+    '<div class="empty-state">Loading mission list...</div>';
+
+  const params = new URLSearchParams();
+  if (query) {
+    params.set("q", query);
+  }
+  params.set("limit", "12");
+
+  try {
+    const response = await fetchJson(`/missions?${params.toString()}`);
+    uiState.missionList = response.missions ?? [];
+    renderMissionBrowser();
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load mission list";
+    uiState.missionList = [];
+    missionBrowserList.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    missionBrowserDetail.innerHTML =
+      '<div class="empty-state">Mission detail is unavailable because the mission list did not load.</div>';
   }
 };
 
@@ -644,6 +783,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.planningWorkspace = null;
     uiState.dispatchWorkspace = null;
     uiState.timeline = null;
+    renderMissionBrowser();
     uiState.transitionChecks = {};
     uiState.actionStatus = {};
     uiState.busyAction = null;
@@ -682,6 +822,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.timeline = timelineResponse.timeline;
     await refreshTransitionChecks(missionId);
 
+    renderMissionBrowser();
     renderOverview();
     renderActions();
     renderPlanning();
@@ -694,6 +835,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.dispatchWorkspace = null;
     uiState.timeline = null;
     uiState.transitionChecks = {};
+    renderMissionBrowser();
     setConnectionState(message, "tone-bad");
     actionsPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     planningPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
@@ -740,6 +882,7 @@ const executeAction = async (action) => {
       [action]: { message: `${ACTION_DEFINITIONS[action].title} completed` },
     };
     uiState.busyAction = null;
+    await loadMissionList(uiState.missionQuery);
     await loadMissionWorkspace(missionId, { preserveActionStatus: true });
     setConnectionState(`${ACTION_DEFINITIONS[action].title} completed`, "tone-ok");
   } catch (error) {
@@ -762,6 +905,16 @@ loadWorkspaceButton.addEventListener("click", () => {
 missionIdInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     loadMissionWorkspace(missionIdInput.value.trim());
+  }
+});
+
+missionSearchButton?.addEventListener("click", () => {
+  loadMissionList(missionSearchInput?.value.trim() ?? "");
+});
+
+missionSearchInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    loadMissionList(missionSearchInput.value.trim());
   }
 });
 
@@ -795,4 +948,5 @@ if (initialMissionId) {
   missionIdInput.value = initialMissionId;
 }
 
+loadMissionList("");
 loadMissionWorkspace(initialMissionId);

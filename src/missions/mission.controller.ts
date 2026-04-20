@@ -34,6 +34,22 @@ export class MissionController {
     }
   };
 
+  listMissions = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const query = this.optionalString(req.query.q);
+      const limit = this.optionalPositiveInteger(req.query.limit);
+      const result = await this.missionService.listMissions({ query, limit });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getDispatchWorkspace = async (
     req: Request,
     res: Response,
@@ -359,6 +375,22 @@ export class MissionController {
 
     if (!Number.isFinite(num)) {
       throw new Error(`${fieldName} must be a valid number`);
+    }
+
+    return num;
+  }
+
+  private optionalPositiveInteger(value: unknown): number | undefined {
+    const normalized = this.optionalString(value);
+
+    if (!normalized) {
+      return undefined;
+    }
+
+    const num = Number(normalized);
+
+    if (!Number.isInteger(num) || num <= 0) {
+      throw new Error("limit must be a positive integer");
     }
 
     return num;

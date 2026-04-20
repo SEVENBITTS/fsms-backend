@@ -27,12 +27,33 @@ import {
   MissionApprovalEvidenceRequiredError,
   MissionDispatchEvidenceRequiredError,
 } from "./errors";
+import type { MissionListRow } from "./mission.repository";
+import type { MissionStatus } from "./mission-telemetry.types";
 
 export interface GetMissionEventsFilters {
   safety?: boolean;
   compliance?: boolean;
   severity?: "info" | "warning" | "critical";
   type?: string;
+}
+
+export interface ListMissionsFilters {
+  query?: string;
+  limit?: number;
+}
+
+export interface MissionListItem {
+  id: string;
+  status: MissionStatus;
+  missionPlanId: string | null;
+  platformId: string | null;
+  pilotId: string | null;
+  lastEventSequenceNo: number;
+  platformName: string | null;
+  pilotDisplayName: string | null;
+  latestEventType: string | null;
+  latestEventSummary: string | null;
+  latestEventTime: string | null;
 }
 
 
@@ -547,6 +568,25 @@ export class MissionService {
     });
   }
 
+  async listMissions(filters: ListMissionsFilters = {}): Promise<{
+    missions: MissionListItem[];
+    query: string | null;
+    limit: number;
+  }> {
+    const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+    const query = filters.query?.trim() || null;
+
+    const missions = await this.db.transaction(async (tx) =>
+      this.missionRepo.list(tx, { query: query ?? undefined, limit }),
+    );
+
+    return {
+      missions: missions.map((row) => this.toMissionListItem(row)),
+      query,
+      limit,
+    };
+  }
+
   async getMissionEvents(
     missionId: string,
     filters: GetMissionEventsFilters = {},
@@ -764,5 +804,21 @@ export class MissionService {
     }
 
     return "pass";
+  }
+
+  private toMissionListItem(row: MissionListRow): MissionListItem {
+    return {
+      id: row.id,
+      status: row.status,
+      missionPlanId: row.mission_plan_id,
+      platformId: row.platform_id,
+      pilotId: row.pilot_id,
+      lastEventSequenceNo: Number(row.last_event_sequence_no),
+      platformName: row.platform_name,
+      pilotDisplayName: row.pilot_display_name,
+      latestEventType: row.latest_event_type,
+      latestEventSummary: row.latest_event_summary,
+      latestEventTime: row.latest_event_time,
+    };
   }
 }
