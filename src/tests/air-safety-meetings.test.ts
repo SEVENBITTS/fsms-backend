@@ -780,7 +780,7 @@ describe("air safety meetings", () => {
             ]),
           }),
           expect.objectContaining({
-            heading: "Latest governance summary sign-off",
+            heading: "Accountable manager sign-off",
             fields: expect.arrayContaining([
               {
                 label: "Accountable manager name",
@@ -809,6 +809,9 @@ describe("air safety meetings", () => {
     expect(response.body.report.report.plainText).toContain(
       "Governance summary approval status: unsigned",
     );
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager sign-off",
+    );
     expect(await countRows()).toEqual(before);
   });
 
@@ -832,10 +835,19 @@ describe("air safety meetings", () => {
       "Governance summary approval assurance report",
     );
     expect(response.body.toString("latin1")).toContain(
+      "Accountable manager",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
       "Governance summary",
     );
     expect(response.body.toString("latin1")).toContain(
       "approval status: unsigned",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Pending sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
       "Approved meetings",
@@ -1194,7 +1206,7 @@ describe("air safety meetings", () => {
             ]),
           }),
           expect.objectContaining({
-            heading: "Latest governance summary sign-off",
+            heading: "Accountable manager sign-off",
             fields: expect.arrayContaining([
               {
                 label: "Accountable manager name",
@@ -1247,6 +1259,9 @@ describe("air safety meetings", () => {
     });
     expect(response.body.report.report.plainText).toContain(
       "Governance summary approval status: approved",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
       governanceSignoff.signatureReference,
@@ -1326,6 +1341,12 @@ describe("air safety meetings", () => {
     );
     expect(response.body.toString("latin1")).toContain(
       "Governance summary approval assurance report",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Accountable manager",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
       "Governance summary",

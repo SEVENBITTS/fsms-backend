@@ -576,8 +576,6 @@ export class AirSafetyMeetingService {
   private buildApprovalRollupSummaryReportSections(
     summary: AirSafetyMeetingApprovalRollupSummary,
   ): AirSafetyMeetingReportSection[] {
-    const pendingSignoff = "Pending sign-off";
-    const signoff = summary.governanceSignoffApproval.latestSignoff;
     const sections: AirSafetyMeetingReportSection[] = [
       {
         heading: "Summary approval overview",
@@ -597,35 +595,7 @@ export class AirSafetyMeetingService {
           { label: "Unsigned meetings", value: summary.counts.unsigned },
         ],
       },
-      {
-        heading: "Latest governance summary sign-off",
-        fields: [
-          {
-            label: "Accountable manager name",
-            value: signoff?.accountableManagerName ?? pendingSignoff,
-          },
-          {
-            label: "Role/title",
-            value: signoff?.accountableManagerRole ?? pendingSignoff,
-          },
-          {
-            label: "Signature",
-            value: signoff?.signatureReference ?? pendingSignoff,
-          },
-          {
-            label: "Signed date/time",
-            value: signoff?.signedAt ?? pendingSignoff,
-          },
-          {
-            label: "Review decision/status",
-            value: signoff?.reviewDecision ?? pendingSignoff,
-          },
-          {
-            label: "Review notes/comments",
-            value: signoff?.reviewNotes ?? pendingSignoff,
-          },
-        ],
-      },
+      this.buildSummaryApprovalSignoffSection(summary),
     ];
 
     const groupedSections: Array<{
@@ -673,6 +643,43 @@ export class AirSafetyMeetingService {
     });
 
     return sections;
+  }
+
+  private buildSummaryApprovalSignoffSection(
+    summary: AirSafetyMeetingApprovalRollupSummary,
+  ): AirSafetyMeetingReportSection {
+    const pendingSignoff = "Pending sign-off";
+    const signoff = summary.governanceSignoffApproval.latestSignoff;
+
+    return {
+      heading: "Accountable manager sign-off",
+      fields: [
+        {
+          label: "Accountable manager name",
+          value: signoff?.accountableManagerName ?? pendingSignoff,
+        },
+        {
+          label: "Role/title",
+          value: signoff?.accountableManagerRole ?? pendingSignoff,
+        },
+        {
+          label: "Signature",
+          value: signoff?.signatureReference ?? pendingSignoff,
+        },
+        {
+          label: "Signed date/time",
+          value: signoff?.signedAt ?? pendingSignoff,
+        },
+        {
+          label: "Review decision/status",
+          value: signoff?.reviewDecision ?? pendingSignoff,
+        },
+        {
+          label: "Review notes/comments",
+          value: signoff?.reviewNotes ?? pendingSignoff,
+        },
+      ],
+    };
   }
 
   private getApprovalRollupSectionHeading(
