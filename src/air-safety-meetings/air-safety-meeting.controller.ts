@@ -62,6 +62,20 @@ export class AirSafetyMeetingController {
     }
   };
 
+  summarizeAirSafetyMeetingApprovalRollup = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const summary =
+        await this.airSafetyMeetingService.summarizeAirSafetyMeetingApprovalRollup();
+      res.status(200).json({ summary });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   generateAirSafetyMeetingApprovalRollupPdf = async (
     _req: Request,
     res: Response,
