@@ -90,6 +90,28 @@ export class AirSafetyMeetingController {
     }
   };
 
+  generateAirSafetyMeetingApprovalRollupSummaryPdf = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const pdf =
+        await this.airSafetyMeetingService.generateAirSafetyMeetingApprovalRollupSummaryPdf();
+      res
+        .status(200)
+        .setHeader("Content-Type", pdf.contentType)
+        .setHeader(
+          "Content-Disposition",
+          `attachment; filename="${pdf.fileName}"`,
+        )
+        .setHeader("Content-Length", pdf.content.byteLength.toString())
+        .send(pdf.content);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   generateAirSafetyMeetingApprovalRollupPdf = async (
     _req: Request,
     res: Response,

@@ -6,6 +6,7 @@ import type {
   AirSafetyMeetingApprovalRollupExport,
   AirSafetyMeetingApprovalRollupSummary,
   AirSafetyMeetingApprovalRollupSummaryRenderedReport,
+  AirSafetyMeetingApprovalRollupSummaryPdf,
   AirSafetyMeetingApprovalRollupPdf,
   AirSafetyMeetingApprovalRollupRecord,
   AirSafetyMeetingApprovalRollupRenderedReport,
@@ -161,6 +162,21 @@ export class AirSafetyMeetingService {
         sections,
         plainText: this.renderSectionsAsPlainText(sections),
       },
+    };
+  }
+
+  async generateAirSafetyMeetingApprovalRollupSummaryPdf(): Promise<AirSafetyMeetingApprovalRollupSummaryPdf> {
+    const renderedReport = await this.renderAirSafetyMeetingApprovalRollupSummary();
+    const content = this.buildSimplePdf([
+      renderedReport.report.title,
+      "",
+      renderedReport.report.plainText,
+    ]);
+
+    return {
+      fileName: "air-safety-meeting-approval-rollup-summary.pdf",
+      contentType: "application/pdf",
+      content,
     };
   }
 

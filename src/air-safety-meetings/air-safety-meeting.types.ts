@@ -324,3 +324,9 @@ export interface AirSafetyMeetingApprovalRollupPdf {
   contentType: "application/pdf";
   content: Buffer;
 }
+
+export interface AirSafetyMeetingApprovalRollupSummaryPdf {
+  fileName: string;
+  contentType: "application/pdf";
+  content: Buffer;
+}
