@@ -65,4 +65,20 @@ export class AirSafetyMeetingController {
       next(error);
     }
   };
+
+  renderAirSafetyMeetingPack = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const report =
+        await this.airSafetyMeetingService.renderAirSafetyMeetingPack(
+          req.params.meetingId,
+        );
+      res.status(200).json({ report });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
