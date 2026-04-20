@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add governance-facing safety meeting approval rendered report endpoint so cross-meeting approval states can be reviewed as an assurance summary.",
+ "nextBuildStep": "Add governance-facing safety meeting approval PDF export so the rendered assurance summary can be circulated as a formal review artifact.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

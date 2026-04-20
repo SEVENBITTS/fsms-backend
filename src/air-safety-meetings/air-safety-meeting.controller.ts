@@ -48,6 +48,20 @@ export class AirSafetyMeetingController {
     }
   };
 
+  renderAirSafetyMeetingApprovalRollup = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const report =
+        await this.airSafetyMeetingService.renderAirSafetyMeetingApprovalRollup();
+      res.status(200).json({ report });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   createAirSafetyMeetingSignoff = async (
     req: Request,
     res: Response,
