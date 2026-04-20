@@ -13,6 +13,13 @@ const parseBinaryResponse = (res: NodeJS.ReadableStream, callback: (error: Error
 };
 
 const clearTables = async () => {
+  await pool.query("delete from safety_action_implementation_evidence");
+  await pool.query("delete from safety_action_decisions");
+  await pool.query("delete from safety_action_proposals");
+  await pool.query("delete from safety_event_agenda_links");
+  await pool.query("delete from safety_event_meeting_triggers");
+  await pool.query("delete from safety_events");
+  await pool.query("delete from air_safety_meetings");
   await pool.query("delete from post_operation_audit_signoffs");
   await pool.query("delete from post_operation_evidence_snapshots");
   await pool.query("delete from mission_planning_approval_handoffs");
@@ -282,6 +289,10 @@ const countRows = async (missionId: string) => {
       (select count(*)::int from mission_events where mission_id = $1) as mission_event_count,
       (select count(*)::int from mission_risk_inputs where mission_id = $1) as risk_input_count,
       (select count(*)::int from airspace_compliance_inputs where mission_id = $1) as airspace_input_count,
+      (select count(*)::int from safety_events where mission_id = $1) as safety_event_count,
+      (select count(*)::int from safety_action_implementation_evidence evidence
+       inner join safety_events events on events.id = evidence.safety_event_id
+       where events.mission_id = $1) as safety_action_implementation_evidence_count,
       (select last_event_sequence_no from missions where id = $1) as mission_sequence
     `,
     [missionId],
@@ -296,7 +307,118 @@ const countRows = async (missionId: string) => {
     mission_event_count: number;
     risk_input_count: number;
     airspace_input_count: number;
+    safety_event_count: number;
+    safety_action_implementation_evidence_count: number;
     mission_sequence: number;
+  };
+};
+
+const createSafetyActionClosureEvidence = async (
+  missionId: string,
+  params?: {
+    eventType?: string;
+    proposalType?: string;
+    evidenceCategory?: string;
+    implementationSummary?: string;
+    completedAt?: string;
+  },
+) => {
+  const meetingResponse = await request(app)
+    .post("/air-safety-meetings")
+    .send({
+      meetingType: "event_triggered_safety_review",
+      dueAt: "2026-04-19T10:00:00.000Z",
+      chairperson: "Safety Manager",
+    });
+
+  expect(meetingResponse.status).toBe(201);
+
+  const eventResponse = await request(app).post("/safety-events").send({
+    eventType: params?.eventType ?? "sop_breach",
+    severity: "high",
+    missionId,
+    eventOccurredAt: "2026-04-18T11:00:00.000Z",
+    reportedBy: "safety-manager",
+    summary: "Mission safety action requires closure evidence",
+    sopReference: "OPS-SOP-LAUNCH-001",
+  });
+
+  expect(eventResponse.status).toBe(201);
+
+  const triggerResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/meeting-trigger`)
+    .send({
+      assessedBy: "safety-manager",
+    });
+
+  expect(triggerResponse.status).toBe(201);
+
+  const agendaLinkResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/meeting-triggers/${triggerResponse.body.trigger.id}/agenda-links`)
+    .send({
+      airSafetyMeetingId: meetingResponse.body.meeting.id,
+      agendaItem: "Review mission safety action closure",
+      linkedBy: "safety-coordinator",
+    });
+
+  expect(agendaLinkResponse.status).toBe(201);
+
+  const proposalResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals`)
+    .send({
+      proposalType: params?.proposalType ?? "sop_change",
+      summary: "Update launch SOP and brief operators",
+      proposedOwner: "Safety Manager",
+      proposedDueAt: "2026-05-01T10:00:00.000Z",
+      createdBy: "safety-manager",
+    });
+
+  expect(proposalResponse.status).toBe(201);
+
+  const acceptResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals/${proposalResponse.body.proposal.id}/decisions`)
+    .send({
+      decision: "accepted",
+      decidedBy: "accountable-manager",
+      decisionNotes: "Accepted for implementation.",
+    });
+
+  expect(acceptResponse.status).toBe(201);
+
+  const completeResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals/${proposalResponse.body.proposal.id}/decisions`)
+    .send({
+      decision: "completed",
+      decidedBy: "safety-manager",
+      decisionNotes: "Implementation completed.",
+    });
+
+  expect(completeResponse.status).toBe(201);
+
+  const evidenceResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals/${proposalResponse.body.proposal.id}/implementation-evidence`)
+    .send({
+      evidenceCategory: params?.evidenceCategory ?? "sop_implementation",
+      implementationSummary:
+        params?.implementationSummary ?? "Launch SOP update completed",
+      evidenceReference: "DOC-OPS-SOP-LAUNCH-002",
+      completedBy: "safety-manager",
+      completedAt: params?.completedAt ?? "2026-05-02T09:00:00.000Z",
+      reviewedBy: "accountable-manager",
+      reviewNotes: "Closure evidence accepted for audit pack.",
+    });
+
+  expect(evidenceResponse.status).toBe(201);
+
+  return {
+    meeting: meetingResponse.body.meeting,
+    event: eventResponse.body.event,
+    trigger: triggerResponse.body.trigger,
+    agendaLink: agendaLinkResponse.body.link,
+    proposal: completeResponse.body.proposal,
+    acceptDecision: acceptResponse.body.decision,
+    completeDecision: completeResponse.body.decision,
+    evidence: evidenceResponse.body.evidence,
   };
 };
 
@@ -920,7 +1042,92 @@ describe("audit evidence snapshots", () => {
     expect(response.body.export.completionSnapshot).toEqual(
       snapshotResponse.body.snapshot.completionSnapshot,
     );
+    expect(response.body.export.safetyActionClosureEvidence).toEqual([]);
     expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("exports safety action closure evidence context for mission-linked safety events", async () => {
+    const { missionId } = await createCompletedMission();
+    const closure = await createSafetyActionClosureEvidence(missionId);
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.safetyActionClosureEvidence).toHaveLength(1);
+    expect(response.body.export.safetyActionClosureEvidence[0]).toMatchObject({
+      safetyEventId: closure.event.id,
+      eventType: "sop_breach",
+      eventSeverity: "high",
+      eventStatus: "open",
+      eventSummary: "Mission safety action requires closure evidence",
+      eventOccurredAt: "2026-04-18T11:00:00.000Z",
+      sopReference: "OPS-SOP-LAUNCH-001",
+      safetyEventMeetingTriggerId: closure.trigger.id,
+      airSafetyMeetingId: closure.meeting.id,
+      safetyEventAgendaLinkId: closure.agendaLink.id,
+      agendaItem: "Review mission safety action closure",
+      safetyActionProposalId: closure.proposal.id,
+      proposalType: "sop_change",
+      proposalStatus: "completed",
+      proposalSummary: "Update launch SOP and brief operators",
+      proposalOwner: "Safety Manager",
+      proposalDueAt: "2026-05-01T10:00:00.000Z",
+      implementationEvidenceId: closure.evidence.id,
+      evidenceCategory: "sop_implementation",
+      implementationSummary: "Launch SOP update completed",
+      evidenceReference: "DOC-OPS-SOP-LAUNCH-002",
+      completedBy: "safety-manager",
+      completedAt: "2026-05-02T09:00:00.000Z",
+      reviewedBy: "accountable-manager",
+      reviewNotes: "Closure evidence accepted for audit pack.",
+    });
+    expect(
+      response.body.export.safetyActionClosureEvidence[0].decisions,
+    ).toEqual([
+      expect.objectContaining({
+        id: closure.acceptDecision.id,
+        decision: "accepted",
+        decidedBy: "accountable-manager",
+        decisionNotes: "Accepted for implementation.",
+      }),
+      expect.objectContaining({
+        id: closure.completeDecision.id,
+        decision: "completed",
+        decidedBy: "safety-manager",
+        decisionNotes: "Implementation completed.",
+      }),
+    ]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("does not leak safety action closure evidence from other missions", async () => {
+    const first = await createCompletedMission();
+    const second = await createCompletedMission();
+    await createSafetyActionClosureEvidence(second.missionId);
+    const firstSnapshot = await request(app)
+      .post(`/missions/${first.missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(firstSnapshot.status).toBe(201);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/post-operation/evidence-snapshots/${firstSnapshot.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.safetyActionClosureEvidence).toEqual([]);
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
   });
 
   it("does not export post-operation snapshots from another mission", async () => {
@@ -1054,6 +1261,15 @@ describe("audit evidence snapshots", () => {
             ]),
           },
           {
+            heading: "Safety action closure evidence",
+            fields: [
+              {
+                label: "Safety action closure evidence",
+                value: "No safety action closure evidence recorded",
+              },
+            ],
+          },
+          {
             heading: "SMS assurance context",
             fields: expect.arrayContaining([
               expect.objectContaining({
@@ -1083,6 +1299,9 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Review decision/status: Pending sign-off",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Safety action closure evidence: No safety action closure evidence recorded",
     );
     expect(response.body.report.report.plainText).toContain(
       "SMS assurance context",
@@ -1152,6 +1371,70 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       `Sign-off record ID: ${signoffResponse.body.signoff.id}`,
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders safety action closure evidence in post-operation reports", async () => {
+    const { missionId } = await createCompletedMission();
+    await createSafetyActionClosureEvidence(missionId, {
+      evidenceCategory: "training_completion",
+      proposalType: "training_action",
+      implementationSummary: "Crew refresher training completed",
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Safety action closure evidence",
+      fields: expect.arrayContaining([
+        {
+          label: "Closure 1 evidence category",
+          value: "training_completion",
+        },
+        {
+          label: "Closure 1 implementation summary",
+          value: "Crew refresher training completed",
+        },
+        {
+          label: "Closure 1 evidence reference",
+          value: "DOC-OPS-SOP-LAUNCH-002",
+        },
+        {
+          label: "Closure 1 completed by",
+          value: "safety-manager",
+        },
+        {
+          label: "Closure 1 reviewed by",
+          value: "accountable-manager",
+        },
+        {
+          label: "Closure 1 action proposal",
+          value: "training_action: Update launch SOP and brief operators",
+        },
+        {
+          label: "Closure 1 action decisions",
+          value: "accepted, completed",
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Safety action closure evidence",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Closure 1 implementation summary: Crew refresher training completed",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Closure 1 action decisions: accepted, completed",
     );
     expect(await countRows(missionId)).toEqual(before);
   });
@@ -1350,12 +1633,50 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
+      "Safety action closure evidence",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "No safety action closure evidence recorded",
+    );
+    expect(response.body.toString("latin1")).toContain(
       "SMS assurance context",
     );
     expect(response.body.toString("latin1")).toContain(
       "Mission readiness gate controls",
     );
     expect(response.body.toString("latin1")).toContain("1.5 SMS documentation");
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("includes safety action closure evidence in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    await createSafetyActionClosureEvidence(missionId, {
+      evidenceCategory: "maintenance_completion",
+      proposalType: "maintenance_action",
+      implementationSummary: "Motor mount inspection closed",
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    const pdfText = response.body.toString("latin1");
+    expect(pdfText).toContain("Safety action closure evidence");
+    expect(pdfText).toContain("Closure 1 evidence category: maintenance_completion");
+    expect(pdfText).toContain(
+      "Closure 1 implementation summary: Motor mount inspection closed",
+    );
+    expect(pdfText).toContain("Closure 1 action decisions: accepted, completed");
     expect(await countRows(missionId)).toEqual(before);
   });
 

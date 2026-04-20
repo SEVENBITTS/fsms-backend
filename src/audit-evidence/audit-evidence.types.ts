@@ -109,6 +109,45 @@ export interface PostOperationEvidenceSnapshot {
   createdAt: string;
 }
 
+export interface SafetyActionClosureDecisionExportContext {
+  id: string;
+  decision: string;
+  decidedBy: string | null;
+  decisionNotes: string | null;
+  decidedAt: string;
+  createdAt: string;
+}
+
+export interface SafetyActionClosureEvidenceExportContext {
+  safetyEventId: string;
+  eventType: string;
+  eventSeverity: string;
+  eventStatus: string;
+  eventSummary: string;
+  eventOccurredAt: string;
+  sopReference: string | null;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  safetyEventAgendaLinkId: string;
+  agendaItem: string;
+  safetyActionProposalId: string;
+  proposalType: string;
+  proposalStatus: string;
+  proposalSummary: string;
+  proposalOwner: string | null;
+  proposalDueAt: string | null;
+  decisions: SafetyActionClosureDecisionExportContext[];
+  implementationEvidenceId: string;
+  evidenceCategory: string;
+  implementationSummary: string;
+  evidenceReference: string | null;
+  completedBy: string | null;
+  completedAt: string;
+  reviewedBy: string | null;
+  reviewNotes: string | null;
+  evidenceCreatedAt: string;
+}
+
 export interface PostOperationAuditSignoff {
   id: string;
   missionId: string;
@@ -133,6 +172,7 @@ export interface PostOperationEvidenceExportPackage {
   createdBy: string | null;
   createdAt: string;
   completionSnapshot: PostOperationCompletionSnapshot;
+  safetyActionClosureEvidence: SafetyActionClosureEvidenceExportContext[];
 }
 
 export interface AuditReportField {

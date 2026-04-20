@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed safety action evidence export context so closure records can appear in safety meeting and audit reports.",
+ "nextBuildStep": "Add safety meeting pack export endpoint so meeting agenda, triggered events, action proposals, decisions, and closure evidence can be reviewed together.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

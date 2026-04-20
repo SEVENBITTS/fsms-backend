@@ -266,6 +266,10 @@ export class AuditEvidenceService {
         throw new PostOperationEvidenceSnapshotNotFoundError(snapshotId);
       }
 
+      const safetyActionClosureEvidence =
+        await this.auditEvidenceRepository
+          .listSafetyActionClosureEvidenceForMissionExport(client, missionId);
+
       return {
         exportType: "post_operation_completion_evidence",
         formatVersion: 1,
@@ -277,6 +281,7 @@ export class AuditEvidenceService {
         createdBy: snapshot.createdBy,
         createdAt: snapshot.createdAt,
         completionSnapshot: snapshot.completionSnapshot,
+        safetyActionClosureEvidence,
       };
     } finally {
       client.release();
@@ -652,6 +657,67 @@ export class AuditEvidenceService {
             value: signoff?.createdAt ?? pendingSignoff,
           },
         ],
+      },
+      {
+        heading: "Safety action closure evidence",
+        fields:
+          evidenceExport.safetyActionClosureEvidence.length > 0
+            ? evidenceExport.safetyActionClosureEvidence.flatMap(
+                (evidence, index) => [
+                  {
+                    label: `Closure ${index + 1} evidence category`,
+                    value: evidence.evidenceCategory,
+                  },
+                  {
+                    label: `Closure ${index + 1} implementation summary`,
+                    value: evidence.implementationSummary,
+                  },
+                  {
+                    label: `Closure ${index + 1} evidence reference`,
+                    value: evidence.evidenceReference,
+                  },
+                  {
+                    label: `Closure ${index + 1} completed by`,
+                    value: evidence.completedBy,
+                  },
+                  {
+                    label: `Closure ${index + 1} completed at`,
+                    value: evidence.completedAt,
+                  },
+                  {
+                    label: `Closure ${index + 1} reviewed by`,
+                    value: evidence.reviewedBy,
+                  },
+                  {
+                    label: `Closure ${index + 1} review notes`,
+                    value: evidence.reviewNotes,
+                  },
+                  {
+                    label: `Closure ${index + 1} safety event`,
+                    value: `${evidence.eventType}: ${evidence.eventSummary}`,
+                  },
+                  {
+                    label: `Closure ${index + 1} agenda item`,
+                    value: evidence.agendaItem,
+                  },
+                  {
+                    label: `Closure ${index + 1} action proposal`,
+                    value: `${evidence.proposalType}: ${evidence.proposalSummary}`,
+                  },
+                  {
+                    label: `Closure ${index + 1} action decisions`,
+                    value: evidence.decisions
+                      .map((decision) => decision.decision)
+                      .join(", "),
+                  },
+                ],
+              )
+            : [
+                {
+                  label: "Safety action closure evidence",
+                  value: "No safety action closure evidence recorded",
+                },
+              ],
       },
       {
         heading: "SMS assurance context",
