@@ -5,6 +5,7 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
+  await pool.query("delete from safety_action_implementation_evidence");
   await pool.query("delete from safety_action_decisions");
   await pool.query("delete from safety_action_proposals");
   await pool.query("delete from safety_event_agenda_links");
@@ -41,6 +42,7 @@ const countRows = async (ids: {
       (select count(*)::int from safety_event_agenda_links) as safety_event_agenda_link_count,
       (select count(*)::int from safety_action_proposals) as safety_action_proposal_count,
       (select count(*)::int from safety_action_decisions) as safety_action_decision_count,
+      (select count(*)::int from safety_action_implementation_evidence) as safety_action_implementation_evidence_count,
       (select count(*)::int from missions where ($1::uuid is null or id = $1)) as mission_count,
       (select count(*)::int from platforms where ($2::uuid is null or id = $2)) as platform_count,
       (select count(*)::int from pilots where ($3::uuid is null or id = $3)) as pilot_count,
@@ -61,6 +63,7 @@ const countRows = async (ids: {
     safety_event_agenda_link_count: number;
     safety_action_proposal_count: number;
     safety_action_decision_count: number;
+    safety_action_implementation_evidence_count: number;
     mission_count: number;
     platform_count: number;
     pilot_count: number;
@@ -224,6 +227,35 @@ const createSafetyActionProposal = async (params?: {
   return {
     ...source,
     proposal: proposalResponse.body.proposal as { id: string; status: string },
+  };
+};
+
+const createCompletedSafetyActionProposal = async (params?: {
+  proposalType?: string;
+  summary?: string;
+}) => {
+  const source = await createSafetyActionProposal(params);
+
+  const acceptResponse = await request(app)
+    .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/decisions`)
+    .send({
+      decision: "accepted",
+      decidedBy: "safety-manager",
+    });
+  const completeResponse = await request(app)
+    .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/decisions`)
+    .send({
+      decision: "completed",
+      decidedBy: "safety-manager",
+      decisionNotes: "Action implemented.",
+    });
+
+  expect(acceptResponse.status).toBe(201);
+  expect(completeResponse.status).toBe(201);
+
+  return {
+    ...source,
+    proposal: completeResponse.body.proposal as { id: string; status: string },
   };
 };
 
@@ -822,6 +854,188 @@ describe("safety events", () => {
     expect(await countRows({})).toEqual(before);
   });
 
+  it("stores SOP, training, and maintenance implementation evidence for completed safety actions", async () => {
+    const cases = [
+      {
+        proposalType: "sop_change",
+        evidenceCategory: "sop_implementation",
+        summary: "Launch checklist SOP updated",
+      },
+      {
+        proposalType: "training_action",
+        evidenceCategory: "training_completion",
+        summary: "Manual recovery refresher completed",
+      },
+      {
+        proposalType: "maintenance_action",
+        evidenceCategory: "maintenance_completion",
+        summary: "Motor mount inspection completed",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const source = await createCompletedSafetyActionProposal({
+        proposalType: testCase.proposalType,
+        summary: testCase.summary,
+      });
+
+      const response = await request(app)
+        .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`)
+        .send({
+          evidenceCategory: testCase.evidenceCategory,
+          implementationSummary: ` ${testCase.summary} `,
+          evidenceReference: " DOC-REF-001 ",
+          completedBy: " safety-manager ",
+          completedAt: "2026-05-20T09:00:00.000Z",
+          reviewedBy: " accountable-manager ",
+          reviewNotes: " Closure evidence reviewed. ",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.evidence).toMatchObject({
+        safetyActionProposalId: source.proposal.id,
+        safetyEventAgendaLinkId: source.agendaLink.id,
+        safetyEventId: source.event.id,
+        safetyEventMeetingTriggerId: source.trigger.id,
+        airSafetyMeetingId: source.meeting.id,
+        evidenceCategory: testCase.evidenceCategory,
+        implementationSummary: testCase.summary,
+        evidenceReference: "DOC-REF-001",
+        completedBy: "safety-manager",
+        completedAt: "2026-05-20T09:00:00.000Z",
+        reviewedBy: "accountable-manager",
+        reviewNotes: "Closure evidence reviewed.",
+      });
+      expect(response.body.evidence.id).toEqual(expect.any(String));
+      expect(response.body.evidence.createdAt).toEqual(expect.any(String));
+    }
+  });
+
+  it("lists implementation evidence for the requested completed safety action", async () => {
+    const source = await createCompletedSafetyActionProposal({
+      proposalType: "general_safety_action",
+      summary: "Complete safety review follow-up",
+    });
+
+    const first = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`)
+      .send({
+        evidenceCategory: "general_safety_action_closure",
+        implementationSummary: "Initial closure evidence captured",
+        completedAt: "2026-05-20T09:00:00.000Z",
+      });
+    const second = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`)
+      .send({
+        evidenceCategory: "accountable_manager_review",
+        implementationSummary: "Accountable manager review completed",
+        completedAt: "2026-05-21T09:00:00.000Z",
+      });
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.evidence).toHaveLength(2);
+    expect(
+      listResponse.body.evidence.map((evidence: { id: string }) => evidence.id),
+    ).toEqual(
+      expect.arrayContaining([
+        first.body.evidence.id,
+        second.body.evidence.id,
+      ]),
+    );
+  });
+
+  it("rejects implementation evidence unless the safety action proposal is completed", async () => {
+    const proposedSource = await createSafetyActionProposal();
+    const acceptedSource = await createSafetyActionProposal();
+    const rejectedSource = await createSafetyActionProposal();
+
+    const acceptedDecision = await request(app)
+      .post(`/safety-events/${acceptedSource.event.id}/agenda-links/${acceptedSource.agendaLink.id}/action-proposals/${acceptedSource.proposal.id}/decisions`)
+      .send({
+        decision: "accepted",
+      });
+    const rejectedDecision = await request(app)
+      .post(`/safety-events/${rejectedSource.event.id}/agenda-links/${rejectedSource.agendaLink.id}/action-proposals/${rejectedSource.proposal.id}/decisions`)
+      .send({
+        decision: "rejected",
+      });
+
+    expect(acceptedDecision.status).toBe(201);
+    expect(rejectedDecision.status).toBe(201);
+
+    for (const source of [proposedSource, acceptedSource, rejectedSource]) {
+      const response = await request(app)
+        .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`)
+        .send({
+          evidenceCategory: "general_safety_action_closure",
+          implementationSummary: "Closure evidence attempted too early",
+          completedAt: "2026-05-20T09:00:00.000Z",
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toMatchObject({
+        type: "safety_action_implementation_evidence_state_invalid",
+      });
+    }
+  });
+
+  it("rejects invalid implementation evidence input and missing proposals", async () => {
+    const source = await createCompletedSafetyActionProposal();
+    const missingProposalId = randomUUID();
+
+    const badCategory = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`)
+      .send({
+        evidenceCategory: "unsupported",
+        implementationSummary: "Bad category",
+        completedAt: "2026-05-20T09:00:00.000Z",
+      });
+    const badDate = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`)
+      .send({
+        evidenceCategory: "general_safety_action_closure",
+        implementationSummary: "Bad date",
+        completedAt: "not-a-date",
+      });
+    const missingSummary = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${source.proposal.id}/implementation-evidence`)
+      .send({
+        evidenceCategory: "general_safety_action_closure",
+        completedAt: "2026-05-20T09:00:00.000Z",
+      });
+    const missingProposal = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${missingProposalId}/implementation-evidence`)
+      .send({
+        evidenceCategory: "general_safety_action_closure",
+        implementationSummary: "Missing proposal",
+        completedAt: "2026-05-20T09:00:00.000Z",
+      });
+
+    expect(badCategory.status).toBe(400);
+    expect(badDate.status).toBe(400);
+    expect(missingSummary.status).toBe(400);
+    expect(badCategory.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+    expect(badDate.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+    expect(missingSummary.body.error).toMatchObject({
+      type: "safety_event_validation_failed",
+    });
+    expect(missingProposal.status).toBe(404);
+    expect(missingProposal.body.error).toMatchObject({
+      type: "safety_action_proposal_not_found",
+    });
+  });
+
   it("captures linked post-operation safety findings without mutating linked records", async () => {
     const platform = await createPlatform();
     const pilot = await createPilot();
@@ -1113,6 +1327,86 @@ describe("safety events", () => {
       ...before,
       safety_action_decision_count:
         before.safety_action_decision_count + 1,
+    });
+  });
+
+  it("creates implementation evidence without mutating source safety records", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    const missionId = await insertMission({
+      platformId: platform.id,
+      pilotId: pilot.id,
+    });
+    const meeting = await createAirSafetyMeeting();
+    const safetyEvent = await request(app).post("/safety-events").send({
+      eventType: "sop_breach",
+      severity: "high",
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      eventOccurredAt: "2026-04-17T12:00:00.000Z",
+      summary: "Launch SOP breach requires closure evidence",
+    });
+
+    expect(safetyEvent.status).toBe(201);
+
+    const triggerResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-trigger`)
+      .send({});
+    const agendaLinkResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/meeting-triggers/${triggerResponse.body.trigger.id}/agenda-links`)
+      .send({
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review launch SOP breach",
+      });
+    const proposalResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals`)
+      .send({
+        proposalType: "sop_change",
+        summary: "Update launch SOP",
+      });
+    const acceptResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals/${proposalResponse.body.proposal.id}/decisions`)
+      .send({
+        decision: "accepted",
+      });
+    const completeResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals/${proposalResponse.body.proposal.id}/decisions`)
+      .send({
+        decision: "completed",
+      });
+
+    expect(triggerResponse.status).toBe(201);
+    expect(agendaLinkResponse.status).toBe(201);
+    expect(proposalResponse.status).toBe(201);
+    expect(acceptResponse.status).toBe(201);
+    expect(completeResponse.status).toBe(201);
+
+    const before = await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    });
+
+    const evidenceResponse = await request(app)
+      .post(`/safety-events/${safetyEvent.body.event.id}/agenda-links/${agendaLinkResponse.body.link.id}/action-proposals/${proposalResponse.body.proposal.id}/implementation-evidence`)
+      .send({
+        evidenceCategory: "sop_implementation",
+        implementationSummary: "Launch SOP update completed",
+        completedAt: "2026-05-20T09:00:00.000Z",
+      });
+
+    expect(evidenceResponse.status).toBe(201);
+    expect(await countRows({
+      missionId,
+      platformId: platform.id,
+      pilotId: pilot.id,
+      meetingId: meeting.id,
+    })).toEqual({
+      ...before,
+      safety_action_implementation_evidence_count:
+        before.safety_action_implementation_evidence_count + 1,
     });
   });
 

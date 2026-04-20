@@ -65,3 +65,14 @@ export class SafetyActionDecisionTransitionError extends Error {
     super(message);
   }
 }
+
+export class SafetyActionImplementationEvidenceStateError extends Error {
+  readonly statusCode = 409;
+  readonly code = "SAFETY_ACTION_IMPLEMENTATION_EVIDENCE_STATE_INVALID";
+
+  constructor(proposalId: string) {
+    super(
+      `Implementation evidence can only be created for completed safety action proposals: ${proposalId}`,
+    );
+  }
+}

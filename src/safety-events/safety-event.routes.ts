@@ -31,6 +31,14 @@ export function createSafetyEventRouter(
     "/:eventId/agenda-links/:agendaLinkId/action-proposals/:proposalId/decisions",
     controller.listSafetyActionDecisions,
   );
+  router.post(
+    "/:eventId/agenda-links/:agendaLinkId/action-proposals/:proposalId/implementation-evidence",
+    controller.createSafetyActionImplementationEvidence,
+  );
+  router.get(
+    "/:eventId/agenda-links/:agendaLinkId/action-proposals/:proposalId/implementation-evidence",
+    controller.listSafetyActionImplementationEvidence,
+  );
 
   return router;
 }

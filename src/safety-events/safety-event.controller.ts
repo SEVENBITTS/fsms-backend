@@ -163,4 +163,41 @@ export class SafetyEventController {
       next(error);
     }
   };
+
+  createSafetyActionImplementationEvidence = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const evidence =
+        await this.safetyEventService.createSafetyActionImplementationEvidence(
+          req.params.eventId,
+          req.params.agendaLinkId,
+          req.params.proposalId,
+          req.body,
+        );
+      res.status(201).json({ evidence });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listSafetyActionImplementationEvidence = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const evidence =
+        await this.safetyEventService.listSafetyActionImplementationEvidence(
+          req.params.eventId,
+          req.params.agendaLinkId,
+          req.params.proposalId,
+        );
+      res.status(200).json({ evidence });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
