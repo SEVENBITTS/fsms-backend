@@ -5,6 +5,7 @@ import type {
   AirSafetyMeetingApprovalRollupRecord,
   AirSafetyMeetingSignoff,
   AirSafetyMeetingSignoffDecision,
+  GovernanceApprovalRollupSignoff,
   AirSafetyMeetingPackExportAgendaItem,
   AirSafetyMeetingStatus,
   AirSafetyMeetingType,
@@ -56,6 +57,28 @@ interface AirSafetyMeetingSignoffRow extends QueryResultRow {
 
 interface CreateAirSafetyMeetingSignoffRow {
   airSafetyMeetingId: string;
+  accountableManagerName: string;
+  accountableManagerRole: string;
+  reviewDecision: AirSafetyMeetingSignoffDecision;
+  signedAt: string;
+  signatureReference: string | null;
+  reviewNotes: string | null;
+  createdBy: string | null;
+}
+
+interface GovernanceApprovalRollupSignoffRow extends QueryResultRow {
+  id: string;
+  accountable_manager_name: string;
+  accountable_manager_role: string;
+  review_decision: AirSafetyMeetingSignoffDecision;
+  signed_at: Date;
+  signature_reference: string | null;
+  review_notes: string | null;
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface CreateGovernanceApprovalRollupSignoffRow {
   accountableManagerName: string;
   accountableManagerRole: string;
   reviewDecision: AirSafetyMeetingSignoffDecision;
@@ -150,6 +173,20 @@ const toAirSafetyMeetingApprovalRollupRecord = (
   signedAt: row.signed_at?.toISOString() ?? null,
   signatureReference: row.signature_reference,
   reviewNotes: row.review_notes,
+});
+
+const toGovernanceApprovalRollupSignoff = (
+  row: GovernanceApprovalRollupSignoffRow,
+): GovernanceApprovalRollupSignoff => ({
+  id: row.id,
+  accountableManagerName: row.accountable_manager_name,
+  accountableManagerRole: row.accountable_manager_role,
+  reviewDecision: row.review_decision,
+  signedAt: row.signed_at.toISOString(),
+  signatureReference: row.signature_reference,
+  reviewNotes: row.review_notes,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
 });
 
 export class AirSafetyMeetingRepository {
@@ -293,6 +330,40 @@ export class AirSafetyMeetingRepository {
     return toAirSafetyMeetingSignoff(result.rows[0]);
   }
 
+  async insertGovernanceApprovalRollupSignoff(
+    tx: PoolClient,
+    input: CreateGovernanceApprovalRollupSignoffRow,
+  ): Promise<GovernanceApprovalRollupSignoff> {
+    const result = await tx.query<GovernanceApprovalRollupSignoffRow>(
+      `
+      insert into governance_approval_rollup_signoffs (
+        id,
+        accountable_manager_name,
+        accountable_manager_role,
+        review_decision,
+        signed_at,
+        signature_reference,
+        review_notes,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.accountableManagerName,
+        input.accountableManagerRole,
+        input.reviewDecision,
+        input.signedAt,
+        input.signatureReference,
+        input.reviewNotes,
+        input.createdBy,
+      ],
+    );
+
+    return toGovernanceApprovalRollupSignoff(result.rows[0]);
+  }
+
   async listAirSafetyMeetingSignoffs(
     tx: PoolClient,
     meetingId: string,
@@ -308,6 +379,20 @@ export class AirSafetyMeetingRepository {
     );
 
     return result.rows.map(toAirSafetyMeetingSignoff);
+  }
+
+  async listGovernanceApprovalRollupSignoffs(
+    tx: PoolClient,
+  ): Promise<GovernanceApprovalRollupSignoff[]> {
+    const result = await tx.query<GovernanceApprovalRollupSignoffRow>(
+      `
+      select *
+      from governance_approval_rollup_signoffs
+      order by signed_at desc, created_at desc, id desc
+      `,
+    );
+
+    return result.rows.map(toGovernanceApprovalRollupSignoff);
   }
 
   async getLatestAirSafetyMeetingSignoff(

@@ -84,6 +84,36 @@ export class AirSafetyMeetingController {
     }
   };
 
+  createGovernanceApprovalRollupSignoff = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const signoff =
+        await this.airSafetyMeetingService.createGovernanceApprovalRollupSignoff(
+          req.body,
+        );
+      res.status(201).json({ signoff });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listGovernanceApprovalRollupSignoffs = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const signoffs =
+        await this.airSafetyMeetingService.listGovernanceApprovalRollupSignoffs();
+      res.status(200).json({ signoffs });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   createAirSafetyMeetingSignoff = async (
     req: Request,
     res: Response,
