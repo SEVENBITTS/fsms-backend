@@ -5,8 +5,10 @@ import { AuditEvidenceService } from "../audit-evidence/audit-evidence.service";
 import type { AuditReportSmsControlMapping } from "../audit-evidence/audit-evidence.types";
 import { MissionRiskRepository } from "../mission-risk/mission-risk.repository";
 import { validateCreateMissionRiskInput } from "../mission-risk/mission-risk.validators";
+import { MissionService } from "../missions/mission.service";
 import {
   MissionPlanningDraftNotFoundError,
+  MissionPlanningMissionNotFoundError,
   MissionPlanningReferenceNotFoundError,
   MissionPlanningReviewNotReadyError,
 } from "./mission-planning.errors";
@@ -15,9 +17,12 @@ import type {
   CreateMissionPlanningApprovalHandoffInput,
   CreateMissionPlanningDraftInput,
   MissionPlanningApprovalHandoff,
+  MissionPlanningApprovalHandoffTrace,
   MissionPlanningDraft,
   MissionPlanningChecklistItem,
   MissionPlanningReview,
+  MissionPlanningWorkspace,
+  MissionPlanningWorkspaceNextAction,
   UpdateMissionPlanningDraftInput,
 } from "./mission-planning.types";
 import {
@@ -27,12 +32,21 @@ import {
 } from "./mission-planning.validators";
 
 export class MissionPlanningService {
+  private static readonly LIFECYCLE_ACTIONS = [
+    "submit",
+    "approve",
+    "launch",
+    "complete",
+    "abort",
+  ] as const;
+
   constructor(
     private readonly pool: Pool,
     private readonly missionPlanningRepository: MissionPlanningRepository,
     private readonly missionRiskRepository: MissionRiskRepository,
     private readonly airspaceComplianceRepository: AirspaceComplianceRepository,
     private readonly auditEvidenceService: AuditEvidenceService,
+    private readonly missionService: MissionService,
   ) {}
 
   async createDraft(
@@ -237,6 +251,158 @@ export class MissionPlanningService {
     };
   }
 
+  async getWorkspace(missionId: string): Promise<MissionPlanningWorkspace> {
+    const client = await this.pool.connect();
+
+    try {
+      const mission = await this.missionPlanningRepository.getMissionWorkspaceMission(
+        client,
+        missionId,
+      );
+
+      if (!mission) {
+        throw new MissionPlanningMissionNotFoundError(missionId);
+      }
+
+      const latestApprovalHandoffRow =
+        await this.missionPlanningRepository.getLatestApprovalHandoffTrace(
+          client,
+          missionId,
+        );
+
+      const [
+        readiness,
+        readinessSnapshots,
+        decisionEvidenceLinks,
+        nextAllowedActions,
+      ] = await Promise.all([
+        this.missionService.checkMissionReadiness({ missionId }),
+        this.auditEvidenceService.listMissionReadinessSnapshots(missionId),
+        this.auditEvidenceService.listMissionDecisionEvidenceLinks(missionId),
+        Promise.all(
+          MissionPlanningService.LIFECYCLE_ACTIONS.map((action) =>
+            this.missionService.checkMissionTransition({ missionId, action }),
+          ),
+        ),
+      ]);
+
+      const placeholders = {
+        platformAssigned: mission.platform_id !== null,
+        pilotAssigned: mission.pilot_id !== null,
+        riskInputPresent: mission.risk_input_present,
+        airspaceInputPresent: mission.airspace_input_present,
+      };
+      const checklist = this.buildChecklist(placeholders);
+      const missingRequirements = checklist
+        .filter((item) => item.status === "missing")
+        .map((item) => item.message);
+      const readinessBlockingReasons = readiness.reasons
+        .filter((reason) => reason.severity !== "pass")
+        .map((reason) => reason.message);
+      const approvalBlockingReasons = Array.from(
+        new Set([...missingRequirements, ...readinessBlockingReasons]),
+      );
+      const launchTransition = nextAllowedActions.find(
+        (action) => action.action === "launch",
+      );
+      const dispatchBlockingReasons = Array.from(
+        new Set([
+          ...(launchTransition?.allowed === false && launchTransition.error
+            ? [launchTransition.error.message]
+            : []),
+          ...(
+            readiness.gate.blocksDispatch || readiness.gate.requiresReview
+              ? readinessBlockingReasons
+              : []
+          ),
+        ]),
+      );
+
+      return {
+        mission: {
+          id: mission.id,
+          missionPlanId: mission.mission_plan_id,
+          status: mission.status,
+          platformId: mission.platform_id,
+          pilotId: mission.pilot_id,
+          lastEventSequenceNo: Number(mission.last_event_sequence_no),
+        },
+        planning: {
+          status: mission.status,
+          missionPlanId: mission.mission_plan_id,
+          platformId: mission.platform_id,
+          pilotId: mission.pilot_id,
+          placeholders,
+          checklist,
+          readyForApproval: approvalBlockingReasons.length === 0,
+          blockingReasons: approvalBlockingReasons,
+        },
+        platform: {
+          assignedPlatformId: mission.platform_id,
+          state: this.getLinkedEntityState(
+            mission.platform_id,
+            readiness.platformReadiness !== null,
+          ),
+          summary: readiness.platformReadiness?.maintenanceStatus.platform ?? null,
+        },
+        pilot: {
+          assignedPilotId: mission.pilot_id,
+          state: this.getLinkedEntityState(
+            mission.pilot_id,
+            readiness.pilotReadiness !== null,
+          ),
+          summary: readiness.pilotReadiness?.readinessStatus.pilot ?? null,
+        },
+        missionRisk: readiness.missionRisk,
+        airspaceCompliance: readiness.airspaceCompliance,
+        readiness,
+        evidence: {
+          readinessSnapshotCount: readinessSnapshots.length,
+          latestReadinessSnapshot: readinessSnapshots[0] ?? null,
+          approvalEvidenceLinkCount: decisionEvidenceLinks.filter(
+            (link) => link.decisionType === "approval",
+          ).length,
+          latestApprovalEvidenceLink:
+            decisionEvidenceLinks.find(
+              (link) => link.decisionType === "approval",
+            ) ?? null,
+          dispatchEvidenceLinkCount: decisionEvidenceLinks.filter(
+            (link) => link.decisionType === "dispatch",
+          ).length,
+          latestDispatchEvidenceLink:
+            decisionEvidenceLinks.find(
+              (link) => link.decisionType === "dispatch",
+            ) ?? null,
+        },
+        approval: {
+          ready: approvalBlockingReasons.length === 0,
+          handoffCreated: latestApprovalHandoffRow !== null,
+          latestApprovalHandoff: latestApprovalHandoffRow
+            ? this.toApprovalHandoffTrace(latestApprovalHandoffRow)
+            : null,
+          blockingReasons: approvalBlockingReasons,
+        },
+        dispatch: {
+          ready: dispatchBlockingReasons.length === 0,
+          blockingReasons: dispatchBlockingReasons,
+        },
+        missingRequirements,
+        blockingReasons: approvalBlockingReasons,
+        nextAllowedActions: nextAllowedActions.map(
+          (action): MissionPlanningWorkspaceNextAction => ({
+            action: action.action,
+            currentStatus: action.currentStatus,
+            targetStatus: action.targetStatus,
+            allowed: action.allowed,
+            error: action.error,
+          }),
+        ),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   async createApprovalHandoff(
     missionId: string,
     input: CreateMissionPlanningApprovalHandoffInput | undefined,
@@ -317,6 +483,37 @@ export class MissionPlanningService {
     }
 
     return this.toDraft(row);
+  }
+
+  private toApprovalHandoffTrace(row: {
+    id: string;
+    mission_id: string;
+    audit_evidence_snapshot_id: string;
+    mission_decision_evidence_link_id: string;
+    planning_review: MissionPlanningReview;
+    created_by: string | null;
+    created_at: string;
+  }): MissionPlanningApprovalHandoffTrace {
+    return {
+      id: row.id,
+      missionId: row.mission_id,
+      auditEvidenceSnapshotId: row.audit_evidence_snapshot_id,
+      missionDecisionEvidenceLinkId: row.mission_decision_evidence_link_id,
+      planningReview: row.planning_review,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+    };
+  }
+
+  private getLinkedEntityState(
+    assignedId: string | null,
+    hasLoadedSummary: boolean,
+  ): "assigned" | "missing" | "not_found" {
+    if (!assignedId) {
+      return "missing";
+    }
+
+    return hasLoadedSummary ? "assigned" : "not_found";
   }
 
   private toDraft(row: {

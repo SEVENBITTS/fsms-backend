@@ -12,6 +12,10 @@ export function createMissionRouter(
   router.post("/:missionId/complete", missionController.completeMission);
   router.post("/:missionId/abort", missionController.abortMission);
 
+  router.get(
+    "/:missionId/planning-workspace",
+    missionController.getPlanningWorkspace,
+  );
   router.get("/:missionId/events", missionController.getMissionEvents);
   router.get("/:missionId/readiness", missionController.checkReadiness);
   router.get(

@@ -39,6 +39,19 @@ const createPilot = async () => {
   return response.body.pilot as { id: string };
 };
 
+const createPilotReadinessEvidence = async (pilotId: string) => {
+  const response = await request(app)
+    .post(`/pilots/${pilotId}/readiness-evidence`)
+    .send({
+      evidenceType: "operator_authorisation",
+      title: "Current operator authorisation",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.evidence as { id: string };
+};
+
 const lowRiskInput = {
   operatingCategory: "open",
   missionComplexity: "low",
@@ -854,5 +867,284 @@ describe("mission planning drafts", () => {
 
     expect(missingResponse.status).toBe(404);
     expect(approvedResponse.status).toBe(404);
+  });
+
+  it("returns a minimal planning workspace with missing-state guidance", async () => {
+    const createResponse = await request(app).post("/mission-plans/drafts").send({});
+
+    expect(createResponse.status).toBe(201);
+    const missionId = createResponse.body.draft.missionId as string;
+    const before = await countRows(missionId);
+
+    const workspaceResponse = await request(app).get(
+      `/missions/${missionId}/planning-workspace`,
+    );
+
+    expect(workspaceResponse.status).toBe(200);
+    expect(workspaceResponse.body.workspace).toMatchObject({
+      mission: {
+        id: missionId,
+        missionPlanId: null,
+        status: "draft",
+        platformId: null,
+        pilotId: null,
+      },
+      planning: {
+        status: "draft",
+        missionPlanId: null,
+        platformId: null,
+        pilotId: null,
+        placeholders: {
+          platformAssigned: false,
+          pilotAssigned: false,
+          riskInputPresent: false,
+          airspaceInputPresent: false,
+        },
+        readyForApproval: false,
+      },
+      platform: {
+        assignedPlatformId: null,
+        state: "missing",
+        summary: null,
+      },
+      pilot: {
+        assignedPilotId: null,
+        state: "missing",
+        summary: null,
+      },
+      missionRisk: expect.objectContaining({
+        missionId,
+        result: "fail",
+      }),
+      airspaceCompliance: expect.objectContaining({
+        missionId,
+        result: "fail",
+        input: null,
+      }),
+      evidence: {
+        readinessSnapshotCount: 0,
+        latestReadinessSnapshot: null,
+        approvalEvidenceLinkCount: 0,
+        latestApprovalEvidenceLink: null,
+        dispatchEvidenceLinkCount: 0,
+        latestDispatchEvidenceLink: null,
+      },
+      approval: {
+        ready: false,
+        handoffCreated: false,
+        latestApprovalHandoff: null,
+      },
+      dispatch: {
+        ready: false,
+      },
+    });
+    expect(workspaceResponse.body.workspace.missingRequirements).toEqual([
+      "Assign a platform before readiness can pass",
+      "Assign a pilot before readiness can pass",
+      "Add mission risk inputs before readiness can pass",
+      "Add airspace compliance inputs before readiness can pass",
+    ]);
+    expect(workspaceResponse.body.workspace.blockingReasons).toEqual(
+      expect.arrayContaining([
+        "Assign a platform before readiness can pass",
+        "Assign a pilot before readiness can pass",
+      ]),
+    );
+    expect(workspaceResponse.body.workspace.nextAllowedActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "submit",
+          currentStatus: "draft",
+          targetStatus: "submitted",
+          allowed: true,
+          error: null,
+        }),
+        expect.objectContaining({
+          action: "approve",
+          allowed: false,
+          error: expect.objectContaining({
+            type: "invalid_state_transition",
+          }),
+        }),
+      ]),
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("returns a populated planning workspace with readiness and evidence status", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-workspace-ready",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+    const missionId = createResponse.body.draft.missionId as string;
+
+    const handoffResponse = await request(app)
+      .post(`/mission-plans/drafts/${missionId}/approval-handoff`)
+      .send({
+        createdBy: "planning lead",
+      });
+
+    expect(handoffResponse.status).toBe(201);
+
+    const workspaceResponse = await request(app).get(
+      `/missions/${missionId}/planning-workspace`,
+    );
+
+    expect(workspaceResponse.status).toBe(200);
+    expect(workspaceResponse.body.workspace).toMatchObject({
+      mission: {
+        id: missionId,
+        missionPlanId: "plan-workspace-ready",
+        status: "draft",
+        platformId: platform.id,
+        pilotId: pilot.id,
+      },
+      planning: {
+        readyForApproval: true,
+        blockingReasons: [],
+      },
+      platform: {
+        assignedPlatformId: platform.id,
+        state: "assigned",
+        summary: expect.objectContaining({
+          id: platform.id,
+          name: "Planning UAV",
+          status: "active",
+        }),
+      },
+      pilot: {
+        assignedPilotId: pilot.id,
+        state: "assigned",
+        summary: expect.objectContaining({
+          id: pilot.id,
+          displayName: "Planning Pilot",
+          status: "active",
+        }),
+      },
+      missionRisk: expect.objectContaining({
+        missionId,
+        result: "pass",
+      }),
+      airspaceCompliance: expect.objectContaining({
+        missionId,
+        result: "pass",
+      }),
+      readiness: expect.objectContaining({
+        missionId,
+        result: "pass",
+        gate: expect.objectContaining({
+          blocksApproval: false,
+          blocksDispatch: false,
+          requiresReview: false,
+        }),
+      }),
+      evidence: {
+        readinessSnapshotCount: 1,
+        latestReadinessSnapshot: expect.objectContaining({
+          missionId,
+        }),
+        approvalEvidenceLinkCount: 1,
+        latestApprovalEvidenceLink: expect.objectContaining({
+          missionId,
+          decisionType: "approval",
+        }),
+        dispatchEvidenceLinkCount: 0,
+        latestDispatchEvidenceLink: null,
+      },
+      approval: {
+        ready: true,
+        handoffCreated: true,
+        latestApprovalHandoff: expect.objectContaining({
+          missionId,
+          createdBy: "planning lead",
+        }),
+        blockingReasons: [],
+      },
+      dispatch: {
+        ready: false,
+        blockingReasons: expect.arrayContaining([
+          "Mission cannot be launched from status draft",
+        ]),
+      },
+    });
+    expect(workspaceResponse.body.workspace.missingRequirements).toEqual([]);
+    expect(workspaceResponse.body.workspace.nextAllowedActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "submit",
+          allowed: true,
+        }),
+        expect.objectContaining({
+          action: "approve",
+          allowed: false,
+        }),
+      ]),
+    );
+  });
+
+  it("keeps planning workspace evidence isolated by mission", async () => {
+    const firstMissionResponse = await request(app).post("/mission-plans/drafts").send({
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+    const secondMissionResponse = await request(app).post("/mission-plans/drafts").send({
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(firstMissionResponse.status).toBe(201);
+    expect(secondMissionResponse.status).toBe(201);
+
+    const secondMissionId = secondMissionResponse.body.draft.missionId as string;
+    const secondHandoffResponse = await request(app)
+      .post(`/mission-plans/drafts/${secondMissionId}/approval-handoff`)
+      .send({
+        createdBy: "planner-2",
+      });
+
+    expect(secondHandoffResponse.status).toBe(201);
+
+    const firstWorkspaceResponse = await request(app).get(
+      `/missions/${firstMissionResponse.body.draft.missionId}/planning-workspace`,
+    );
+
+    expect(firstWorkspaceResponse.status).toBe(200);
+    expect(firstWorkspaceResponse.body.workspace.evidence).toMatchObject({
+      readinessSnapshotCount: 0,
+      latestReadinessSnapshot: null,
+      approvalEvidenceLinkCount: 0,
+      latestApprovalEvidenceLink: null,
+    });
+    expect(firstWorkspaceResponse.body.workspace.approval).toMatchObject({
+      handoffCreated: false,
+      latestApprovalHandoff: null,
+    });
+  });
+
+  it("returns 404 for missing planning workspace missions", async () => {
+    const response = await request(app).get(
+      `/missions/${randomUUID()}/planning-workspace`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "mission_not_found",
+      },
+    });
   });
 });

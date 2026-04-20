@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { MissionService } from "./mission.service";
 import { InvalidMissionTransitionError } from "./errors";
 import { MissionLifecycleAction } from "../modules/missions/domain/missionLifecycle";
+import { MissionPlanningService } from "../mission-planning/mission-planning.service";
 
 const VALID_ACTIONS = new Set<MissionLifecycleAction>([
   "submit",
@@ -12,7 +13,26 @@ const VALID_ACTIONS = new Set<MissionLifecycleAction>([
 ]);
 
 export class MissionController {
-  constructor(private readonly missionService: MissionService) {}
+  constructor(
+    private readonly missionService: MissionService,
+    private readonly missionPlanningService: MissionPlanningService,
+  ) {}
+
+  getPlanningWorkspace = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireUuid(req.params.missionId, "missionId");
+      const workspace =
+        await this.missionPlanningService.getWorkspace(missionId);
+
+      res.status(200).json({ workspace });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   getMissionEvents = async (
     req: Request,
