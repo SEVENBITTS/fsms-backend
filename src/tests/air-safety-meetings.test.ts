@@ -922,6 +922,137 @@ describe("air safety meetings", () => {
     expect(await countRows()).toEqual(before);
   });
 
+  it("generates an empty governance approval rollup PDF with explicit empty-state wording", async () => {
+    const before = await countRows();
+
+    const response = await request(app)
+      .get("/air-safety-meetings/approval-rollup/pdf")
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    expect(response.headers["content-disposition"]).toContain("attachment");
+    expect(response.headers["content-disposition"]).toContain(
+      "air-safety-meeting-approval-rollup.pdf",
+    );
+    expect(Buffer.isBuffer(response.body)).toBe(true);
+    expect(response.body.toString("latin1", 0, 8)).toBe("%PDF-1.4");
+    expect(response.body.toString("latin1")).toContain(
+      "Air safety meeting approval assurance summary",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Approval rollup summary",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Total meetings:",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Approved meetings: 0",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Meetings: No air safety meetings recorded",
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("generates a populated governance approval rollup PDF without mutating source records", async () => {
+    const approvedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "event_triggered_safety_review",
+      dueAt: "2026-04-24T10:00:00.000Z",
+      chairperson: "Safety Manager",
+      createdBy: "safety-admin",
+    });
+    const rejectedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "sop_breach_review",
+      dueAt: "2026-04-23T10:00:00.000Z",
+      chairperson: "Chief Pilot",
+      createdBy: "safety-admin",
+    });
+    const followUpMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "training_review",
+      dueAt: "2026-04-22T10:00:00.000Z",
+      chairperson: "Training Manager",
+      createdBy: "safety-admin",
+    });
+    const unsignedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "maintenance_safety_review",
+      dueAt: "2026-04-21T10:00:00.000Z",
+      chairperson: "Engineering Lead",
+      createdBy: "safety-admin",
+    });
+
+    expect(approvedMeeting.status).toBe(201);
+    expect(rejectedMeeting.status).toBe(201);
+    expect(followUpMeeting.status).toBe(201);
+    expect(unsignedMeeting.status).toBe(201);
+
+    await createMeetingSignoff(approvedMeeting.body.meeting.id, {
+      accountableManagerName: "Alex Morgan",
+      reviewDecision: "approved",
+      signedAt: "2026-04-24T11:00:00.000Z",
+      reviewNotes: "Approved for governance closure.",
+    });
+    const rejectedSignoff = await createMeetingSignoff(rejectedMeeting.body.meeting.id, {
+      accountableManagerName: "Jordan Lee",
+      reviewDecision: "rejected",
+      signedAt: "2026-04-23T11:00:00.000Z",
+      reviewNotes: "Rejected pending corrective action.",
+    });
+    const followUpSignoff = await createMeetingSignoff(followUpMeeting.body.meeting.id, {
+      accountableManagerName: "Taylor Shaw",
+      reviewDecision: "requires_follow_up",
+      signedAt: "2026-04-22T11:00:00.000Z",
+      reviewNotes: "Follow-up review required.",
+    });
+    const before = await countRows();
+
+    const response = await request(app)
+      .get("/air-safety-meetings/approval-rollup/pdf")
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    expect(response.headers["content-disposition"]).toContain(
+      "air-safety-meeting-approval-rollup.pdf",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Air safety meeting approval assurance summary",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Total meetings:",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Approved meetings: 1",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Rejected meetings: 1",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Requires follow-up meetings: 1",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Unsigned",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      `Meetings: ${approvedMeeting.body.meeting.id} |`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "event_triggered_safety_review | scheduled | 2026-04-24T10:00:00.000Z",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      `Meetings: ${rejectedMeeting.body.meeting.id} |`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      `Meetings: ${followUpMeeting.body.meeting.id} |`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      `Meetings: ${unsignedMeeting.body.meeting.id} |`,
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
   it("exports an empty safety meeting pack without mutating source records", async () => {
     const meeting = await createEventTriggeredMeeting();
     const before = await countRows();

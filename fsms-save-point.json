@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add governance-facing safety meeting approval PDF export so the rendered assurance summary can be circulated as a formal review artifact.",
+ "nextBuildStep": "Add accountable-manager signature block to governance-facing safety meeting approval PDFs so circulated assurance summaries can be formally signed off.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
