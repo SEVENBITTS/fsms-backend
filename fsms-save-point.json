@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add safety meeting sign-off approval export context so downstream audit and governance outputs can distinguish approved, rejected, and follow-up meeting decisions.",
+ "nextBuildStep": "Add governance-facing safety meeting approval rollup export so approved, rejected, follow-up, and unsigned meeting decisions can be reviewed across meetings.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
