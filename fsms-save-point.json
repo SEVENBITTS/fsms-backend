@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add governance-facing summary approval rollup consumer so downstream audit and governance tools can review summary decisions without parsing raw export payloads.",
+ "nextBuildStep": "Add governance-facing summary approval rendered report so downstream audit and governance users can review summary decisions in a human-readable assurance format.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

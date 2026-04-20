@@ -4,6 +4,7 @@ import { AirSafetyMeetingRepository } from "./air-safety-meeting.repository";
 import type {
   AirSafetyMeeting,
   AirSafetyMeetingApprovalRollupExport,
+  AirSafetyMeetingApprovalRollupSummary,
   AirSafetyMeetingApprovalRollupPdf,
   AirSafetyMeetingApprovalRollupRecord,
   AirSafetyMeetingApprovalRollupRenderedReport,
@@ -108,6 +109,40 @@ export class AirSafetyMeetingService {
         sections,
         plainText: this.renderSectionsAsPlainText(sections),
       },
+    };
+  }
+
+  async summarizeAirSafetyMeetingApprovalRollup(): Promise<AirSafetyMeetingApprovalRollupSummary> {
+    const rollupExport = await this.exportAirSafetyMeetingApprovalRollup();
+    const approvedMeetings = rollupExport.records.filter(
+      (record) => record.latestSignoffApprovalStatus === "approved",
+    );
+    const rejectedMeetings = rollupExport.records.filter(
+      (record) => record.latestSignoffApprovalStatus === "rejected",
+    );
+    const requiresFollowUpMeetings = rollupExport.records.filter(
+      (record) => record.latestSignoffApprovalStatus === "requires_follow_up",
+    );
+    const unsignedMeetings = rollupExport.records.filter(
+      (record) => record.latestSignoffApprovalStatus === "unsigned",
+    );
+
+    return {
+      summaryType: "air_safety_meeting_approval_rollup_summary",
+      formatVersion: 1,
+      generatedAt: new Date().toISOString(),
+      governanceSignoffApproval: rollupExport.governanceSignoffApproval,
+      counts: {
+        total: rollupExport.records.length,
+        approved: approvedMeetings.length,
+        rejected: rejectedMeetings.length,
+        requiresFollowUp: requiresFollowUpMeetings.length,
+        unsigned: unsignedMeetings.length,
+      },
+      approvedMeetings,
+      rejectedMeetings,
+      requiresFollowUpMeetings,
+      unsignedMeetings,
     };
   }
 

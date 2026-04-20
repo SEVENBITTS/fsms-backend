@@ -247,6 +247,26 @@ export interface AirSafetyMeetingApprovalRollupExport {
   records: AirSafetyMeetingApprovalRollupRecord[];
 }
 
+export interface AirSafetyMeetingApprovalRollupSummaryCounts {
+  total: number;
+  approved: number;
+  rejected: number;
+  requiresFollowUp: number;
+  unsigned: number;
+}
+
+export interface AirSafetyMeetingApprovalRollupSummary {
+  summaryType: "air_safety_meeting_approval_rollup_summary";
+  formatVersion: 1;
+  generatedAt: string;
+  governanceSignoffApproval: GovernanceApprovalRollupSignoffApprovalContext;
+  counts: AirSafetyMeetingApprovalRollupSummaryCounts;
+  approvedMeetings: AirSafetyMeetingApprovalRollupRecord[];
+  rejectedMeetings: AirSafetyMeetingApprovalRollupRecord[];
+  requiresFollowUpMeetings: AirSafetyMeetingApprovalRollupRecord[];
+  unsignedMeetings: AirSafetyMeetingApprovalRollupRecord[];
+}
+
 export interface AirSafetyMeetingApprovalRollupRenderedReport {
   renderType: "air_safety_meeting_approval_rollup_report";
   formatVersion: 1;
