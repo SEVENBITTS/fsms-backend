@@ -151,7 +151,6 @@ const missionService = new MissionService(
   airspaceComplianceService,
   auditEvidenceRepository,
 );
-const missionController = new MissionController(missionService);
 const auditEvidenceService = new AuditEvidenceService(
   pool,
   auditEvidenceRepository,
@@ -167,6 +166,11 @@ const missionPlanningService = new MissionPlanningService(
   missionRiskRepository,
   airspaceComplianceRepository,
   auditEvidenceService,
+  missionService,
+);
+const missionController = new MissionController(
+  missionService,
+  missionPlanningService,
 );
 const missionPlanningController = new MissionPlanningController(
   missionPlanningService,

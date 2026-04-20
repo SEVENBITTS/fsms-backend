@@ -12,6 +12,15 @@ export class MissionPlanningDraftNotFoundError extends Error {
   }
 }
 
+export class MissionPlanningMissionNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "MISSION_NOT_FOUND";
+
+  constructor(missionId: string) {
+    super(`Mission not found: ${missionId}`);
+  }
+}
+
 export class MissionPlanningReferenceNotFoundError extends Error {
   readonly statusCode = 404;
   readonly code = "MISSION_PLANNING_REFERENCE_NOT_FOUND";

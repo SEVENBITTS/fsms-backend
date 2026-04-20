@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add governance-summary approval distribution context so formal assurance summaries can be circulated and tracked without parsing raw PDF artifacts.",
+ "nextBuildStep": "Add mission dispatch workspace endpoint so operators can evaluate live go/no-go state, dispatch evidence, and launch blockers from a single mission view.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
