@@ -238,6 +238,24 @@ export class AirSafetyMeetingRepository {
     return result.rows.map(toAirSafetyMeetingSignoff);
   }
 
+  async getLatestAirSafetyMeetingSignoff(
+    tx: PoolClient,
+    meetingId: string,
+  ): Promise<AirSafetyMeetingSignoff | null> {
+    const result = await tx.query<AirSafetyMeetingSignoffRow>(
+      `
+      select *
+      from air_safety_meeting_signoffs
+      where air_safety_meeting_id = $1
+      order by signed_at desc, created_at desc, id desc
+      limit 1
+      `,
+      [meetingId],
+    );
+
+    return result.rows[0] ? toAirSafetyMeetingSignoff(result.rows[0]) : null;
+  }
+
   async getAirSafetyMeetingById(
     tx: PoolClient,
     meetingId: string,

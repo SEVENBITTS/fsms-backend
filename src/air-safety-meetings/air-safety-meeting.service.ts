@@ -178,7 +178,10 @@ export class AirSafetyMeetingService {
     meetingIdInput: unknown,
   ): Promise<AirSafetyMeetingPackRenderedReport> {
     const meetingExport = await this.exportAirSafetyMeetingPack(meetingIdInput);
-    const sections = this.buildMeetingPackReportSections(meetingExport);
+    const signoff = await this.getLatestAirSafetyMeetingSignoff(
+      meetingExport.meetingId,
+    );
+    const sections = this.buildMeetingPackReportSections(meetingExport, signoff);
 
     return {
       renderType: "air_safety_meeting_pack_report",
@@ -288,6 +291,7 @@ export class AirSafetyMeetingService {
 
   private buildMeetingPackReportSections(
     meetingExport: AirSafetyMeetingPackExport,
+    signoff: AirSafetyMeetingSignoff | null,
   ): AirSafetyMeetingReportSection[] {
     const meeting = meetingExport.meeting;
     const pendingSignoff = "Pending sign-off";
@@ -340,27 +344,27 @@ export class AirSafetyMeetingService {
         fields: [
           {
             label: "Accountable manager name",
-            value: pendingSignoff,
+            value: signoff?.accountableManagerName ?? pendingSignoff,
           },
           {
             label: "Role/title",
-            value: pendingSignoff,
+            value: signoff?.accountableManagerRole ?? pendingSignoff,
           },
           {
             label: "Signature",
-            value: pendingSignoff,
+            value: signoff?.signatureReference ?? pendingSignoff,
           },
           {
             label: "Signed date/time",
-            value: pendingSignoff,
+            value: signoff?.signedAt ?? pendingSignoff,
           },
           {
             label: "Review decision/status",
-            value: pendingSignoff,
+            value: signoff?.reviewDecision ?? pendingSignoff,
           },
           {
             label: "Review notes/comments",
-            value: pendingSignoff,
+            value: signoff?.reviewNotes ?? pendingSignoff,
           },
         ],
       },
@@ -604,5 +608,20 @@ export class AirSafetyMeetingService {
       .replace(/\\/g, "\\\\")
       .replace(/\(/g, "\\(")
       .replace(/\)/g, "\\)");
+  }
+
+  private async getLatestAirSafetyMeetingSignoff(
+    meetingId: string,
+  ): Promise<AirSafetyMeetingSignoff | null> {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.airSafetyMeetingRepository.getLatestAirSafetyMeetingSignoff(
+        client,
+        meetingId,
+      );
+    } finally {
+      client.release();
+    }
   }
 }

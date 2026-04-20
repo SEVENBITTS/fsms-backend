@@ -86,6 +86,39 @@ const createEventTriggeredMeeting = async () => {
   return response.body.meeting as { id: string };
 };
 
+const createMeetingSignoff = async (
+  meetingId: string,
+  overrides?: {
+    accountableManagerName?: string;
+    accountableManagerRole?: string;
+    reviewDecision?: string;
+    signedAt?: string;
+    signatureReference?: string | null;
+    reviewNotes?: string | null;
+    createdBy?: string | null;
+  },
+) => {
+  const response = await request(app)
+    .post(`/air-safety-meetings/${meetingId}/signoffs`)
+    .send({
+      accountableManagerName:
+        overrides?.accountableManagerName ?? "Alex Morgan",
+      accountableManagerRole:
+        overrides?.accountableManagerRole ?? "Accountable Manager",
+      reviewDecision: overrides?.reviewDecision ?? "approved",
+      signedAt: overrides?.signedAt ?? "2026-04-20T17:00:00.000Z",
+      signatureReference:
+        overrides?.signatureReference ??
+        "signature://accountable-manager/alex-morgan",
+      reviewNotes:
+        overrides?.reviewNotes ?? "Meeting pack reviewed and approved.",
+      createdBy: overrides?.createdBy ?? "safety-admin",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.signoff;
+};
+
 const createAgendaLinkedEvent = async (
   meetingId: string,
   params?: {
@@ -253,20 +286,9 @@ describe("air safety meetings", () => {
     const meeting = await createEventTriggeredMeeting();
     const before = await countRows();
 
-    const createResponse = await request(app)
-      .post(`/air-safety-meetings/${meeting.id}/signoffs`)
-      .send({
-        accountableManagerName: "Alex Morgan",
-        accountableManagerRole: "Accountable Manager",
-        reviewDecision: "approved",
-        signedAt: "2026-04-20T17:00:00.000Z",
-        signatureReference: "signature://accountable-manager/alex-morgan",
-        reviewNotes: "Meeting pack reviewed and approved.",
-        createdBy: "safety-admin",
-      });
+    const signoff = await createMeetingSignoff(meeting.id);
 
-    expect(createResponse.status).toBe(201);
-    expect(createResponse.body.signoff).toMatchObject({
+    expect(signoff).toMatchObject({
       airSafetyMeetingId: meeting.id,
       accountableManagerName: "Alex Morgan",
       accountableManagerRole: "Accountable Manager",
@@ -276,8 +298,8 @@ describe("air safety meetings", () => {
       reviewNotes: "Meeting pack reviewed and approved.",
       createdBy: "safety-admin",
     });
-    expect(createResponse.body.signoff.id).toEqual(expect.any(String));
-    expect(createResponse.body.signoff.createdAt).toEqual(expect.any(String));
+    expect(signoff.id).toEqual(expect.any(String));
+    expect(signoff.createdAt).toEqual(expect.any(String));
 
     const listResponse = await request(app).get(
       `/air-safety-meetings/${meeting.id}/signoffs`,
@@ -285,7 +307,7 @@ describe("air safety meetings", () => {
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.signoffs).toHaveLength(1);
-    expect(listResponse.body.signoffs[0]).toEqual(createResponse.body.signoff);
+    expect(listResponse.body.signoffs[0]).toEqual(signoff);
     expect(await countRows()).toEqual({
       ...before,
       signoff_count: before.signoff_count + 1,
@@ -842,6 +864,12 @@ describe("air safety meetings", () => {
   it("renders agenda events, trigger rationale, decisions, and closure evidence", async () => {
     const meeting = await createEventTriggeredMeeting();
     const source = await createCompletedActionWithEvidence(meeting.id);
+    const signoff = await createMeetingSignoff(meeting.id, {
+      reviewDecision: "requires_follow_up",
+      signedAt: "2026-04-20T18:00:00.000Z",
+      signatureReference: "signature://accountable-manager/alex-follow-up",
+      reviewNotes: "Additional corrective action review required.",
+    });
     const before = await countRows();
 
     const response = await request(app).get(
@@ -902,18 +930,18 @@ describe("air safety meetings", () => {
           fields: expect.arrayContaining([
             {
               label: "Accountable manager name",
-              value: "Pending sign-off",
+              value: signoff.accountableManagerName,
             },
-            { label: "Role/title", value: "Pending sign-off" },
-            { label: "Signature", value: "Pending sign-off" },
-            { label: "Signed date/time", value: "Pending sign-off" },
+            { label: "Role/title", value: signoff.accountableManagerRole },
+            { label: "Signature", value: signoff.signatureReference },
+            { label: "Signed date/time", value: signoff.signedAt },
             {
               label: "Review decision/status",
-              value: "Pending sign-off",
+              value: signoff.reviewDecision,
             },
             {
               label: "Review notes/comments",
-              value: "Pending sign-off",
+              value: signoff.reviewNotes,
             },
           ]),
         }),
@@ -923,7 +951,10 @@ describe("air safety meetings", () => {
       "Accountable manager sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
-      "Review decision/status: Pending sign-off",
+      `Review decision/status: ${signoff.reviewDecision}`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Signature: ${signoff.signatureReference}`,
     );
     expect(response.body.report.report.plainText).toContain(
       "Decision history: accepted | accountable-manager",
@@ -1008,6 +1039,11 @@ describe("air safety meetings", () => {
   it("generates a populated safety meeting pack PDF without mutating source records", async () => {
     const meeting = await createEventTriggeredMeeting();
     const source = await createCompletedActionWithEvidence(meeting.id);
+    const signoff = await createMeetingSignoff(meeting.id, {
+      signedAt: "2026-04-20T18:30:00.000Z",
+      signatureReference: "signature://accountable-manager/alex-approved",
+      reviewNotes: "Meeting pack approved for formal review.",
+    });
     const before = await countRows();
 
     const response = await request(app)
@@ -1033,13 +1069,22 @@ describe("air safety meetings", () => {
       "Accountable manager name:",
     );
     expect(response.body.toString("latin1")).toContain(
-      "Pending sign-off",
+      signoff.accountableManagerName,
     );
     expect(response.body.toString("latin1")).toContain(
-      "Signature: Pending",
+      "Signature:",
     );
     expect(response.body.toString("latin1")).toContain(
-      "Review decision/status: Pending sign-off",
+      signoff.signatureReference!,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      `Review decision/status: ${signoff.reviewDecision}`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Signed date/time:",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      signoff.signedAt,
     );
     expect(response.body.toString("latin1")).toContain(
       "Agenda link ID:",
@@ -1105,6 +1150,11 @@ describe("air safety meetings", () => {
         evidenceCategory: "maintenance_completion",
       },
     );
+    const secondSignoff = await createMeetingSignoff(secondMeeting.id, {
+      accountableManagerName: "Jordan Lee",
+      signatureReference: "signature://accountable-manager/jordan-lee",
+      reviewNotes: "Second meeting approved.",
+    });
     const before = await countRows();
 
     const response = await request(app)
@@ -1117,6 +1167,12 @@ describe("air safety meetings", () => {
       `Air safety meeting pack for meeting ${firstMeeting.id}`,
     );
     expect(response.body.toString("latin1")).not.toContain(secondSource.event.id);
+    expect(response.body.toString("latin1")).not.toContain(
+      secondSignoff.signatureReference!,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Review decision/status: Pending sign-off",
+    );
     expect(await countRows()).toEqual(before);
   });
 
