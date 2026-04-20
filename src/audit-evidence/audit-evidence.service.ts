@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
 import { MissionService } from "../missions/mission.service";
 import {
@@ -461,7 +461,7 @@ export class AuditEvidenceService {
   }
 
   private async buildPostOperationCompletionSnapshot(
-    client: Awaited<ReturnType<Pool["connect"]>>,
+    client: PoolClient,
     mission: { missionId: string; missionPlanId: string | null; status: string },
   ): Promise<PostOperationCompletionSnapshot> {
     const events =
