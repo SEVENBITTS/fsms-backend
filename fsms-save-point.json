@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add governance-summary sign-off approval export context so downstream audit and governance outputs can distinguish approved, rejected, and follow-up summary decisions.",
+ "nextBuildStep": "Add governance-facing summary approval rollup consumer so downstream audit and governance tools can review summary decisions without parsing raw export payloads.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

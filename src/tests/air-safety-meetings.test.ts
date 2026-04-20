@@ -703,6 +703,10 @@ describe("air safety meetings", () => {
     expect(response.body.export).toMatchObject({
       exportType: "air_safety_meeting_approval_rollup",
       formatVersion: 1,
+      governanceSignoffApproval: {
+        status: "unsigned",
+        latestSignoff: null,
+      },
       records: [],
     });
     expect(response.body.export.generatedAt).toEqual(expect.any(String));
@@ -759,6 +763,15 @@ describe("air safety meetings", () => {
       signedAt: "2026-04-22T11:00:00.000Z",
       reviewNotes: "Follow-up review required.",
     });
+    const governanceSignoff = await createGovernanceRollupSignoff({
+      accountableManagerName: "Morgan Blake",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-25T09:00:00.000Z",
+      signatureReference: "signature://governance/morgan-blake",
+      reviewNotes: "Governance summary approved for circulation.",
+      createdBy: "governance-admin",
+    });
     const before = await countRows();
 
     const response = await request(app).get(
@@ -766,6 +779,10 @@ describe("air safety meetings", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.body.export.governanceSignoffApproval).toEqual({
+      status: "approved",
+      latestSignoff: governanceSignoff,
+    });
     expect(response.body.export.records).toEqual([
       {
         meetingId: approvedMeeting.body.meeting.id,
@@ -1265,6 +1282,50 @@ describe("air safety meetings", () => {
     expect(response.body.toString("latin1")).toContain(
       unsignedMeeting.body.meeting.id,
     );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports rejected governance-summary sign-off approval context without mutating source records", async () => {
+    const governanceSignoff = await createGovernanceRollupSignoff({
+      accountableManagerName: "Jordan Lee",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "rejected",
+      signedAt: "2026-04-20T11:00:00.000Z",
+      signatureReference: "signature://governance/jordan-rejected",
+      reviewNotes: "Rejected pending governance remediation.",
+      createdBy: "governance-admin",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get("/air-safety-meetings/approval-rollup");
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.governanceSignoffApproval).toEqual({
+      status: "rejected",
+      latestSignoff: governanceSignoff,
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports requires-follow-up governance-summary sign-off approval context without mutating source records", async () => {
+    const governanceSignoff = await createGovernanceRollupSignoff({
+      accountableManagerName: "Taylor Shaw",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "requires_follow_up",
+      signedAt: "2026-04-20T11:00:00.000Z",
+      signatureReference: "signature://governance/taylor-follow-up",
+      reviewNotes: "Follow-up review required before circulation.",
+      createdBy: "governance-admin",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get("/air-safety-meetings/approval-rollup");
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.governanceSignoffApproval).toEqual({
+      status: "requires_follow_up",
+      latestSignoff: governanceSignoff,
+    });
     expect(await countRows()).toEqual(before);
   });
 

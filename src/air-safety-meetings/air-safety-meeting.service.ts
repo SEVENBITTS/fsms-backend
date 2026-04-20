@@ -69,13 +69,21 @@ export class AirSafetyMeetingService {
     const client = await this.pool.connect();
 
     try {
-      const records = await this.airSafetyMeetingRepository
-        .listAirSafetyMeetingApprovalRollup(client);
+      const [records, governanceSignoff] = await Promise.all([
+        this.airSafetyMeetingRepository.listAirSafetyMeetingApprovalRollup(client),
+        this.airSafetyMeetingRepository.getLatestGovernanceApprovalRollupSignoff(
+          client,
+        ),
+      ]);
 
       return {
         exportType: "air_safety_meeting_approval_rollup",
         formatVersion: 1,
         generatedAt: new Date().toISOString(),
+        governanceSignoffApproval: {
+          status: governanceSignoff?.reviewDecision ?? "unsigned",
+          latestSignoff: governanceSignoff,
+        },
         records,
       };
     } finally {
@@ -85,10 +93,9 @@ export class AirSafetyMeetingService {
 
   async renderAirSafetyMeetingApprovalRollup(): Promise<AirSafetyMeetingApprovalRollupRenderedReport> {
     const rollupExport = await this.exportAirSafetyMeetingApprovalRollup();
-    const governanceSignoff = await this.getLatestGovernanceApprovalRollupSignoff();
     const sections = this.buildApprovalRollupReportSections(
       rollupExport,
-      governanceSignoff,
+      rollupExport.governanceSignoffApproval.latestSignoff,
     );
 
     return {
@@ -864,16 +871,4 @@ export class AirSafetyMeetingService {
     }
   }
 
-  private async getLatestGovernanceApprovalRollupSignoff(): Promise<
-    GovernanceApprovalRollupSignoff | null
-  > {
-    const client = await this.pool.connect();
-
-    try {
-      return await this.airSafetyMeetingRepository
-        .getLatestGovernanceApprovalRollupSignoff(client);
-    } finally {
-      client.release();
-    }
-  }
 }

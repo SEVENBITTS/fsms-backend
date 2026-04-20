@@ -234,10 +234,16 @@ export interface AirSafetyMeetingApprovalRollupRecord {
   reviewNotes: string | null;
 }
 
+export interface GovernanceApprovalRollupSignoffApprovalContext {
+  status: "unsigned" | AirSafetyMeetingSignoffDecision;
+  latestSignoff: GovernanceApprovalRollupSignoff | null;
+}
+
 export interface AirSafetyMeetingApprovalRollupExport {
   exportType: "air_safety_meeting_approval_rollup";
   formatVersion: 1;
   generatedAt: string;
+  governanceSignoffApproval: GovernanceApprovalRollupSignoffApprovalContext;
   records: AirSafetyMeetingApprovalRollupRecord[];
 }
 
