@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Connect migration-backed safety meeting sign-off records into rendered and PDF meeting pack outputs so placeholders are replaced by audited approval data.",
+ "nextBuildStep": "Add safety meeting sign-off approval export context so downstream audit and governance outputs can distinguish approved, rejected, and follow-up meeting decisions.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
