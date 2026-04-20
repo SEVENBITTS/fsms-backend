@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add accountable-manager signature block to governance-facing safety meeting approval PDFs so circulated assurance summaries can be formally signed off.",
+ "nextBuildStep": "Add stored governance-summary sign-off records so formal approval of circulated safety meeting assurance summaries can be captured and audited.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
