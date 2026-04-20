@@ -10,6 +10,7 @@ const missionSearchButton = document.getElementById("mission-search-btn");
 const missionBrowserList = document.getElementById("mission-browser-list");
 const missionBrowserDetail = document.getElementById("mission-browser-detail");
 const actionsPanel = document.getElementById("actions-panel");
+const evidencePanel = document.getElementById("evidence-panel");
 const planningPanel = document.getElementById("planning-panel");
 const dispatchPanel = document.getElementById("dispatch-panel");
 const timelinePanel = document.getElementById("timeline-panel");
@@ -70,6 +71,33 @@ const ACTION_DEFINITIONS = {
   },
 };
 
+const EVIDENCE_HELPERS = {
+  readinessSnapshot: {
+    title: "Readiness Snapshot",
+    description: "Create the latest mission readiness snapshot using the existing audit evidence flow.",
+    endpoint: (missionId) => `/missions/${missionId}/readiness/audit-snapshots`,
+    method: "POST",
+    fields: [{ key: "createdBy", label: "Created by", type: "text", required: true }],
+  },
+  approvalHandoff: {
+    title: "Approval Evidence",
+    description: "Create the planning approval handoff, snapshot, and approval evidence link in one backend flow.",
+    endpoint: (missionId) => `/mission-plans/drafts/${missionId}/approval-handoff`,
+    method: "POST",
+    fields: [{ key: "createdBy", label: "Created by", type: "text", required: true }],
+  },
+  dispatchEvidence: {
+    title: "Dispatch Evidence",
+    description: "Create a dispatch evidence link from an existing readiness snapshot.",
+    endpoint: (missionId) => `/missions/${missionId}/decision-evidence-links`,
+    method: "POST",
+    fields: [
+      { key: "createdBy", label: "Created by", type: "text", required: true },
+      { key: "snapshotId", label: "Snapshot ID", type: "text", required: true },
+    ],
+  },
+};
+
 const uiState = {
   missionId: "",
   planningWorkspace: null,
@@ -80,6 +108,8 @@ const uiState = {
   transitionChecks: {},
   actionStatus: {},
   busyAction: null,
+  helperStatus: {},
+  busyHelper: null,
 };
 
 const toneClass = (value) => {
@@ -298,6 +328,66 @@ const applyActionDefaults = () => {
   }
 };
 
+const applyEvidenceHelperDefaults = () => {
+  const latestSnapshotId =
+    uiState.planningWorkspace?.evidence?.latestReadinessSnapshot?.id ?? "";
+
+  const defaultMap = {
+    readinessSnapshot: {
+      createdBy: "evidence-reviewer-1",
+    },
+    approvalHandoff: {
+      createdBy: "planning-lead-1",
+    },
+    dispatchEvidence: {
+      createdBy: "dispatcher-1",
+      snapshotId: latestSnapshotId,
+    },
+  };
+
+  for (const helper of Object.keys(EVIDENCE_HELPERS)) {
+    const defaults = defaultMap[helper] ?? {};
+
+    for (const [key, value] of Object.entries(defaults)) {
+      const input = document.getElementById(`helper-${helper}-${key}`);
+      if (!input) {
+        continue;
+      }
+
+      if (!input.value || key === "snapshotId") {
+        input.value = value;
+      }
+    }
+  }
+};
+
+const collectEvidenceHelperPayload = (helper) => {
+  const definition = EVIDENCE_HELPERS[helper];
+  const payload = {};
+
+  for (const field of definition.fields) {
+    const input = document.getElementById(`helper-${helper}-${field.key}`);
+    const rawValue = input?.value ?? "";
+    const trimmed = typeof rawValue === "string" ? rawValue.trim() : rawValue;
+
+    if (field.required && !trimmed) {
+      throw new Error(`${field.label} is required`);
+    }
+
+    if (!trimmed) {
+      continue;
+    }
+
+    payload[field.key] = trimmed;
+  }
+
+  if (helper === "dispatchEvidence") {
+    payload.decisionType = "dispatch";
+  }
+
+  return payload;
+};
+
 const renderMissionBrowser = () => {
   const missions = uiState.missionList ?? [];
 
@@ -396,6 +486,118 @@ const renderMissionBrowser = () => {
       </div>
     </section>
   `;
+};
+
+const renderEvidenceHelpers = () => {
+  if (!evidencePanel) {
+    return;
+  }
+
+  if (!uiState.missionId || !uiState.planningWorkspace || !uiState.dispatchWorkspace) {
+    evidencePanel.innerHTML =
+      '<div class="empty-state">Load a mission before evidence helpers can be used.</div>';
+    return;
+  }
+
+  const planningWorkspace = uiState.planningWorkspace;
+  const dispatchWorkspace = uiState.dispatchWorkspace;
+  const latestSnapshot = planningWorkspace.evidence.latestReadinessSnapshot;
+  const latestApprovalLink = planningWorkspace.evidence.latestApprovalEvidenceLink;
+  const latestDispatchLink = dispatchWorkspace.dispatch.latestDispatchEvidenceLink;
+  const latestHandoff = planningWorkspace.approval.latestApprovalHandoff;
+
+  evidencePanel.innerHTML = `
+    <div class="summary-grid" style="margin-bottom: 14px;">
+      <section class="summary-block">
+        <h4>Current Evidence State</h4>
+        <div class="kv">
+          <div class="k">Readiness snapshots</div>
+          <div>${escapeHtml(String(planningWorkspace.evidence.readinessSnapshotCount))}</div>
+          <div class="k">Latest snapshot</div>
+          <div>${escapeHtml(latestSnapshot?.id ?? "Missing")}</div>
+          <div class="k">Approval handoff</div>
+          <div>${escapeHtml(latestHandoff?.id ?? "Missing")}</div>
+          <div class="k">Approval evidence link</div>
+          <div>${escapeHtml(latestApprovalLink?.id ?? "Missing")}</div>
+          <div class="k">Dispatch evidence link</div>
+          <div>${escapeHtml(latestDispatchLink?.id ?? "Missing")}</div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Safeguards</h4>
+        <div class="kv">
+          <div class="k">Approval handoff state</div>
+          <div>${renderBadge(planningWorkspace.approval.handoffCreated ? "Recorded" : "Missing")}</div>
+          <div class="k">Approval blockers</div>
+          <div>${escapeHtml(planningWorkspace.approval.blockingReasons.join("; ") || "None")}</div>
+          <div class="k">Dispatch blockers</div>
+          <div>${escapeHtml(dispatchWorkspace.dispatch.blockingReasons.join("; ") || "None")}</div>
+          <div class="k">Dispatch missing requirements</div>
+          <div>${escapeHtml(dispatchWorkspace.dispatch.missingRequirements.join("; ") || "None")}</div>
+        </div>
+      </section>
+    </div>
+    <div class="action-grid">
+      ${Object.entries(EVIDENCE_HELPERS)
+        .map(([helper, definition]) => renderEvidenceHelperCard(helper, definition))
+        .join("")}
+    </div>
+  `;
+
+  applyEvidenceHelperDefaults();
+  bindEvidenceHelperForms();
+};
+
+const renderEvidenceHelperCard = (helper, definition) => {
+  const helperBusy = uiState.busyHelper === helper;
+  const helperStatus = uiState.helperStatus[helper];
+
+  const fieldMarkup = definition.fields
+    .map((field) => {
+      const inputId = `helper-${helper}-${field.key}`;
+      return `
+        <div class="action-field">
+          <label for="${inputId}">${escapeHtml(field.label)}</label>
+          <input id="${inputId}" type="${field.type}" ${field.required ? "required" : ""} />
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <section class="action-card">
+      <h4>${escapeHtml(definition.title)}</h4>
+      <div class="action-meta">${escapeHtml(definition.description)}</div>
+      <form class="evidence-helper-form" data-helper="${helper}">
+        <div class="action-form-row">
+          ${fieldMarkup}
+        </div>
+        <div class="action-footer">
+          <button class="action-button" type="submit" ${helperBusy ? "disabled" : ""}>
+            ${helperBusy ? "Running..." : `Create ${escapeHtml(definition.title)}`}
+          </button>
+          <div class="action-status ${toneClass(helperStatus?.message ?? "info")}">${escapeHtml(
+            helperStatus?.message ?? "Ready",
+          )}</div>
+        </div>
+      </form>
+    </section>
+  `;
+};
+
+const bindEvidenceHelperForms = () => {
+  document.querySelectorAll(".evidence-helper-form").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const helper = form.getAttribute("data-helper");
+      if (!helper) {
+        return;
+      }
+
+      await executeEvidenceHelper(helper);
+    });
+  });
 };
 
 const loadMissionList = async (query = "") => {
@@ -787,10 +989,13 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.transitionChecks = {};
     uiState.actionStatus = {};
     uiState.busyAction = null;
+    uiState.helperStatus = {};
+    uiState.busyHelper = null;
     setConnectionState("Enter a mission UUID", "tone-warn");
     setLoadedMission("");
     overviewMetrics.innerHTML = "";
     actionsPanel.innerHTML = `<div class="empty-state">Load a mission before lifecycle actions can be evaluated.</div>`;
+    evidencePanel.innerHTML = `<div class="empty-state">Load a mission before evidence helpers can be used.</div>`;
     planningPanel.innerHTML = `<div class="empty-state">Enter a mission UUID to load the planning workspace.</div>`;
     dispatchPanel.innerHTML = `<div class="empty-state">Dispatch state will appear after a mission is loaded.</div>`;
     timelinePanel.innerHTML = `<div class="empty-state">Timeline data will appear after a mission is loaded.</div>`;
@@ -825,6 +1030,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     renderMissionBrowser();
     renderOverview();
     renderActions();
+    renderEvidenceHelpers();
     renderPlanning();
     renderDispatch();
     renderTimeline();
@@ -836,12 +1042,63 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.timeline = null;
     uiState.transitionChecks = {};
     renderMissionBrowser();
+    uiState.helperStatus = {};
+    uiState.busyHelper = null;
     setConnectionState(message, "tone-bad");
     actionsPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    evidencePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     planningPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     dispatchPanel.innerHTML = `<div class="empty-state">Dispatch view unavailable because the mission workspace did not load.</div>`;
     timelinePanel.innerHTML = `<div class="empty-state">Timeline view unavailable because the mission workspace did not load.</div>`;
     overviewMetrics.innerHTML = "";
+  }
+};
+
+const executeEvidenceHelper = async (helper) => {
+  const missionId = uiState.missionId;
+  if (!missionId) {
+    return;
+  }
+
+  let payload;
+  try {
+    payload = collectEvidenceHelperPayload(helper);
+  } catch (error) {
+    uiState.helperStatus[helper] = {
+      message: error instanceof Error ? error.message : "Invalid evidence helper payload",
+    };
+    renderEvidenceHelpers();
+    return;
+  }
+
+  uiState.busyHelper = helper;
+  uiState.helperStatus[helper] = { message: "Submitting evidence helper..." };
+  renderEvidenceHelpers();
+
+  try {
+    const definition = EVIDENCE_HELPERS[helper];
+    await fetchJson(definition.endpoint(missionId), {
+      method: definition.method,
+      body: JSON.stringify(payload),
+    });
+
+    uiState.helperStatus = {
+      [helper]: { message: `${definition.title} created` },
+    };
+    uiState.busyHelper = null;
+    await loadMissionList(uiState.missionQuery);
+    await loadMissionWorkspace(missionId, { preserveActionStatus: true });
+    setConnectionState(`${definition.title} created`, "tone-ok");
+  } catch (error) {
+    uiState.busyHelper = null;
+    uiState.helperStatus[helper] = {
+      message: error instanceof Error ? error.message : "Evidence helper failed",
+    };
+    renderEvidenceHelpers();
+    setConnectionState(
+      error instanceof Error ? error.message : "Evidence helper failed",
+      "tone-bad",
+    );
   }
 };
 
