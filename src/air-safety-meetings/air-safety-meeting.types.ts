@@ -178,12 +178,20 @@ export interface AirSafetyMeetingPackExportAgendaItem {
   actionProposals: AirSafetyMeetingPackExportActionProposal[];
 }
 
+export interface AirSafetyMeetingPackSignoffApprovalContext {
+  status:
+    | "unsigned"
+    | AirSafetyMeetingSignoffDecision;
+  latestSignoff: AirSafetyMeetingSignoff | null;
+}
+
 export interface AirSafetyMeetingPackExport {
   exportType: "air_safety_meeting_pack";
   formatVersion: 1;
   generatedAt: string;
   meetingId: string;
   meeting: AirSafetyMeeting;
+  signoffApproval: AirSafetyMeetingPackSignoffApprovalContext;
   agendaItems: AirSafetyMeetingPackExportAgendaItem[];
 }
 

@@ -158,6 +158,8 @@ export class AirSafetyMeetingService {
         throw new AirSafetyMeetingNotFoundError(meetingId);
       }
 
+      const signoff = await this.airSafetyMeetingRepository
+        .getLatestAirSafetyMeetingSignoff(client, meetingId);
       const agendaItems = await this.airSafetyMeetingRepository
         .listAirSafetyMeetingPackAgendaItems(client, meetingId);
 
@@ -167,6 +169,10 @@ export class AirSafetyMeetingService {
         generatedAt: new Date().toISOString(),
         meetingId,
         meeting,
+        signoffApproval: {
+          status: signoff?.reviewDecision ?? "unsigned",
+          latestSignoff: signoff,
+        },
         agendaItems,
       };
     } finally {

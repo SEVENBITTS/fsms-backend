@@ -731,6 +731,83 @@ describe("air safety meetings", () => {
     expect(await countRows()).toEqual(before);
   });
 
+  it("exports an unsigned sign-off approval context when no meeting sign-off exists", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.signoffApproval).toEqual({
+      status: "unsigned",
+      latestSignoff: null,
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports approved meeting sign-off approval context", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const signoff = await createMeetingSignoff(meeting.id, {
+      reviewDecision: "approved",
+      reviewNotes: "Approved for closure.",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.signoffApproval).toEqual({
+      status: "approved",
+      latestSignoff: signoff,
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports rejected meeting sign-off approval context", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const signoff = await createMeetingSignoff(meeting.id, {
+      reviewDecision: "rejected",
+      signatureReference: null,
+      reviewNotes: "Rejected pending corrective action.",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.signoffApproval).toEqual({
+      status: "rejected",
+      latestSignoff: signoff,
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports requires-follow-up meeting sign-off approval context", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const signoff = await createMeetingSignoff(meeting.id, {
+      reviewDecision: "requires_follow_up",
+      reviewNotes: "Further review required before approval.",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.signoffApproval).toEqual({
+      status: "requires_follow_up",
+      latestSignoff: signoff,
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
   it("does not leak meeting pack records from other meetings", async () => {
     const firstMeeting = await createEventTriggeredMeeting();
     const secondMeeting = await createEventTriggeredMeeting();
@@ -742,6 +819,12 @@ describe("air safety meetings", () => {
         evidenceCategory: "maintenance_completion",
       },
     );
+    const secondSignoff = await createMeetingSignoff(secondMeeting.id, {
+      accountableManagerName: "Jordan Lee",
+      signatureReference: "signature://accountable-manager/jordan-lee",
+      reviewDecision: "approved",
+      reviewNotes: "Second meeting approved.",
+    });
     const firstBefore = await countRows();
 
     const response = await request(app).get(
@@ -750,9 +833,16 @@ describe("air safety meetings", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.export.meetingId).toBe(firstMeeting.id);
+    expect(response.body.export.signoffApproval).toEqual({
+      status: "unsigned",
+      latestSignoff: null,
+    });
     expect(response.body.export.agendaItems).toEqual([]);
     expect(JSON.stringify(response.body.export)).not.toContain(
       secondSource.event.id,
+    );
+    expect(JSON.stringify(response.body.export)).not.toContain(
+      secondSignoff.id,
     );
     expect(await countRows()).toEqual(firstBefore);
   });
