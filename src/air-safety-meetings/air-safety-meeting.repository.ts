@@ -395,6 +395,21 @@ export class AirSafetyMeetingRepository {
     return result.rows.map(toGovernanceApprovalRollupSignoff);
   }
 
+  async getLatestGovernanceApprovalRollupSignoff(
+    tx: PoolClient,
+  ): Promise<GovernanceApprovalRollupSignoff | null> {
+    const result = await tx.query<GovernanceApprovalRollupSignoffRow>(
+      `
+      select *
+      from governance_approval_rollup_signoffs
+      order by signed_at desc, created_at desc, id desc
+      limit 1
+      `,
+    );
+
+    return result.rows[0] ? toGovernanceApprovalRollupSignoff(result.rows[0]) : null;
+  }
+
   async getLatestAirSafetyMeetingSignoff(
     tx: PoolClient,
     meetingId: string,
