@@ -73,6 +73,48 @@ const createDispatchEvidenceLink = async (missionId: string) => {
   return linkResponse.body.link as { id: string };
 };
 
+const recordTelemetry = async (missionId: string) => {
+  const response = await request(app)
+    .post(`/missions/${missionId}/telemetry`)
+    .send({
+      records: [
+        {
+          timestamp: "2026-04-20T10:00:00.000Z",
+          lat: 51.5074,
+          lng: -0.1278,
+          altitudeM: 55,
+          speedMps: 12,
+          headingDeg: 180,
+          progressPct: 25,
+          payload: { segment: "departure" },
+        },
+        {
+          timestamp: "2026-04-20T10:05:00.000Z",
+          lat: 51.508,
+          lng: -0.1281,
+          altitudeM: 62,
+          speedMps: 14,
+          headingDeg: 182,
+          progressPct: 90,
+          payload: { segment: "return" },
+        },
+      ],
+    });
+
+  expect(response.status).toBe(202);
+};
+
+const createPostOperationEvidenceSnapshot = async (missionId: string) => {
+  const response = await request(app)
+    .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+    .send({
+      createdBy: "ops-reviewer-1",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.snapshot as { id: string };
+};
+
 const lowRiskInput = {
   operatingCategory: "open",
   missionComplexity: "low",
@@ -132,6 +174,32 @@ const countRows = async (missionId?: string) => {
     snapshot_count: number;
     planning_handoff_count: number;
     decision_link_count: number;
+  };
+};
+
+const countOperationsTimelineRows = async (missionId: string) => {
+  const result = await pool.query(
+    `
+    select
+      (select count(*)::int from mission_risk_inputs where mission_id = $1) as risk_input_count,
+      (select count(*)::int from airspace_compliance_inputs where mission_id = $1) as airspace_input_count,
+      (select count(*)::int from mission_planning_approval_handoffs where mission_id = $1) as planning_handoff_count,
+      (select count(*)::int from mission_events where mission_id = $1) as mission_event_count,
+      (select count(*)::int from mission_decision_evidence_links where mission_id = $1) as decision_link_count,
+      (select count(*)::int from mission_telemetry where mission_id = $1) as telemetry_count,
+      (select count(*)::int from post_operation_evidence_snapshots where mission_id = $1) as post_operation_snapshot_count
+    `,
+    [missionId],
+  );
+
+  return result.rows[0] as {
+    risk_input_count: number;
+    airspace_input_count: number;
+    planning_handoff_count: number;
+    mission_event_count: number;
+    decision_link_count: number;
+    telemetry_count: number;
+    post_operation_snapshot_count: number;
   };
 };
 
@@ -1473,6 +1541,282 @@ describe("mission planning drafts", () => {
   it("returns 404 for missing dispatch workspace missions", async () => {
     const response = await request(app).get(
       `/missions/${randomUUID()}/dispatch-workspace`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "mission_not_found",
+      },
+    });
+  });
+
+  it("returns a minimal operations timeline with explicit missing phases", async () => {
+    const createResponse = await request(app).post("/mission-plans/drafts").send({});
+
+    expect(createResponse.status).toBe(201);
+    const missionId = createResponse.body.draft.missionId as string;
+
+    const timelineResponse = await request(app).get(
+      `/missions/${missionId}/operations-timeline`,
+    );
+
+    expect(timelineResponse.status).toBe(200);
+    expect(timelineResponse.body.timeline).toMatchObject({
+      mission: {
+        id: missionId,
+        status: "draft",
+      },
+      items: [],
+      phases: [
+        expect.objectContaining({
+          phase: "planning",
+          status: "missing",
+        }),
+        expect.objectContaining({
+          phase: "approval",
+          status: "missing",
+        }),
+        expect.objectContaining({
+          phase: "dispatch",
+          status: "missing",
+        }),
+        expect.objectContaining({
+          phase: "flight",
+          status: "missing",
+        }),
+        expect.objectContaining({
+          phase: "post_operation",
+          status: "missing",
+        }),
+      ],
+    });
+  });
+
+  it("returns a populated operations timeline across planning, approval, dispatch, flight, and post-operation", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-ops-timeline",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+    const missionId = createResponse.body.draft.missionId as string;
+
+    const handoffResponse = await request(app)
+      .post(`/mission-plans/drafts/${missionId}/approval-handoff`)
+      .send({
+        createdBy: "planning lead",
+      });
+    expect(handoffResponse.status).toBe(201);
+
+    expect(
+      (
+        await request(app).post(`/missions/${missionId}/submit`).send({
+          userId: "operator-1",
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (
+        await request(app).post(`/missions/${missionId}/approve`).send({
+          reviewerId: "approver-1",
+          decisionEvidenceLinkId:
+            handoffResponse.body.handoff.approvalEvidenceLink.id,
+        })
+      ).status,
+    ).toBe(204);
+
+    const dispatchLink = await createDispatchEvidenceLink(missionId);
+
+    expect(
+      (
+        await request(app).post(`/missions/${missionId}/launch`).send({
+          operatorId: "operator-1",
+          vehicleId: "vehicle-1",
+          lat: 51.5074,
+          lng: -0.1278,
+          decisionEvidenceLinkId: dispatchLink.id,
+        })
+      ).status,
+    ).toBe(204);
+
+    await recordTelemetry(missionId);
+
+    expect(
+      (
+        await request(app).post(`/missions/${missionId}/complete`).send({
+          operatorId: "operator-1",
+        })
+      ).status,
+    ).toBe(204);
+
+    const postOperationSnapshot = await createPostOperationEvidenceSnapshot(
+      missionId,
+    );
+    const before = await countOperationsTimelineRows(missionId);
+
+    const timelineResponse = await request(app).get(
+      `/missions/${missionId}/operations-timeline`,
+    );
+
+    expect(timelineResponse.status).toBe(200);
+    expect(timelineResponse.body.timeline.mission).toMatchObject({
+      id: missionId,
+      missionPlanId: "plan-ops-timeline",
+      status: "completed",
+    });
+    expect(timelineResponse.body.timeline.phases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ phase: "planning", status: "present" }),
+        expect.objectContaining({ phase: "approval", status: "present" }),
+        expect.objectContaining({ phase: "dispatch", status: "present" }),
+        expect.objectContaining({ phase: "flight", status: "present" }),
+        expect.objectContaining({ phase: "post_operation", status: "present" }),
+      ]),
+    );
+    expect(timelineResponse.body.timeline.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: "planning",
+          type: "planning_risk_input",
+        }),
+        expect.objectContaining({
+          phase: "planning",
+          type: "planning_airspace_input",
+        }),
+        expect.objectContaining({
+          phase: "planning",
+          type: "planning_approval_handoff",
+        }),
+        expect.objectContaining({
+          phase: "approval",
+          type: "decision_evidence_link",
+          details: expect.objectContaining({
+            decisionType: "approval",
+          }),
+        }),
+        expect.objectContaining({
+          phase: "approval",
+          type: "mission_event",
+          details: expect.objectContaining({
+            eventType: "mission.approved",
+          }),
+        }),
+        expect.objectContaining({
+          phase: "dispatch",
+          type: "decision_evidence_link",
+          details: expect.objectContaining({
+            decisionType: "dispatch",
+          }),
+        }),
+        expect.objectContaining({
+          phase: "dispatch",
+          type: "mission_event",
+          details: expect.objectContaining({
+            eventType: "mission.launched",
+          }),
+        }),
+        expect.objectContaining({
+          phase: "flight",
+          type: "telemetry_summary",
+          details: expect.objectContaining({
+            recordCount: 2,
+          }),
+        }),
+        expect.objectContaining({
+          phase: "post_operation",
+          type: "mission_event",
+          details: expect.objectContaining({
+            eventType: "mission.completed",
+          }),
+        }),
+        expect.objectContaining({
+          phase: "post_operation",
+          type: "post_operation_snapshot",
+          details: expect.objectContaining({
+            id: postOperationSnapshot.id,
+          }),
+        }),
+      ]),
+    );
+
+    const occurredAtValues = timelineResponse.body.timeline.items.map(
+      (item: { occurredAt: string }) => item.occurredAt,
+    );
+    expect([...occurredAtValues].sort()).toEqual(occurredAtValues);
+    expect(await countOperationsTimelineRows(missionId)).toEqual(before);
+  });
+
+  it("keeps operations timeline records isolated by mission", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+
+    const firstMissionResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "ops-iso-1",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+    const secondMissionResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "ops-iso-2",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(firstMissionResponse.status).toBe(201);
+    expect(secondMissionResponse.status).toBe(201);
+
+    const secondMissionId = secondMissionResponse.body.draft.missionId as string;
+    const handoffResponse = await request(app)
+      .post(`/mission-plans/drafts/${secondMissionId}/approval-handoff`)
+      .send({
+        createdBy: "planning lead",
+      });
+
+    expect(handoffResponse.status).toBe(201);
+
+    const firstTimelineResponse = await request(app).get(
+      `/missions/${firstMissionResponse.body.draft.missionId}/operations-timeline`,
+    );
+
+    expect(firstTimelineResponse.status).toBe(200);
+    expect(firstTimelineResponse.body.timeline.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "planning_risk_input",
+        }),
+        expect.objectContaining({
+          type: "planning_airspace_input",
+        }),
+      ]),
+    );
+    expect(firstTimelineResponse.body.timeline.items).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "planning_approval_handoff",
+          details: expect.objectContaining({
+            missionDecisionEvidenceLinkId:
+              handoffResponse.body.handoff.approvalEvidenceLink.id,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("returns 404 for missing operations timeline missions", async () => {
+    const response = await request(app).get(
+      `/missions/${randomUUID()}/operations-timeline`,
     );
 
     expect(response.status).toBe(404);

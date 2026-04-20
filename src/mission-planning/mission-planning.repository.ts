@@ -33,6 +33,31 @@ interface MissionPlanningApprovalHandoffTraceRow extends QueryResultRow {
   created_at: string;
 }
 
+interface MissionPlanningRiskInputTimelineRow extends QueryResultRow {
+  id: string;
+  created_at: string;
+  operating_category: string;
+  mission_complexity: string;
+  population_exposure: string;
+  airspace_complexity: string;
+  weather_risk: string;
+  payload_risk: string;
+  mitigation_summary: string | null;
+}
+
+interface MissionPlanningAirspaceInputTimelineRow extends QueryResultRow {
+  id: string;
+  created_at: string;
+  airspace_class: string;
+  max_altitude_ft: number;
+  restriction_status: string;
+  permission_status: string;
+  controlled_airspace: boolean;
+  nearby_aerodrome: boolean;
+  evidence_ref: string | null;
+  notes: string | null;
+}
+
 export class MissionPlanningRepository {
   async platformExists(tx: PoolClient, platformId: string): Promise<boolean> {
     const result = await tx.query(
@@ -193,6 +218,83 @@ export class MissionPlanningRepository {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  async listMissionRiskInputTimelineRows(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<MissionPlanningRiskInputTimelineRow[]> {
+    const result = await tx.query<MissionPlanningRiskInputTimelineRow>(
+      `
+      select
+        id,
+        created_at,
+        operating_category,
+        mission_complexity,
+        population_exposure,
+        airspace_complexity,
+        weather_risk,
+        payload_risk,
+        mitigation_summary
+      from mission_risk_inputs
+      where mission_id = $1
+      order by created_at asc, id asc
+      `,
+      [missionId],
+    );
+
+    return result.rows;
+  }
+
+  async listAirspaceInputTimelineRows(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<MissionPlanningAirspaceInputTimelineRow[]> {
+    const result = await tx.query<MissionPlanningAirspaceInputTimelineRow>(
+      `
+      select
+        id,
+        created_at,
+        airspace_class,
+        max_altitude_ft,
+        restriction_status,
+        permission_status,
+        controlled_airspace,
+        nearby_aerodrome,
+        evidence_ref,
+        notes
+      from airspace_compliance_inputs
+      where mission_id = $1
+      order by created_at asc, id asc
+      `,
+      [missionId],
+    );
+
+    return result.rows;
+  }
+
+  async listApprovalHandoffTraces(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<MissionPlanningApprovalHandoffTraceRow[]> {
+    const result = await tx.query<MissionPlanningApprovalHandoffTraceRow>(
+      `
+      select
+        id,
+        mission_id,
+        audit_evidence_snapshot_id,
+        mission_decision_evidence_link_id,
+        planning_review,
+        created_by,
+        created_at
+      from mission_planning_approval_handoffs
+      where mission_id = $1
+      order by created_at asc, id asc
+      `,
+      [missionId],
+    );
+
+    return result.rows;
   }
 
   async insertApprovalHandoffTrace(

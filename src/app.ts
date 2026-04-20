@@ -167,6 +167,7 @@ const missionPlanningService = new MissionPlanningService(
   airspaceComplianceRepository,
   auditEvidenceService,
   missionService,
+  missionTelemetryRepo,
 );
 const missionController = new MissionController(
   missionService,
