@@ -115,6 +115,23 @@ export interface MissionPlanningWorkspaceDispatchStatus {
   blockingReasons: string[];
 }
 
+export interface MissionDispatchWorkspaceApprovalStatus {
+  currentStatus: string;
+  approvedForDispatch: boolean;
+  handoffCreated: boolean;
+  latestApprovalHandoff: MissionPlanningApprovalHandoffTrace | null;
+  latestApprovalEvidenceLink: MissionDecisionEvidenceLink | null;
+  blockingReasons: string[];
+}
+
+export interface MissionDispatchWorkspaceDispatchStatus {
+  ready: boolean;
+  latestDispatchEvidenceLink: MissionDecisionEvidenceLink | null;
+  launchPreflight: MissionPlanningWorkspaceNextAction;
+  blockingReasons: string[];
+  missingRequirements: string[];
+}
+
 export interface MissionPlanningWorkspaceNextAction {
   action: MissionLifecycleAction;
   currentStatus: string;
@@ -154,6 +171,27 @@ export interface MissionPlanningWorkspace {
   approval: MissionPlanningWorkspaceApprovalStatus;
   dispatch: MissionPlanningWorkspaceDispatchStatus;
   missingRequirements: string[];
+  blockingReasons: string[];
+  nextAllowedActions: MissionPlanningWorkspaceNextAction[];
+}
+
+export interface MissionDispatchWorkspace {
+  mission: {
+    id: string;
+    missionPlanId: string | null;
+    status: string;
+    platformId: string | null;
+    pilotId: string | null;
+    lastEventSequenceNo: number;
+  };
+  platform: MissionPlanningWorkspacePlatformStatus;
+  pilot: MissionPlanningWorkspacePilotStatus;
+  missionRisk: MissionRiskAssessment | null;
+  airspaceCompliance: AirspaceComplianceAssessment | null;
+  readiness: MissionReadinessCheck;
+  evidence: MissionPlanningWorkspaceEvidenceStatus;
+  approval: MissionDispatchWorkspaceApprovalStatus;
+  dispatch: MissionDispatchWorkspaceDispatchStatus;
   blockingReasons: string[];
   nextAllowedActions: MissionPlanningWorkspaceNextAction[];
 }

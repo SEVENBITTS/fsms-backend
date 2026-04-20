@@ -16,6 +16,7 @@ import { MissionPlanningRepository } from "./mission-planning.repository";
 import type {
   CreateMissionPlanningApprovalHandoffInput,
   CreateMissionPlanningDraftInput,
+  MissionDispatchWorkspace,
   MissionPlanningApprovalHandoff,
   MissionPlanningApprovalHandoffTrace,
   MissionPlanningDraft,
@@ -30,6 +31,39 @@ import {
   validateCreateMissionPlanningDraftInput,
   validateUpdateMissionPlanningDraftInput,
 } from "./mission-planning.validators";
+
+type MissionWorkspaceContext = {
+  mission: {
+    id: string;
+    status: string;
+    mission_plan_id: string | null;
+    platform_id: string | null;
+    pilot_id: string | null;
+    last_event_sequence_no: number;
+    risk_input_present: boolean;
+    airspace_input_present: boolean;
+  };
+  latestApprovalHandoff: MissionPlanningApprovalHandoffTrace | null;
+  readiness: Awaited<ReturnType<MissionService["checkMissionReadiness"]>>;
+  readinessSnapshots: Awaited<
+    ReturnType<AuditEvidenceService["listMissionReadinessSnapshots"]>
+  >;
+  decisionEvidenceLinks: Awaited<
+    ReturnType<AuditEvidenceService["listMissionDecisionEvidenceLinks"]>
+  >;
+  nextAllowedActions: Awaited<
+    ReturnType<MissionService["checkMissionTransition"]>
+  >[];
+  placeholders: {
+    platformAssigned: boolean;
+    pilotAssigned: boolean;
+    riskInputPresent: boolean;
+    airspaceInputPresent: boolean;
+  };
+  checklist: MissionPlanningChecklistItem[];
+  missingRequirements: string[];
+  readinessBlockingReasons: string[];
+};
 
 export class MissionPlanningService {
   private static readonly LIFECYCLE_ACTIONS = [
@@ -252,6 +286,274 @@ export class MissionPlanningService {
   }
 
   async getWorkspace(missionId: string): Promise<MissionPlanningWorkspace> {
+    const context = await this.getMissionWorkspaceContext(missionId);
+    const {
+      mission,
+      latestApprovalHandoff,
+      readiness,
+      readinessSnapshots,
+      decisionEvidenceLinks,
+      nextAllowedActions,
+      placeholders,
+      checklist,
+      missingRequirements,
+      readinessBlockingReasons,
+    } = context;
+    const latestApprovalEvidenceLink =
+      decisionEvidenceLinks.find((link) => link.decisionType === "approval") ??
+      null;
+    const latestDispatchEvidenceLink =
+      decisionEvidenceLinks.find((link) => link.decisionType === "dispatch") ??
+      null;
+    const approvalBlockingReasons = Array.from(
+      new Set([...missingRequirements, ...readinessBlockingReasons]),
+    );
+    const launchTransition = nextAllowedActions.find(
+      (action) => action.action === "launch",
+    );
+    const dispatchBlockingReasons = Array.from(
+      new Set([
+        ...(launchTransition?.allowed === false && launchTransition.error
+          ? [launchTransition.error.message]
+          : []),
+        ...(readiness.gate.blocksDispatch || readiness.gate.requiresReview
+          ? readinessBlockingReasons
+          : []),
+      ]),
+    );
+
+    return {
+      mission: {
+        id: mission.id,
+        missionPlanId: mission.mission_plan_id,
+        status: mission.status,
+        platformId: mission.platform_id,
+        pilotId: mission.pilot_id,
+        lastEventSequenceNo: Number(mission.last_event_sequence_no),
+      },
+      planning: {
+        status: mission.status,
+        missionPlanId: mission.mission_plan_id,
+        platformId: mission.platform_id,
+        pilotId: mission.pilot_id,
+        placeholders,
+        checklist,
+        readyForApproval: approvalBlockingReasons.length === 0,
+        blockingReasons: approvalBlockingReasons,
+      },
+      platform: {
+        assignedPlatformId: mission.platform_id,
+        state: this.getLinkedEntityState(
+          mission.platform_id,
+          readiness.platformReadiness !== null,
+        ),
+        summary: readiness.platformReadiness?.maintenanceStatus.platform ?? null,
+      },
+      pilot: {
+        assignedPilotId: mission.pilot_id,
+        state: this.getLinkedEntityState(
+          mission.pilot_id,
+          readiness.pilotReadiness !== null,
+        ),
+        summary: readiness.pilotReadiness?.readinessStatus.pilot ?? null,
+      },
+      missionRisk: readiness.missionRisk,
+      airspaceCompliance: readiness.airspaceCompliance,
+      readiness,
+      evidence: {
+        readinessSnapshotCount: readinessSnapshots.length,
+        latestReadinessSnapshot: readinessSnapshots[0] ?? null,
+        approvalEvidenceLinkCount: decisionEvidenceLinks.filter(
+          (link) => link.decisionType === "approval",
+        ).length,
+        latestApprovalEvidenceLink,
+        dispatchEvidenceLinkCount: decisionEvidenceLinks.filter(
+          (link) => link.decisionType === "dispatch",
+        ).length,
+        latestDispatchEvidenceLink,
+      },
+      approval: {
+        ready: approvalBlockingReasons.length === 0,
+        handoffCreated: latestApprovalHandoff !== null,
+        latestApprovalHandoff,
+        blockingReasons: approvalBlockingReasons,
+      },
+      dispatch: {
+        ready: dispatchBlockingReasons.length === 0,
+        blockingReasons: dispatchBlockingReasons,
+      },
+      missingRequirements,
+      blockingReasons: approvalBlockingReasons,
+      nextAllowedActions: nextAllowedActions.map(
+        (action): MissionPlanningWorkspaceNextAction => ({
+          action: action.action,
+          currentStatus: action.currentStatus,
+          targetStatus: action.targetStatus,
+          allowed: action.allowed,
+          error: action.error,
+        }),
+      ),
+    };
+  }
+
+  async getDispatchWorkspace(missionId: string): Promise<MissionDispatchWorkspace> {
+    const context = await this.getMissionWorkspaceContext(missionId);
+    const {
+      mission,
+      latestApprovalHandoff,
+      readiness,
+      readinessSnapshots,
+      decisionEvidenceLinks,
+      nextAllowedActions,
+      readinessBlockingReasons,
+    } = context;
+    const latestApprovalEvidenceLink =
+      decisionEvidenceLinks.find((link) => link.decisionType === "approval") ??
+      null;
+    const latestDispatchEvidenceLink =
+      decisionEvidenceLinks.find((link) => link.decisionType === "dispatch") ??
+      null;
+    const launchTransition = nextAllowedActions.find(
+      (action) => action.action === "launch",
+    );
+
+    if (!launchTransition) {
+      throw new Error("Launch transition preflight was not produced");
+    }
+
+    const dispatchMissingRequirements: string[] = [];
+
+    if (!latestApprovalHandoff) {
+      dispatchMissingRequirements.push(
+        "Create planning approval handoff before dispatch",
+      );
+    }
+
+    if (!latestApprovalEvidenceLink) {
+      dispatchMissingRequirements.push(
+        "Link approval evidence before dispatch",
+      );
+    }
+
+    if (!latestDispatchEvidenceLink) {
+      dispatchMissingRequirements.push(
+        "Create linked dispatch evidence before launch",
+      );
+    }
+
+    const approvalBlockingReasons = Array.from(
+      new Set([
+        ...(mission.status === "approved" ||
+        mission.status === "active" ||
+        mission.status === "completed"
+          ? []
+          : ["Mission must be approved before launch can proceed"]),
+        ...(latestApprovalHandoff
+          ? []
+          : ["Planning approval handoff is not recorded for this mission"]),
+        ...(latestApprovalEvidenceLink
+          ? []
+          : ["Approval evidence link is not recorded for this mission"]),
+      ]),
+    );
+    const dispatchBlockingReasons = Array.from(
+      new Set([
+        ...(launchTransition.allowed || !launchTransition.error
+          ? []
+          : [launchTransition.error.message]),
+        ...approvalBlockingReasons,
+        ...dispatchMissingRequirements,
+        ...(readiness.gate.blocksDispatch || readiness.gate.requiresReview
+          ? readinessBlockingReasons
+          : []),
+      ]),
+    );
+
+    return {
+      mission: {
+        id: mission.id,
+        missionPlanId: mission.mission_plan_id,
+        status: mission.status,
+        platformId: mission.platform_id,
+        pilotId: mission.pilot_id,
+        lastEventSequenceNo: Number(mission.last_event_sequence_no),
+      },
+      platform: {
+        assignedPlatformId: mission.platform_id,
+        state: this.getLinkedEntityState(
+          mission.platform_id,
+          readiness.platformReadiness !== null,
+        ),
+        summary: readiness.platformReadiness?.maintenanceStatus.platform ?? null,
+      },
+      pilot: {
+        assignedPilotId: mission.pilot_id,
+        state: this.getLinkedEntityState(
+          mission.pilot_id,
+          readiness.pilotReadiness !== null,
+        ),
+        summary: readiness.pilotReadiness?.readinessStatus.pilot ?? null,
+      },
+      missionRisk: readiness.missionRisk,
+      airspaceCompliance: readiness.airspaceCompliance,
+      readiness,
+      evidence: {
+        readinessSnapshotCount: readinessSnapshots.length,
+        latestReadinessSnapshot: readinessSnapshots[0] ?? null,
+        approvalEvidenceLinkCount: decisionEvidenceLinks.filter(
+          (link) => link.decisionType === "approval",
+        ).length,
+        latestApprovalEvidenceLink,
+        dispatchEvidenceLinkCount: decisionEvidenceLinks.filter(
+          (link) => link.decisionType === "dispatch",
+        ).length,
+        latestDispatchEvidenceLink,
+      },
+      approval: {
+        currentStatus: mission.status,
+        approvedForDispatch:
+          mission.status === "approved" ||
+          mission.status === "active" ||
+          mission.status === "completed",
+        handoffCreated: latestApprovalHandoff !== null,
+        latestApprovalHandoff,
+        latestApprovalEvidenceLink,
+        blockingReasons: approvalBlockingReasons,
+      },
+      dispatch: {
+        ready: dispatchBlockingReasons.length === 0,
+        latestDispatchEvidenceLink,
+        launchPreflight: {
+          action: launchTransition.action,
+          currentStatus: launchTransition.currentStatus,
+          targetStatus: launchTransition.targetStatus,
+          allowed: launchTransition.allowed,
+          error: launchTransition.error,
+        },
+        blockingReasons: dispatchBlockingReasons,
+        missingRequirements: dispatchMissingRequirements,
+      },
+      blockingReasons: dispatchBlockingReasons,
+      nextAllowedActions: nextAllowedActions
+        .filter(
+          (action) =>
+            action.action === "launch" ||
+            action.action === "complete" ||
+            action.action === "abort",
+        )
+        .map((action): MissionPlanningWorkspaceNextAction => ({
+          action: action.action,
+          currentStatus: action.currentStatus,
+          targetStatus: action.targetStatus,
+          allowed: action.allowed,
+          error: action.error,
+      })),
+    };
+  }
+
+  private async getMissionWorkspaceContext(
+    missionId: string,
+  ): Promise<MissionWorkspaceContext> {
     const client = await this.pool.connect();
 
     try {
@@ -269,7 +571,6 @@ export class MissionPlanningService {
           client,
           missionId,
         );
-
       const [
         readiness,
         readinessSnapshots,
@@ -285,7 +586,6 @@ export class MissionPlanningService {
           ),
         ),
       ]);
-
       const placeholders = {
         platformAssigned: mission.platform_id !== null,
         pilotAssigned: mission.pilot_id !== null,
@@ -299,104 +599,20 @@ export class MissionPlanningService {
       const readinessBlockingReasons = readiness.reasons
         .filter((reason) => reason.severity !== "pass")
         .map((reason) => reason.message);
-      const approvalBlockingReasons = Array.from(
-        new Set([...missingRequirements, ...readinessBlockingReasons]),
-      );
-      const launchTransition = nextAllowedActions.find(
-        (action) => action.action === "launch",
-      );
-      const dispatchBlockingReasons = Array.from(
-        new Set([
-          ...(launchTransition?.allowed === false && launchTransition.error
-            ? [launchTransition.error.message]
-            : []),
-          ...(
-            readiness.gate.blocksDispatch || readiness.gate.requiresReview
-              ? readinessBlockingReasons
-              : []
-          ),
-        ]),
-      );
 
       return {
-        mission: {
-          id: mission.id,
-          missionPlanId: mission.mission_plan_id,
-          status: mission.status,
-          platformId: mission.platform_id,
-          pilotId: mission.pilot_id,
-          lastEventSequenceNo: Number(mission.last_event_sequence_no),
-        },
-        planning: {
-          status: mission.status,
-          missionPlanId: mission.mission_plan_id,
-          platformId: mission.platform_id,
-          pilotId: mission.pilot_id,
-          placeholders,
-          checklist,
-          readyForApproval: approvalBlockingReasons.length === 0,
-          blockingReasons: approvalBlockingReasons,
-        },
-        platform: {
-          assignedPlatformId: mission.platform_id,
-          state: this.getLinkedEntityState(
-            mission.platform_id,
-            readiness.platformReadiness !== null,
-          ),
-          summary: readiness.platformReadiness?.maintenanceStatus.platform ?? null,
-        },
-        pilot: {
-          assignedPilotId: mission.pilot_id,
-          state: this.getLinkedEntityState(
-            mission.pilot_id,
-            readiness.pilotReadiness !== null,
-          ),
-          summary: readiness.pilotReadiness?.readinessStatus.pilot ?? null,
-        },
-        missionRisk: readiness.missionRisk,
-        airspaceCompliance: readiness.airspaceCompliance,
+        mission,
+        latestApprovalHandoff: latestApprovalHandoffRow
+          ? this.toApprovalHandoffTrace(latestApprovalHandoffRow)
+          : null,
         readiness,
-        evidence: {
-          readinessSnapshotCount: readinessSnapshots.length,
-          latestReadinessSnapshot: readinessSnapshots[0] ?? null,
-          approvalEvidenceLinkCount: decisionEvidenceLinks.filter(
-            (link) => link.decisionType === "approval",
-          ).length,
-          latestApprovalEvidenceLink:
-            decisionEvidenceLinks.find(
-              (link) => link.decisionType === "approval",
-            ) ?? null,
-          dispatchEvidenceLinkCount: decisionEvidenceLinks.filter(
-            (link) => link.decisionType === "dispatch",
-          ).length,
-          latestDispatchEvidenceLink:
-            decisionEvidenceLinks.find(
-              (link) => link.decisionType === "dispatch",
-            ) ?? null,
-        },
-        approval: {
-          ready: approvalBlockingReasons.length === 0,
-          handoffCreated: latestApprovalHandoffRow !== null,
-          latestApprovalHandoff: latestApprovalHandoffRow
-            ? this.toApprovalHandoffTrace(latestApprovalHandoffRow)
-            : null,
-          blockingReasons: approvalBlockingReasons,
-        },
-        dispatch: {
-          ready: dispatchBlockingReasons.length === 0,
-          blockingReasons: dispatchBlockingReasons,
-        },
+        readinessSnapshots,
+        decisionEvidenceLinks,
+        nextAllowedActions,
+        placeholders,
+        checklist,
         missingRequirements,
-        blockingReasons: approvalBlockingReasons,
-        nextAllowedActions: nextAllowedActions.map(
-          (action): MissionPlanningWorkspaceNextAction => ({
-            action: action.action,
-            currentStatus: action.currentStatus,
-            targetStatus: action.targetStatus,
-            allowed: action.allowed,
-            error: action.error,
-          }),
-        ),
+        readinessBlockingReasons,
       };
     } finally {
       client.release();

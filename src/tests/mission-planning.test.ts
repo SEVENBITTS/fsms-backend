@@ -52,6 +52,27 @@ const createPilotReadinessEvidence = async (pilotId: string) => {
   return response.body.evidence as { id: string };
 };
 
+const createDispatchEvidenceLink = async (missionId: string) => {
+  const snapshotResponse = await request(app)
+    .post(`/missions/${missionId}/readiness/audit-snapshots`)
+    .send({
+      createdBy: "dispatcher-1",
+    });
+
+  expect(snapshotResponse.status).toBe(201);
+
+  const linkResponse = await request(app)
+    .post(`/missions/${missionId}/decision-evidence-links`)
+    .send({
+      snapshotId: snapshotResponse.body.snapshot.id,
+      decisionType: "dispatch",
+      createdBy: "dispatcher-1",
+    });
+
+  expect(linkResponse.status).toBe(201);
+  return linkResponse.body.link as { id: string };
+};
+
 const lowRiskInput = {
   operatingCategory: "open",
   missionComplexity: "low",
@@ -1138,6 +1159,320 @@ describe("mission planning drafts", () => {
   it("returns 404 for missing planning workspace missions", async () => {
     const response = await request(app).get(
       `/missions/${randomUUID()}/planning-workspace`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "mission_not_found",
+      },
+    });
+  });
+
+  it("returns a dispatch workspace for submitted missions with live launch blockers", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-dispatch-submitted",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+    const missionId = createResponse.body.draft.missionId as string;
+
+    const submitResponse = await request(app)
+      .post(`/missions/${missionId}/submit`)
+      .send({
+        userId: "operator-1",
+      });
+
+    expect(submitResponse.status).toBe(204);
+
+    const workspaceResponse = await request(app).get(
+      `/missions/${missionId}/dispatch-workspace`,
+    );
+
+    expect(workspaceResponse.status).toBe(200);
+    expect(workspaceResponse.body.workspace).toMatchObject({
+      mission: {
+        id: missionId,
+        status: "submitted",
+      },
+      approval: {
+        currentStatus: "submitted",
+        approvedForDispatch: false,
+        handoffCreated: false,
+        latestApprovalHandoff: null,
+        latestApprovalEvidenceLink: null,
+      },
+      dispatch: {
+        ready: false,
+        latestDispatchEvidenceLink: null,
+        launchPreflight: {
+          action: "launch",
+          currentStatus: "submitted",
+          targetStatus: "active",
+          allowed: false,
+          error: {
+            type: "invalid_state_transition",
+            message: "Mission cannot be launched from status submitted",
+          },
+        },
+        missingRequirements: expect.arrayContaining([
+          "Create planning approval handoff before dispatch",
+          "Link approval evidence before dispatch",
+          "Create linked dispatch evidence before launch",
+        ]),
+      },
+    });
+    expect(workspaceResponse.body.workspace.blockingReasons).toEqual(
+      expect.arrayContaining([
+        "Mission cannot be launched from status submitted",
+        "Mission must be approved before launch can proceed",
+      ]),
+    );
+    expect(workspaceResponse.body.workspace.nextAllowedActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "launch",
+          allowed: false,
+        }),
+        expect.objectContaining({
+          action: "abort",
+          allowed: true,
+        }),
+      ]),
+    );
+  });
+
+  it("returns a dispatch workspace for approved missions without dispatch evidence", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-dispatch-approved",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+    const missionId = createResponse.body.draft.missionId as string;
+
+    const handoffResponse = await request(app)
+      .post(`/mission-plans/drafts/${missionId}/approval-handoff`)
+      .send({
+        createdBy: "planning lead",
+      });
+
+    expect(handoffResponse.status).toBe(201);
+
+    const submitResponse = await request(app)
+      .post(`/missions/${missionId}/submit`)
+      .send({
+        userId: "operator-1",
+      });
+    expect(submitResponse.status).toBe(204);
+
+    const approveResponse = await request(app)
+      .post(`/missions/${missionId}/approve`)
+      .send({
+        reviewerId: "approver-1",
+        decisionEvidenceLinkId:
+          handoffResponse.body.handoff.approvalEvidenceLink.id,
+      });
+    expect(approveResponse.status).toBe(204);
+
+    const before = await countRows(missionId);
+    const workspaceResponse = await request(app).get(
+      `/missions/${missionId}/dispatch-workspace`,
+    );
+
+    expect(workspaceResponse.status).toBe(200);
+    expect(workspaceResponse.body.workspace).toMatchObject({
+      mission: {
+        id: missionId,
+        status: "approved",
+      },
+      approval: {
+        currentStatus: "approved",
+        approvedForDispatch: true,
+        handoffCreated: true,
+        latestApprovalHandoff: expect.objectContaining({
+          missionId,
+        }),
+        latestApprovalEvidenceLink: expect.objectContaining({
+          missionId,
+          decisionType: "approval",
+        }),
+        blockingReasons: [],
+      },
+      dispatch: {
+        ready: false,
+        latestDispatchEvidenceLink: null,
+        launchPreflight: {
+          action: "launch",
+          currentStatus: "approved",
+          targetStatus: "active",
+          allowed: true,
+          error: null,
+        },
+        missingRequirements: ["Create linked dispatch evidence before launch"],
+      },
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("returns a dispatch workspace for approved missions with dispatch evidence", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+
+    const createResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "plan-dispatch-ready",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(createResponse.status).toBe(201);
+    const missionId = createResponse.body.draft.missionId as string;
+
+    const handoffResponse = await request(app)
+      .post(`/mission-plans/drafts/${missionId}/approval-handoff`)
+      .send({
+        createdBy: "planning lead",
+      });
+    expect(handoffResponse.status).toBe(201);
+
+    expect(
+      (
+        await request(app).post(`/missions/${missionId}/submit`).send({
+          userId: "operator-1",
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (
+        await request(app).post(`/missions/${missionId}/approve`).send({
+          reviewerId: "approver-1",
+          decisionEvidenceLinkId:
+            handoffResponse.body.handoff.approvalEvidenceLink.id,
+        })
+      ).status,
+    ).toBe(204);
+
+    const dispatchLink = await createDispatchEvidenceLink(missionId);
+
+    const workspaceResponse = await request(app).get(
+      `/missions/${missionId}/dispatch-workspace`,
+    );
+
+    expect(workspaceResponse.status).toBe(200);
+    expect(workspaceResponse.body.workspace).toMatchObject({
+      mission: {
+        id: missionId,
+        status: "approved",
+      },
+      evidence: {
+        dispatchEvidenceLinkCount: 1,
+        latestDispatchEvidenceLink: expect.objectContaining({
+          id: dispatchLink.id,
+          missionId,
+          decisionType: "dispatch",
+        }),
+      },
+      dispatch: {
+        ready: true,
+        latestDispatchEvidenceLink: expect.objectContaining({
+          id: dispatchLink.id,
+        }),
+        launchPreflight: {
+          action: "launch",
+          currentStatus: "approved",
+          targetStatus: "active",
+          allowed: true,
+          error: null,
+        },
+        blockingReasons: [],
+        missingRequirements: [],
+      },
+    });
+  });
+
+  it("keeps dispatch workspace evidence isolated by mission", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+    await createPilotReadinessEvidence(pilot.id);
+
+    const firstMissionResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "dispatch-isolated-1",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+    const secondMissionResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "dispatch-isolated-2",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(firstMissionResponse.status).toBe(201);
+    expect(secondMissionResponse.status).toBe(201);
+
+    const secondMissionId = secondMissionResponse.body.draft.missionId as string;
+    const secondHandoffResponse = await request(app)
+      .post(`/mission-plans/drafts/${secondMissionId}/approval-handoff`)
+      .send({
+        createdBy: "planning lead",
+      });
+
+    expect(secondHandoffResponse.status).toBe(201);
+    expect(
+      (
+        await request(app).post(`/missions/${secondMissionId}/submit`).send({
+          userId: "operator-1",
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (
+        await request(app).post(`/missions/${secondMissionId}/approve`).send({
+          reviewerId: "approver-1",
+          decisionEvidenceLinkId:
+            secondHandoffResponse.body.handoff.approvalEvidenceLink.id,
+        })
+      ).status,
+    ).toBe(204);
+    await createDispatchEvidenceLink(secondMissionId);
+
+    const firstWorkspaceResponse = await request(app).get(
+      `/missions/${firstMissionResponse.body.draft.missionId}/dispatch-workspace`,
+    );
+
+    expect(firstWorkspaceResponse.status).toBe(200);
+    expect(firstWorkspaceResponse.body.workspace.evidence).toMatchObject({
+      dispatchEvidenceLinkCount: 0,
+      latestDispatchEvidenceLink: null,
+      approvalEvidenceLinkCount: 0,
+      latestApprovalEvidenceLink: null,
+    });
+  });
+
+  it("returns 404 for missing dispatch workspace missions", async () => {
+    const response = await request(app).get(
+      `/missions/${randomUUID()}/dispatch-workspace`,
     );
 
     expect(response.status).toBe(404);

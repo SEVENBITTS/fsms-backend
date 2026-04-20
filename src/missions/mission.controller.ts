@@ -34,6 +34,22 @@ export class MissionController {
     }
   };
 
+  getDispatchWorkspace = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireUuid(req.params.missionId, "missionId");
+      const workspace =
+        await this.missionPlanningService.getDispatchWorkspace(missionId);
+
+      res.status(200).json({ workspace });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getMissionEvents = async (
     req: Request,
     res: Response,

@@ -16,6 +16,10 @@ export function createMissionRouter(
     "/:missionId/planning-workspace",
     missionController.getPlanningWorkspace,
   );
+  router.get(
+    "/:missionId/dispatch-workspace",
+    missionController.getDispatchWorkspace,
+  );
   router.get("/:missionId/events", missionController.getMissionEvents);
   router.get("/:missionId/readiness", missionController.checkReadiness);
   router.get(

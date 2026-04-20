@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission dispatch workspace endpoint so operators can evaluate live go/no-go state, dispatch evidence, and launch blockers from a single mission view.",
+ "nextBuildStep": "Add mission operations timeline endpoint combining planning, approval, dispatch, telemetry, and post-operation evidence.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
