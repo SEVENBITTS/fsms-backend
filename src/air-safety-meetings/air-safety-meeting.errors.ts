@@ -11,3 +11,12 @@ export class AirSafetyMeetingNotFoundError extends Error {
     super(`Air safety meeting not found: ${meetingId}`);
   }
 }
+
+export class AirSafetyMeetingSignoffNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "AIR_SAFETY_MEETING_SIGNOFF_NOT_FOUND";
+
+  constructor(signoffId: string) {
+    super(`Air safety meeting sign-off not found: ${signoffId}`);
+  }
+}

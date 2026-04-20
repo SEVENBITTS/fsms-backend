@@ -18,6 +18,7 @@ const parseBinaryResponse = (
 };
 
 const clearTables = async () => {
+  await pool.query("delete from air_safety_meeting_signoffs");
   await pool.query("delete from safety_action_implementation_evidence");
   await pool.query("delete from safety_action_decisions");
   await pool.query("delete from safety_action_proposals");
@@ -49,6 +50,7 @@ const countRows = async () => {
     `
     select
       (select count(*)::int from air_safety_meetings) as meeting_count,
+      (select count(*)::int from air_safety_meeting_signoffs) as signoff_count,
       (select count(*)::int from safety_events) as safety_event_count,
       (select count(*)::int from safety_event_meeting_triggers) as trigger_count,
       (select count(*)::int from safety_event_agenda_links) as agenda_link_count,
@@ -60,6 +62,7 @@ const countRows = async () => {
 
   return result.rows[0] as {
     meeting_count: number;
+    signoff_count: number;
     safety_event_count: number;
     trigger_count: number;
     agenda_link_count: number;
@@ -244,6 +247,203 @@ describe("air safety meetings", () => {
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.meetings).toHaveLength(1);
     expect(listResponse.body.meetings[0]).toEqual(response.body.meeting);
+  });
+
+  it("creates and lists stored air safety meeting sign-offs without mutating linked records", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+
+    const createResponse = await request(app)
+      .post(`/air-safety-meetings/${meeting.id}/signoffs`)
+      .send({
+        accountableManagerName: "Alex Morgan",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-20T17:00:00.000Z",
+        signatureReference: "signature://accountable-manager/alex-morgan",
+        reviewNotes: "Meeting pack reviewed and approved.",
+        createdBy: "safety-admin",
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.signoff).toMatchObject({
+      airSafetyMeetingId: meeting.id,
+      accountableManagerName: "Alex Morgan",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-20T17:00:00.000Z",
+      signatureReference: "signature://accountable-manager/alex-morgan",
+      reviewNotes: "Meeting pack reviewed and approved.",
+      createdBy: "safety-admin",
+    });
+    expect(createResponse.body.signoff.id).toEqual(expect.any(String));
+    expect(createResponse.body.signoff.createdAt).toEqual(expect.any(String));
+
+    const listResponse = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/signoffs`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.signoffs).toHaveLength(1);
+    expect(listResponse.body.signoffs[0]).toEqual(createResponse.body.signoff);
+    expect(await countRows()).toEqual({
+      ...before,
+      signoff_count: before.signoff_count + 1,
+    });
+  });
+
+  it("allows multiple stored sign-offs on the same meeting ordered newest first", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+
+    const firstResponse = await request(app)
+      .post(`/air-safety-meetings/${meeting.id}/signoffs`)
+      .send({
+        accountableManagerName: "Alex Morgan",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "requires_follow_up",
+        signedAt: "2026-04-20T10:00:00.000Z",
+        reviewNotes: "Follow-up required before approval.",
+      });
+    const secondResponse = await request(app)
+      .post(`/air-safety-meetings/${meeting.id}/signoffs`)
+      .send({
+        accountableManagerName: "Alex Morgan",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-20T12:00:00.000Z",
+        signatureReference: "signature://accountable-manager/alex-morgan",
+        reviewNotes: "Follow-up completed and approved.",
+      });
+
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/signoffs`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.signoffs).toHaveLength(2);
+    expect(listResponse.body.signoffs[0].id).toBe(secondResponse.body.signoff.id);
+    expect(listResponse.body.signoffs[1].id).toBe(firstResponse.body.signoff.id);
+    expect(await countRows()).toEqual({
+      ...before,
+      signoff_count: before.signoff_count + 2,
+    });
+  });
+
+  it("does not leak stored air safety meeting sign-offs across meetings", async () => {
+    const firstMeeting = await createEventTriggeredMeeting();
+    const secondMeeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+
+    const secondResponse = await request(app)
+      .post(`/air-safety-meetings/${secondMeeting.id}/signoffs`)
+      .send({
+        accountableManagerName: "Alex Morgan",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-20T17:00:00.000Z",
+        reviewNotes: "Second meeting approved.",
+      });
+
+    expect(secondResponse.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/air-safety-meetings/${firstMeeting.id}/signoffs`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.signoffs).toEqual([]);
+    expect(await countRows()).toEqual({
+      ...before,
+      signoff_count: before.signoff_count + 1,
+    });
+  });
+
+  it("rejects invalid stored air safety meeting sign-off requests", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+    const endpoint = `/air-safety-meetings/${meeting.id}/signoffs`;
+
+    const missingNameResponse = await request(app).post(endpoint).send({
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-20T17:00:00.000Z",
+    });
+    const invalidDecisionResponse = await request(app).post(endpoint).send({
+      accountableManagerName: "Alex Morgan",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "maybe",
+      signedAt: "2026-04-20T17:00:00.000Z",
+    });
+    const invalidDateResponse = await request(app).post(endpoint).send({
+      accountableManagerName: "Alex Morgan",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "not-a-date",
+    });
+
+    expect(missingNameResponse.status).toBe(400);
+    expect(invalidDecisionResponse.status).toBe(400);
+    expect(invalidDateResponse.status).toBe(400);
+    expect(missingNameResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(invalidDecisionResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(invalidDateResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("returns 404 for unknown stored air safety meeting sign-off meetings", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+    const invalidCreateResponse = await request(app)
+      .post("/air-safety-meetings/not-a-uuid/signoffs")
+      .send({
+        accountableManagerName: "Alex Morgan",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-20T17:00:00.000Z",
+      });
+    const invalidListResponse = await request(app).get(
+      "/air-safety-meetings/not-a-uuid/signoffs",
+    );
+
+    const missingCreateResponse = await request(app)
+      .post(`/air-safety-meetings/${randomUUID()}/signoffs`)
+      .send({
+        accountableManagerName: "Alex Morgan",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-20T17:00:00.000Z",
+      });
+    const missingListResponse = await request(app).get(
+      `/air-safety-meetings/${randomUUID()}/signoffs`,
+    );
+
+    expect(invalidCreateResponse.status).toBe(400);
+    expect(invalidListResponse.status).toBe(400);
+    expect(missingCreateResponse.status).toBe(404);
+    expect(missingListResponse.status).toBe(404);
+    expect(invalidCreateResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(invalidListResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(missingCreateResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_not_found",
+    });
+    expect(missingListResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_not_found",
+    });
+    expect(await countRows()).toEqual(before);
   });
 
   it("reports overdue quarterly compliance when no completed quarterly meeting exists", async () => {

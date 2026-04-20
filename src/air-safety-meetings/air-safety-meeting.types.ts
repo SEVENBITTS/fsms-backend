@@ -16,6 +16,11 @@ export type QuarterlyComplianceStatus =
   | "due_soon"
   | "overdue";
 
+export type AirSafetyMeetingSignoffDecision =
+  | "approved"
+  | "rejected"
+  | "requires_follow_up";
+
 export interface CreateAirSafetyMeetingInput {
   meetingType?: AirSafetyMeetingType;
   scheduledPeriodStart?: string | null;
@@ -27,6 +32,16 @@ export interface CreateAirSafetyMeetingInput {
   attendees?: string[];
   agenda?: string[];
   minutes?: string | null;
+  createdBy?: string | null;
+}
+
+export interface CreateAirSafetyMeetingSignoffInput {
+  accountableManagerName?: string;
+  accountableManagerRole?: string;
+  reviewDecision?: AirSafetyMeetingSignoffDecision;
+  signedAt?: string;
+  signatureReference?: string | null;
+  reviewNotes?: string | null;
   createdBy?: string | null;
 }
 
@@ -45,6 +60,19 @@ export interface AirSafetyMeeting {
   createdBy: string | null;
   createdAt: string;
   closedAt: string | null;
+}
+
+export interface AirSafetyMeetingSignoff {
+  id: string;
+  airSafetyMeetingId: string;
+  accountableManagerName: string;
+  accountableManagerRole: string;
+  reviewDecision: AirSafetyMeetingSignoffDecision;
+  signedAt: string;
+  signatureReference: string | null;
+  reviewNotes: string | null;
+  createdBy: string | null;
+  createdAt: string;
 }
 
 export interface QuarterlyAirSafetyMeetingCompliance {

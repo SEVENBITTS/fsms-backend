@@ -34,6 +34,39 @@ export class AirSafetyMeetingController {
     }
   };
 
+  createAirSafetyMeetingSignoff = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const signoff =
+        await this.airSafetyMeetingService.createAirSafetyMeetingSignoff(
+          req.params.meetingId,
+          req.body,
+        );
+      res.status(201).json({ signoff });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listAirSafetyMeetingSignoffs = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const signoffs =
+        await this.airSafetyMeetingService.listAirSafetyMeetingSignoffs(
+          req.params.meetingId,
+        );
+      res.status(200).json({ signoffs });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getQuarterlyCompliance = async (
     req: Request,
     res: Response,

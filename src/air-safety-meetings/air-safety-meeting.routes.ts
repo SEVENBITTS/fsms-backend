@@ -9,6 +9,8 @@ export function createAirSafetyMeetingRouter(
   router.post("/", controller.createAirSafetyMeeting);
   router.get("/", controller.listAirSafetyMeetings);
   router.get("/quarterly-compliance", controller.getQuarterlyCompliance);
+  router.post("/:meetingId/signoffs", controller.createAirSafetyMeetingSignoff);
+  router.get("/:meetingId/signoffs", controller.listAirSafetyMeetingSignoffs);
   router.get("/:meetingId/export/pdf", controller.generateAirSafetyMeetingPackPdf);
   router.get("/:meetingId/export/render", controller.renderAirSafetyMeetingPack);
   router.get("/:meetingId/export", controller.exportAirSafetyMeetingPack);

@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
   AirSafetyMeeting,
+  AirSafetyMeetingSignoff,
+  AirSafetyMeetingSignoffDecision,
   AirSafetyMeetingPackExportAgendaItem,
   AirSafetyMeetingStatus,
   AirSafetyMeetingType,
@@ -35,6 +37,30 @@ interface CreateAirSafetyMeetingRow {
   attendees: string[];
   agenda: string[];
   minutes: string | null;
+  createdBy: string | null;
+}
+
+interface AirSafetyMeetingSignoffRow extends QueryResultRow {
+  id: string;
+  air_safety_meeting_id: string;
+  accountable_manager_name: string;
+  accountable_manager_role: string;
+  review_decision: AirSafetyMeetingSignoffDecision;
+  signed_at: Date;
+  signature_reference: string | null;
+  review_notes: string | null;
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface CreateAirSafetyMeetingSignoffRow {
+  airSafetyMeetingId: string;
+  accountableManagerName: string;
+  accountableManagerRole: string;
+  reviewDecision: AirSafetyMeetingSignoffDecision;
+  signedAt: string;
+  signatureReference: string | null;
+  reviewNotes: string | null;
   createdBy: string | null;
 }
 
@@ -72,6 +98,21 @@ const toAirSafetyMeeting = (row: AirSafetyMeetingRow): AirSafetyMeeting => ({
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
   closedAt: row.closed_at?.toISOString() ?? null,
+});
+
+const toAirSafetyMeetingSignoff = (
+  row: AirSafetyMeetingSignoffRow,
+): AirSafetyMeetingSignoff => ({
+  id: row.id,
+  airSafetyMeetingId: row.air_safety_meeting_id,
+  accountableManagerName: row.accountable_manager_name,
+  accountableManagerRole: row.accountable_manager_role,
+  reviewDecision: row.review_decision,
+  signedAt: row.signed_at.toISOString(),
+  signatureReference: row.signature_reference,
+  reviewNotes: row.review_notes,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
 });
 
 export class AirSafetyMeetingRepository {
@@ -142,6 +183,59 @@ export class AirSafetyMeetingRepository {
     );
 
     return result.rows.map(toAirSafetyMeeting);
+  }
+
+  async insertAirSafetyMeetingSignoff(
+    tx: PoolClient,
+    input: CreateAirSafetyMeetingSignoffRow,
+  ): Promise<AirSafetyMeetingSignoff> {
+    const result = await tx.query<AirSafetyMeetingSignoffRow>(
+      `
+      insert into air_safety_meeting_signoffs (
+        id,
+        air_safety_meeting_id,
+        accountable_manager_name,
+        accountable_manager_role,
+        review_decision,
+        signed_at,
+        signature_reference,
+        review_notes,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.airSafetyMeetingId,
+        input.accountableManagerName,
+        input.accountableManagerRole,
+        input.reviewDecision,
+        input.signedAt,
+        input.signatureReference,
+        input.reviewNotes,
+        input.createdBy,
+      ],
+    );
+
+    return toAirSafetyMeetingSignoff(result.rows[0]);
+  }
+
+  async listAirSafetyMeetingSignoffs(
+    tx: PoolClient,
+    meetingId: string,
+  ): Promise<AirSafetyMeetingSignoff[]> {
+    const result = await tx.query<AirSafetyMeetingSignoffRow>(
+      `
+      select *
+      from air_safety_meeting_signoffs
+      where air_safety_meeting_id = $1
+      order by signed_at desc, created_at desc, id desc
+      `,
+      [meetingId],
+    );
+
+    return result.rows.map(toAirSafetyMeetingSignoff);
   }
 
   async getAirSafetyMeetingById(

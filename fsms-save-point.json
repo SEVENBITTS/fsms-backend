@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add stored safety meeting sign-off records so accountable-manager meeting pack approvals can be captured and audited.",
+ "nextBuildStep": "Connect migration-backed safety meeting sign-off records into rendered and PDF meeting pack outputs so placeholders are replaced by audited approval data.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
