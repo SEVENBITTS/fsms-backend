@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
   AirSafetyMeeting,
+  AirSafetyMeetingApprovalRollupRecord,
   AirSafetyMeetingSignoff,
   AirSafetyMeetingSignoffDecision,
   AirSafetyMeetingPackExportAgendaItem,
@@ -68,6 +69,23 @@ interface AirSafetyMeetingPackExportAgendaItemRow extends QueryResultRow {
   agenda_item: AirSafetyMeetingPackExportAgendaItem;
 }
 
+interface AirSafetyMeetingApprovalRollupRow extends QueryResultRow {
+  meeting_id: string;
+  meeting_type: AirSafetyMeetingType;
+  meeting_status: AirSafetyMeetingStatus;
+  due_at: Date;
+  held_at: Date | null;
+  chairperson: string | null;
+  created_at: Date;
+  latest_signoff_approval_status: "unsigned" | AirSafetyMeetingSignoffDecision;
+  latest_signoff_id: string | null;
+  accountable_manager_name: string | null;
+  accountable_manager_role: string | null;
+  signed_at: Date | null;
+  signature_reference: string | null;
+  review_notes: string | null;
+}
+
 const toDateOnly = (value: Date | string | null): string | null => {
   if (!value) {
     return null;
@@ -113,6 +131,25 @@ const toAirSafetyMeetingSignoff = (
   reviewNotes: row.review_notes,
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
+});
+
+const toAirSafetyMeetingApprovalRollupRecord = (
+  row: AirSafetyMeetingApprovalRollupRow,
+): AirSafetyMeetingApprovalRollupRecord => ({
+  meetingId: row.meeting_id,
+  meetingType: row.meeting_type,
+  meetingStatus: row.meeting_status,
+  dueAt: row.due_at.toISOString(),
+  heldAt: row.held_at?.toISOString() ?? null,
+  chairperson: row.chairperson,
+  createdAt: row.created_at.toISOString(),
+  latestSignoffApprovalStatus: row.latest_signoff_approval_status,
+  latestSignoffId: row.latest_signoff_id,
+  accountableManagerName: row.accountable_manager_name,
+  accountableManagerRole: row.accountable_manager_role,
+  signedAt: row.signed_at?.toISOString() ?? null,
+  signatureReference: row.signature_reference,
+  reviewNotes: row.review_notes,
 });
 
 export class AirSafetyMeetingRepository {
@@ -183,6 +220,41 @@ export class AirSafetyMeetingRepository {
     );
 
     return result.rows.map(toAirSafetyMeeting);
+  }
+
+  async listAirSafetyMeetingApprovalRollup(
+    tx: PoolClient,
+  ): Promise<AirSafetyMeetingApprovalRollupRecord[]> {
+    const result = await tx.query<AirSafetyMeetingApprovalRollupRow>(
+      `
+      select
+        meetings.id as meeting_id,
+        meetings.meeting_type,
+        meetings.status as meeting_status,
+        meetings.due_at,
+        meetings.held_at,
+        meetings.chairperson,
+        meetings.created_at,
+        coalesce(signoffs.review_decision::text, 'unsigned') as latest_signoff_approval_status,
+        signoffs.id as latest_signoff_id,
+        signoffs.accountable_manager_name,
+        signoffs.accountable_manager_role,
+        signoffs.signed_at,
+        signoffs.signature_reference,
+        signoffs.review_notes
+      from air_safety_meetings meetings
+      left join lateral (
+        select *
+        from air_safety_meeting_signoffs
+        where air_safety_meeting_id = meetings.id
+        order by signed_at desc, created_at desc, id desc
+        limit 1
+      ) signoffs on true
+      order by meetings.due_at desc, meetings.created_at desc, meetings.id desc
+      `,
+    );
+
+    return result.rows.map(toAirSafetyMeetingApprovalRollupRecord);
   }
 
   async insertAirSafetyMeetingSignoff(

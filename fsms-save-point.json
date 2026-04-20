@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add governance-facing safety meeting approval rollup export so approved, rejected, follow-up, and unsigned meeting decisions can be reviewed across meetings.",
+ "nextBuildStep": "Add governance-facing safety meeting approval rendered report endpoint so cross-meeting approval states can be reviewed as an assurance summary.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

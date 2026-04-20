@@ -559,6 +559,179 @@ describe("air safety meetings", () => {
     });
   });
 
+  it("exports an empty safety meeting approval rollup without mutating source records", async () => {
+    const before = await countRows();
+
+    const response = await request(app).get(
+      "/air-safety-meetings/approval-rollup",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export).toMatchObject({
+      exportType: "air_safety_meeting_approval_rollup",
+      formatVersion: 1,
+      records: [],
+    });
+    expect(response.body.export.generatedAt).toEqual(expect.any(String));
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports governance approval rollup records for approved, rejected, follow-up, and unsigned meetings", async () => {
+    const approvedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "event_triggered_safety_review",
+      dueAt: "2026-04-24T10:00:00.000Z",
+      chairperson: "Safety Manager",
+      createdBy: "safety-admin",
+    });
+    const rejectedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "sop_breach_review",
+      dueAt: "2026-04-23T10:00:00.000Z",
+      chairperson: "Chief Pilot",
+      createdBy: "safety-admin",
+    });
+    const followUpMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "training_review",
+      dueAt: "2026-04-22T10:00:00.000Z",
+      chairperson: "Training Manager",
+      createdBy: "safety-admin",
+    });
+    const unsignedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "maintenance_safety_review",
+      dueAt: "2026-04-21T10:00:00.000Z",
+      chairperson: "Engineering Lead",
+      createdBy: "safety-admin",
+    });
+
+    expect(approvedMeeting.status).toBe(201);
+    expect(rejectedMeeting.status).toBe(201);
+    expect(followUpMeeting.status).toBe(201);
+    expect(unsignedMeeting.status).toBe(201);
+
+    const approvedSignoff = await createMeetingSignoff(approvedMeeting.body.meeting.id, {
+      accountableManagerName: "Alex Morgan",
+      reviewDecision: "approved",
+      signedAt: "2026-04-24T11:00:00.000Z",
+      reviewNotes: "Approved for governance closure.",
+    });
+    const rejectedSignoff = await createMeetingSignoff(rejectedMeeting.body.meeting.id, {
+      accountableManagerName: "Jordan Lee",
+      reviewDecision: "rejected",
+      signedAt: "2026-04-23T11:00:00.000Z",
+      signatureReference: null,
+      reviewNotes: "Rejected pending corrective action.",
+    });
+    const followUpSignoff = await createMeetingSignoff(followUpMeeting.body.meeting.id, {
+      accountableManagerName: "Taylor Shaw",
+      reviewDecision: "requires_follow_up",
+      signedAt: "2026-04-22T11:00:00.000Z",
+      reviewNotes: "Follow-up review required.",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get(
+      "/air-safety-meetings/approval-rollup",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.records).toEqual([
+      {
+        meetingId: approvedMeeting.body.meeting.id,
+        meetingType: "event_triggered_safety_review",
+        meetingStatus: "scheduled",
+        dueAt: "2026-04-24T10:00:00.000Z",
+        heldAt: null,
+        chairperson: "Safety Manager",
+        createdAt: approvedMeeting.body.meeting.createdAt,
+        latestSignoffApprovalStatus: "approved",
+        latestSignoffId: approvedSignoff.id,
+        accountableManagerName: "Alex Morgan",
+        accountableManagerRole: "Accountable Manager",
+        signedAt: "2026-04-24T11:00:00.000Z",
+        signatureReference: approvedSignoff.signatureReference,
+        reviewNotes: "Approved for governance closure.",
+      },
+      {
+        meetingId: rejectedMeeting.body.meeting.id,
+        meetingType: "sop_breach_review",
+        meetingStatus: "scheduled",
+        dueAt: "2026-04-23T10:00:00.000Z",
+        heldAt: null,
+        chairperson: "Chief Pilot",
+        createdAt: rejectedMeeting.body.meeting.createdAt,
+        latestSignoffApprovalStatus: "rejected",
+        latestSignoffId: rejectedSignoff.id,
+        accountableManagerName: "Jordan Lee",
+        accountableManagerRole: "Accountable Manager",
+        signedAt: "2026-04-23T11:00:00.000Z",
+        signatureReference: rejectedSignoff.signatureReference,
+        reviewNotes: "Rejected pending corrective action.",
+      },
+      {
+        meetingId: followUpMeeting.body.meeting.id,
+        meetingType: "training_review",
+        meetingStatus: "scheduled",
+        dueAt: "2026-04-22T10:00:00.000Z",
+        heldAt: null,
+        chairperson: "Training Manager",
+        createdAt: followUpMeeting.body.meeting.createdAt,
+        latestSignoffApprovalStatus: "requires_follow_up",
+        latestSignoffId: followUpSignoff.id,
+        accountableManagerName: "Taylor Shaw",
+        accountableManagerRole: "Accountable Manager",
+        signedAt: "2026-04-22T11:00:00.000Z",
+        signatureReference: followUpSignoff.signatureReference,
+        reviewNotes: "Follow-up review required.",
+      },
+      {
+        meetingId: unsignedMeeting.body.meeting.id,
+        meetingType: "maintenance_safety_review",
+        meetingStatus: "scheduled",
+        dueAt: "2026-04-21T10:00:00.000Z",
+        heldAt: null,
+        chairperson: "Engineering Lead",
+        createdAt: unsignedMeeting.body.meeting.createdAt,
+        latestSignoffApprovalStatus: "unsigned",
+        latestSignoffId: null,
+        accountableManagerName: null,
+        accountableManagerRole: null,
+        signedAt: null,
+        signatureReference: null,
+        reviewNotes: null,
+      },
+    ]);
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("uses the newest sign-off when multiple approvals exist on one meeting", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    await createMeetingSignoff(meeting.id, {
+      reviewDecision: "requires_follow_up",
+      signedAt: "2026-04-20T10:00:00.000Z",
+      reviewNotes: "Initial follow-up required.",
+    });
+    const latestSignoff = await createMeetingSignoff(meeting.id, {
+      reviewDecision: "approved",
+      signedAt: "2026-04-20T12:00:00.000Z",
+      reviewNotes: "Follow-up completed and approved.",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get(
+      "/air-safety-meetings/approval-rollup",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.records).toHaveLength(1);
+    expect(response.body.export.records[0]).toMatchObject({
+      meetingId: meeting.id,
+      latestSignoffApprovalStatus: "approved",
+      latestSignoffId: latestSignoff.id,
+      signedAt: latestSignoff.signedAt,
+      reviewNotes: "Follow-up completed and approved.",
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
   it("exports an empty safety meeting pack without mutating source records", async () => {
     const meeting = await createEventTriggeredMeeting();
     const before = await countRows();
