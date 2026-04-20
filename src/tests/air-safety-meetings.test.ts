@@ -574,7 +574,7 @@ describe("air safety meetings", () => {
       },
       report: {
         title: `Air safety meeting pack for meeting ${meeting.id}`,
-        sections: [
+        sections: expect.arrayContaining([
           expect.objectContaining({
             heading: "Meeting summary",
             fields: expect.arrayContaining([
@@ -589,6 +589,26 @@ describe("air safety meetings", () => {
               {
                 label: "Standing agenda",
                 value: "Review safety events; Review action closure",
+              },
+            ]),
+          }),
+          expect.objectContaining({
+            heading: "Accountable manager sign-off",
+            fields: expect.arrayContaining([
+              {
+                label: "Accountable manager name",
+                value: "Pending sign-off",
+              },
+              { label: "Role/title", value: "Pending sign-off" },
+              { label: "Signature", value: "Pending sign-off" },
+              { label: "Signed date/time", value: "Pending sign-off" },
+              {
+                label: "Review decision/status",
+                value: "Pending sign-off",
+              },
+              {
+                label: "Review notes/comments",
+                value: "Pending sign-off",
               },
             ]),
           }),
@@ -609,7 +629,7 @@ describe("air safety meetings", () => {
               },
             ],
           },
-        ],
+        ]),
       },
     });
     expect(response.body.report.generatedAt).toEqual(expect.any(String));
@@ -674,6 +694,36 @@ describe("air safety meetings", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Meeting summary",
+    );
+    expect(response.body.report.report.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          heading: "Accountable manager sign-off",
+          fields: expect.arrayContaining([
+            {
+              label: "Accountable manager name",
+              value: "Pending sign-off",
+            },
+            { label: "Role/title", value: "Pending sign-off" },
+            { label: "Signature", value: "Pending sign-off" },
+            { label: "Signed date/time", value: "Pending sign-off" },
+            {
+              label: "Review decision/status",
+              value: "Pending sign-off",
+            },
+            {
+              label: "Review notes/comments",
+              value: "Pending sign-off",
+            },
+          ]),
+        }),
+      ]),
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Review decision/status: Pending sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
       "Decision history: accepted | accountable-manager",
@@ -777,6 +827,21 @@ describe("air safety meetings", () => {
       `Air safety meeting pack for meeting ${meeting.id}`,
     );
     expect(response.body.toString("latin1")).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Accountable manager name:",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Pending sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Signature: Pending",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Review decision/status: Pending sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
       "Agenda link ID:",
     );
     expect(response.body.toString("latin1")).toContain(
@@ -809,10 +874,16 @@ describe("air safety meetings", () => {
       `Air safety meeting pack for meeting ${meeting.id}`,
     );
     expect(response.body.toString("latin1")).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Pending sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
       "Agenda-linked safety events",
     );
     expect(response.body.toString("latin1")).toContain(
-      "agenda-linked safety events recorded",
+      "Agenda items: No agenda-linked safety events",
     );
     expect(response.body.toString("latin1")).toContain(
       "No safety action proposals",

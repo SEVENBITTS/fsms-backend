@@ -220,6 +220,7 @@ export class AirSafetyMeetingService {
     meetingExport: AirSafetyMeetingPackExport,
   ): AirSafetyMeetingReportSection[] {
     const meeting = meetingExport.meeting;
+    const pendingSignoff = "Pending sign-off";
     const sections: AirSafetyMeetingReportSection[] = [
       {
         heading: "Meeting summary",
@@ -262,6 +263,35 @@ export class AirSafetyMeetingService {
                 : "No standing agenda recorded",
           },
           { label: "Minutes", value: meeting.minutes },
+        ],
+      },
+      {
+        heading: "Accountable manager sign-off",
+        fields: [
+          {
+            label: "Accountable manager name",
+            value: pendingSignoff,
+          },
+          {
+            label: "Role/title",
+            value: pendingSignoff,
+          },
+          {
+            label: "Signature",
+            value: pendingSignoff,
+          },
+          {
+            label: "Signed date/time",
+            value: pendingSignoff,
+          },
+          {
+            label: "Review decision/status",
+            value: pendingSignoff,
+          },
+          {
+            label: "Review notes/comments",
+            value: pendingSignoff,
+          },
         ],
       },
     ];
