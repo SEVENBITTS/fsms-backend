@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add safety meeting pack PDF generation endpoint so rendered meeting packs can be downloaded for formal review.",
+ "nextBuildStep": "Add accountable-manager signature block to safety meeting pack PDF reports so formal meeting reviews can be signed off.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
