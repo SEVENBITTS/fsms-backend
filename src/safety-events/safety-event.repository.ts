@@ -3,6 +3,8 @@ import type { PoolClient, QueryResultRow } from "pg";
 import type {
   SafetyActionDecision,
   SafetyActionDecisionType,
+  SafetyActionImplementationEvidence,
+  SafetyActionImplementationEvidenceCategory,
   SafetyActionProposal,
   SafetyActionProposalStatus,
   SafetyActionProposalType,
@@ -162,6 +164,38 @@ interface CreateSafetyActionDecisionRow {
   decisionNotes: string | null;
 }
 
+interface SafetyActionImplementationEvidenceRow extends QueryResultRow {
+  id: string;
+  safety_action_proposal_id: string;
+  safety_event_agenda_link_id: string;
+  safety_event_id: string;
+  safety_event_meeting_trigger_id: string;
+  air_safety_meeting_id: string;
+  evidence_category: SafetyActionImplementationEvidenceCategory;
+  implementation_summary: string;
+  evidence_reference: string | null;
+  completed_by: string | null;
+  completed_at: Date;
+  reviewed_by: string | null;
+  review_notes: string | null;
+  created_at: Date;
+}
+
+interface CreateSafetyActionImplementationEvidenceRow {
+  safetyActionProposalId: string;
+  safetyEventAgendaLinkId: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  evidenceCategory: SafetyActionImplementationEvidenceCategory;
+  implementationSummary: string;
+  evidenceReference: string | null;
+  completedBy: string | null;
+  completedAt: Date;
+  reviewedBy: string | null;
+  reviewNotes: string | null;
+}
+
 const toSafetyEvent = (row: SafetyEventRow): SafetyEvent => ({
   id: row.id,
   eventType: row.event_type,
@@ -248,6 +282,25 @@ const toSafetyActionDecision = (
   decidedBy: row.decided_by,
   decisionNotes: row.decision_notes,
   decidedAt: row.decided_at.toISOString(),
+  createdAt: row.created_at.toISOString(),
+});
+
+const toSafetyActionImplementationEvidence = (
+  row: SafetyActionImplementationEvidenceRow,
+): SafetyActionImplementationEvidence => ({
+  id: row.id,
+  safetyActionProposalId: row.safety_action_proposal_id,
+  safetyEventAgendaLinkId: row.safety_event_agenda_link_id,
+  safetyEventId: row.safety_event_id,
+  safetyEventMeetingTriggerId: row.safety_event_meeting_trigger_id,
+  airSafetyMeetingId: row.air_safety_meeting_id,
+  evidenceCategory: row.evidence_category,
+  implementationSummary: row.implementation_summary,
+  evidenceReference: row.evidence_reference,
+  completedBy: row.completed_by,
+  completedAt: row.completed_at.toISOString(),
+  reviewedBy: row.reviewed_by,
+  reviewNotes: row.review_notes,
   createdAt: row.created_at.toISOString(),
 });
 
@@ -616,6 +669,67 @@ export class SafetyEventRepository {
     );
 
     return result.rows.map(toSafetyActionDecision);
+  }
+
+  async insertSafetyActionImplementationEvidence(
+    tx: PoolClient,
+    input: CreateSafetyActionImplementationEvidenceRow,
+  ): Promise<SafetyActionImplementationEvidence> {
+    const result = await tx.query<SafetyActionImplementationEvidenceRow>(
+      `
+      insert into safety_action_implementation_evidence (
+        id,
+        safety_action_proposal_id,
+        safety_event_agenda_link_id,
+        safety_event_id,
+        safety_event_meeting_trigger_id,
+        air_safety_meeting_id,
+        evidence_category,
+        implementation_summary,
+        evidence_reference,
+        completed_by,
+        completed_at,
+        reviewed_by,
+        review_notes
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.safetyActionProposalId,
+        input.safetyEventAgendaLinkId,
+        input.safetyEventId,
+        input.safetyEventMeetingTriggerId,
+        input.airSafetyMeetingId,
+        input.evidenceCategory,
+        input.implementationSummary,
+        input.evidenceReference,
+        input.completedBy,
+        input.completedAt,
+        input.reviewedBy,
+        input.reviewNotes,
+      ],
+    );
+
+    return toSafetyActionImplementationEvidence(result.rows[0]);
+  }
+
+  async listSafetyActionImplementationEvidenceByProposal(
+    tx: PoolClient,
+    proposalId: string,
+  ): Promise<SafetyActionImplementationEvidence[]> {
+    const result = await tx.query<SafetyActionImplementationEvidenceRow>(
+      `
+      select *
+      from safety_action_implementation_evidence
+      where safety_action_proposal_id = $1
+      order by completed_at desc, created_at desc, id desc
+      `,
+      [proposalId],
+    );
+
+    return result.rows.map(toSafetyActionImplementationEvidence);
   }
 
   async referenceExists(

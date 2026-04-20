@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed safety action implementation evidence so completed SOP, training, and maintenance actions can store reviewable closure records.",
+ "nextBuildStep": "Add migration-backed safety action evidence export context so closure records can appear in safety meeting and audit reports.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -2,10 +2,12 @@ import { SafetyEventValidationError } from "./safety-event.errors";
 import type {
   AssessSafetyEventMeetingTriggerInput,
   CreateSafetyActionDecisionInput,
+  CreateSafetyActionImplementationEvidenceInput,
   CreateSafetyActionProposalInput,
   CreateSafetyEventAgendaLinkInput,
   CreateSafetyEventInput,
   SafetyActionDecisionType,
+  SafetyActionImplementationEvidenceCategory,
   SafetyActionProposalStatus,
   SafetyActionProposalType,
   SafetyEventSeverity,
@@ -59,6 +61,15 @@ const ACTION_DECISIONS = new Set<SafetyActionDecisionType>([
   "rejected",
   "completed",
 ]);
+
+const ACTION_IMPLEMENTATION_EVIDENCE_CATEGORIES =
+  new Set<SafetyActionImplementationEvidenceCategory>([
+    "sop_implementation",
+    "training_completion",
+    "maintenance_completion",
+    "accountable_manager_review",
+    "general_safety_action_closure",
+  ]);
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -341,5 +352,39 @@ export function validateCreateSafetyActionDecisionInput(
     decision,
     decidedBy: optionalTrimmed(input.decidedBy, "decidedBy"),
     decisionNotes: optionalTrimmed(input.decisionNotes, "decisionNotes"),
+  };
+}
+
+export function validateCreateSafetyActionImplementationEvidenceInput(
+  input: CreateSafetyActionImplementationEvidenceInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new SafetyEventValidationError("Request body must be an object");
+  }
+
+  const evidenceCategory = input.evidenceCategory;
+  if (
+    !evidenceCategory ||
+    !ACTION_IMPLEMENTATION_EVIDENCE_CATEGORIES.has(evidenceCategory)
+  ) {
+    throw new SafetyEventValidationError(
+      "evidenceCategory is required and supported",
+    );
+  }
+
+  return {
+    evidenceCategory,
+    implementationSummary: requiredTrimmed(
+      input.implementationSummary,
+      "implementationSummary",
+    ),
+    evidenceReference: optionalTrimmed(
+      input.evidenceReference,
+      "evidenceReference",
+    ),
+    completedBy: optionalTrimmed(input.completedBy, "completedBy"),
+    completedAt: requiredDate(input.completedAt, "completedAt"),
+    reviewedBy: optionalTrimmed(input.reviewedBy, "reviewedBy"),
+    reviewNotes: optionalTrimmed(input.reviewNotes, "reviewNotes"),
   };
 }

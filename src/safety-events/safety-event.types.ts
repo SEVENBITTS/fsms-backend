@@ -173,3 +173,37 @@ export interface SafetyActionDecision {
   decidedAt: string;
   createdAt: string;
 }
+
+export type SafetyActionImplementationEvidenceCategory =
+  | "sop_implementation"
+  | "training_completion"
+  | "maintenance_completion"
+  | "accountable_manager_review"
+  | "general_safety_action_closure";
+
+export interface CreateSafetyActionImplementationEvidenceInput {
+  evidenceCategory?: SafetyActionImplementationEvidenceCategory;
+  implementationSummary?: string;
+  evidenceReference?: string | null;
+  completedBy?: string | null;
+  completedAt?: string;
+  reviewedBy?: string | null;
+  reviewNotes?: string | null;
+}
+
+export interface SafetyActionImplementationEvidence {
+  id: string;
+  safetyActionProposalId: string;
+  safetyEventAgendaLinkId: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  evidenceCategory: SafetyActionImplementationEvidenceCategory;
+  implementationSummary: string;
+  evidenceReference: string | null;
+  completedBy: string | null;
+  completedAt: string;
+  reviewedBy: string | null;
+  reviewNotes: string | null;
+  createdAt: string;
+}
