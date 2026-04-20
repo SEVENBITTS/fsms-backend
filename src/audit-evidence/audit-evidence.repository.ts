@@ -10,6 +10,8 @@ import type {
   PostOperationAuditSignoff,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceSnapshot,
+  SafetyActionClosureDecisionExportContext,
+  SafetyActionClosureEvidenceExportContext,
 } from "./audit-evidence.types";
 
 interface AuditEvidenceSnapshotRow extends QueryResultRow {
@@ -126,6 +128,36 @@ interface AuditReportSmsControlMappingRow extends QueryResultRow {
   sms_elements: string[] | null;
 }
 
+interface SafetyActionClosureEvidenceExportRow extends QueryResultRow {
+  safety_event_id: string;
+  event_type: string;
+  event_severity: string;
+  event_status: string;
+  event_summary: string;
+  event_occurred_at: Date;
+  sop_reference: string | null;
+  safety_event_meeting_trigger_id: string;
+  air_safety_meeting_id: string;
+  safety_event_agenda_link_id: string;
+  agenda_item: string;
+  safety_action_proposal_id: string;
+  proposal_type: string;
+  proposal_status: string;
+  proposal_summary: string;
+  proposal_owner: string | null;
+  proposal_due_at: Date | null;
+  decisions: SafetyActionClosureDecisionExportContext[] | null;
+  implementation_evidence_id: string;
+  evidence_category: string;
+  implementation_summary: string;
+  evidence_reference: string | null;
+  completed_by: string | null;
+  completed_at: Date;
+  reviewed_by: string | null;
+  review_notes: string | null;
+  evidence_created_at: Date;
+}
+
 const toAuditEvidenceSnapshot = (
   row: AuditEvidenceSnapshotRow,
 ): AuditEvidenceSnapshot => ({
@@ -215,6 +247,38 @@ const toAuditReportSmsControlMapping = (
   title: row.title,
   controlArea: row.control_area,
   smsElements: row.sms_elements ?? [],
+});
+
+const toSafetyActionClosureEvidenceExportContext = (
+  row: SafetyActionClosureEvidenceExportRow,
+): SafetyActionClosureEvidenceExportContext => ({
+  safetyEventId: row.safety_event_id,
+  eventType: row.event_type,
+  eventSeverity: row.event_severity,
+  eventStatus: row.event_status,
+  eventSummary: row.event_summary,
+  eventOccurredAt: row.event_occurred_at.toISOString(),
+  sopReference: row.sop_reference,
+  safetyEventMeetingTriggerId: row.safety_event_meeting_trigger_id,
+  airSafetyMeetingId: row.air_safety_meeting_id,
+  safetyEventAgendaLinkId: row.safety_event_agenda_link_id,
+  agendaItem: row.agenda_item,
+  safetyActionProposalId: row.safety_action_proposal_id,
+  proposalType: row.proposal_type,
+  proposalStatus: row.proposal_status,
+  proposalSummary: row.proposal_summary,
+  proposalOwner: row.proposal_owner,
+  proposalDueAt: row.proposal_due_at?.toISOString() ?? null,
+  decisions: row.decisions ?? [],
+  implementationEvidenceId: row.implementation_evidence_id,
+  evidenceCategory: row.evidence_category,
+  implementationSummary: row.implementation_summary,
+  evidenceReference: row.evidence_reference,
+  completedBy: row.completed_by,
+  completedAt: row.completed_at.toISOString(),
+  reviewedBy: row.reviewed_by,
+  reviewNotes: row.review_notes,
+  evidenceCreatedAt: row.evidence_created_at.toISOString(),
 });
 
 export class AuditEvidenceRepository {
@@ -640,6 +704,73 @@ export class AuditEvidenceRepository {
     );
 
     return result.rows.map(toAuditReportSmsControlMapping);
+  }
+
+  async listSafetyActionClosureEvidenceForMissionExport(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<SafetyActionClosureEvidenceExportContext[]> {
+    const result = await tx.query<SafetyActionClosureEvidenceExportRow>(
+      `
+      select
+        events.id as safety_event_id,
+        events.event_type,
+        events.severity as event_severity,
+        events.status as event_status,
+        events.summary as event_summary,
+        events.event_occurred_at,
+        events.sop_reference,
+        evidence.safety_event_meeting_trigger_id,
+        evidence.air_safety_meeting_id,
+        evidence.safety_event_agenda_link_id,
+        links.agenda_item,
+        evidence.safety_action_proposal_id,
+        proposals.proposal_type,
+        proposals.status as proposal_status,
+        proposals.summary as proposal_summary,
+        proposals.proposed_owner as proposal_owner,
+        proposals.proposed_due_at as proposal_due_at,
+        coalesce(
+          (
+            select jsonb_agg(
+              jsonb_build_object(
+                'id', decisions.id,
+                'decision', decisions.decision,
+                'decidedBy', decisions.decided_by,
+                'decisionNotes', decisions.decision_notes,
+                'decidedAt', decisions.decided_at,
+                'createdAt', decisions.created_at
+              )
+              order by decisions.decided_at asc, decisions.created_at asc, decisions.id asc
+            )
+            from safety_action_decisions decisions
+            where decisions.safety_action_proposal_id = proposals.id
+          ),
+          '[]'::jsonb
+        ) as decisions,
+        evidence.id as implementation_evidence_id,
+        evidence.evidence_category,
+        evidence.implementation_summary,
+        evidence.evidence_reference,
+        evidence.completed_by,
+        evidence.completed_at,
+        evidence.reviewed_by,
+        evidence.review_notes,
+        evidence.created_at as evidence_created_at
+      from safety_action_implementation_evidence evidence
+      inner join safety_events events
+        on events.id = evidence.safety_event_id
+      inner join safety_event_agenda_links links
+        on links.id = evidence.safety_event_agenda_link_id
+      inner join safety_action_proposals proposals
+        on proposals.id = evidence.safety_action_proposal_id
+      where events.mission_id = $1
+      order by evidence.completed_at desc, evidence.created_at desc, evidence.id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toSafetyActionClosureEvidenceExportContext);
   }
 
   async decisionEvidenceLinkReferencesReadinessSnapshot(
