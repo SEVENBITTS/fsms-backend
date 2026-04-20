@@ -195,6 +195,30 @@ export interface AirSafetyMeetingPackExport {
   agendaItems: AirSafetyMeetingPackExportAgendaItem[];
 }
 
+export interface AirSafetyMeetingApprovalRollupRecord {
+  meetingId: string;
+  meetingType: AirSafetyMeetingType;
+  meetingStatus: AirSafetyMeetingStatus;
+  dueAt: string;
+  heldAt: string | null;
+  chairperson: string | null;
+  createdAt: string;
+  latestSignoffApprovalStatus: "unsigned" | AirSafetyMeetingSignoffDecision;
+  latestSignoffId: string | null;
+  accountableManagerName: string | null;
+  accountableManagerRole: string | null;
+  signedAt: string | null;
+  signatureReference: string | null;
+  reviewNotes: string | null;
+}
+
+export interface AirSafetyMeetingApprovalRollupExport {
+  exportType: "air_safety_meeting_approval_rollup";
+  formatVersion: 1;
+  generatedAt: string;
+  records: AirSafetyMeetingApprovalRollupRecord[];
+}
+
 export interface AirSafetyMeetingReportField {
   label: string;
   value: string | number | boolean | null;

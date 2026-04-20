@@ -3,6 +3,7 @@ import { AirSafetyMeetingNotFoundError } from "./air-safety-meeting.errors";
 import { AirSafetyMeetingRepository } from "./air-safety-meeting.repository";
 import type {
   AirSafetyMeeting,
+  AirSafetyMeetingApprovalRollupExport,
   AirSafetyMeetingSignoff,
   AirSafetyMeetingPackExportActionProposal,
   AirSafetyMeetingPackExportAgendaItem,
@@ -53,6 +54,24 @@ export class AirSafetyMeetingService {
 
     try {
       return await this.airSafetyMeetingRepository.listAirSafetyMeetings(client);
+    } finally {
+      client.release();
+    }
+  }
+
+  async exportAirSafetyMeetingApprovalRollup(): Promise<AirSafetyMeetingApprovalRollupExport> {
+    const client = await this.pool.connect();
+
+    try {
+      const records = await this.airSafetyMeetingRepository
+        .listAirSafetyMeetingApprovalRollup(client);
+
+      return {
+        exportType: "air_safety_meeting_approval_rollup",
+        formatVersion: 1,
+        generatedAt: new Date().toISOString(),
+        records,
+      };
     } finally {
       client.release();
     }
