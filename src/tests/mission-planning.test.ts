@@ -1912,8 +1912,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Operator Mission Workspace");
     expect(response.text).toContain("Mission Lifecycle Actions");
     expect(response.text).toContain("Mission Search and Selection");
+    expect(response.text).toContain("Evidence Helpers");
     expect(response.text).toContain("mission-search-input");
     expect(response.text).toContain("mission-browser-list");
+    expect(response.text).toContain("evidence-panel");
     expect(response.text).toContain("/static/operator-mission-workspace.js");
   });
 
@@ -1933,5 +1935,9 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain('getElementById("mission-search-input")');
     expect(response.text).toContain('fetchJson(`/missions?${params.toString()}`)');
     expect(response.text).toContain('data-open-mission');
+    expect(response.text).toContain('getElementById("evidence-panel")');
+    expect(response.text).toContain("/readiness/audit-snapshots");
+    expect(response.text).toContain("/approval-handoff");
+    expect(response.text).toContain('payload.decisionType = "dispatch"');
   });
 });
