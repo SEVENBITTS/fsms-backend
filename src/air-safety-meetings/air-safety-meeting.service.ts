@@ -4,6 +4,8 @@ import { AirSafetyMeetingRepository } from "./air-safety-meeting.repository";
 import type {
   AirSafetyMeeting,
   AirSafetyMeetingApprovalRollupExport,
+  AirSafetyMeetingApprovalRollupRecord,
+  AirSafetyMeetingApprovalRollupRenderedReport,
   AirSafetyMeetingSignoff,
   AirSafetyMeetingPackExportActionProposal,
   AirSafetyMeetingPackExportAgendaItem,
@@ -75,6 +77,23 @@ export class AirSafetyMeetingService {
     } finally {
       client.release();
     }
+  }
+
+  async renderAirSafetyMeetingApprovalRollup(): Promise<AirSafetyMeetingApprovalRollupRenderedReport> {
+    const rollupExport = await this.exportAirSafetyMeetingApprovalRollup();
+    const sections = this.buildApprovalRollupReportSections(rollupExport);
+
+    return {
+      renderType: "air_safety_meeting_approval_rollup_report",
+      formatVersion: 1,
+      generatedAt: new Date().toISOString(),
+      sourceExport: rollupExport,
+      report: {
+        title: "Air safety meeting approval assurance summary",
+        sections,
+        plainText: this.renderSectionsAsPlainText(sections),
+      },
+    };
   }
 
   async createAirSafetyMeetingSignoff(
@@ -312,6 +331,120 @@ export class AirSafetyMeetingService {
     const result = new Date(value.getTime());
     result.setUTCMonth(result.getUTCMonth() + months);
     return result;
+  }
+
+  private buildApprovalRollupReportSections(
+    rollupExport: AirSafetyMeetingApprovalRollupExport,
+  ): AirSafetyMeetingReportSection[] {
+    const records = rollupExport.records;
+    const statuses: Array<AirSafetyMeetingApprovalRollupRecord["latestSignoffApprovalStatus"]> = [
+      "approved",
+      "rejected",
+      "requires_follow_up",
+      "unsigned",
+    ];
+
+    const sections: AirSafetyMeetingReportSection[] = [
+      {
+        heading: "Approval rollup summary",
+        fields: [
+          { label: "Export generated at", value: rollupExport.generatedAt },
+          { label: "Total meetings", value: records.length },
+          {
+            label: "Approved meetings",
+            value: records.filter(
+              (record) => record.latestSignoffApprovalStatus === "approved",
+            ).length,
+          },
+          {
+            label: "Rejected meetings",
+            value: records.filter(
+              (record) => record.latestSignoffApprovalStatus === "rejected",
+            ).length,
+          },
+          {
+            label: "Requires follow-up meetings",
+            value: records.filter(
+              (record) =>
+                record.latestSignoffApprovalStatus === "requires_follow_up",
+            ).length,
+          },
+          {
+            label: "Unsigned meetings",
+            value: records.filter(
+              (record) => record.latestSignoffApprovalStatus === "unsigned",
+            ).length,
+          },
+        ],
+      },
+    ];
+
+    if (records.length === 0) {
+      sections.push({
+        heading: "Approval rollup records",
+        fields: [
+          {
+            label: "Meetings",
+            value: "No air safety meetings recorded",
+          },
+        ],
+      });
+      return sections;
+    }
+
+    statuses.forEach((status) => {
+      const statusRecords = records.filter(
+        (record) => record.latestSignoffApprovalStatus === status,
+      );
+
+      sections.push({
+        heading: this.getApprovalRollupSectionHeading(status),
+        fields: [
+          {
+            label: "Meetings",
+            value:
+              statusRecords.length > 0
+                ? statusRecords
+                    .map((record) => this.renderApprovalRollupRecord(record))
+                    .join("; ")
+                : `No ${status.replaceAll("_", " ")} meetings`,
+          },
+        ],
+      });
+    });
+
+    return sections;
+  }
+
+  private getApprovalRollupSectionHeading(
+    status: AirSafetyMeetingApprovalRollupRecord["latestSignoffApprovalStatus"],
+  ): string {
+    if (status === "requires_follow_up") {
+      return "Requires follow-up meetings";
+    }
+
+    if (status === "unsigned") {
+      return "Unsigned meetings";
+    }
+
+    return `${status.charAt(0).toUpperCase()}${status.slice(1)} meetings`;
+  }
+
+  private renderApprovalRollupRecord(
+    record: AirSafetyMeetingApprovalRollupRecord,
+  ): string {
+    return [
+      record.meetingId,
+      record.meetingType,
+      record.meetingStatus,
+      record.dueAt,
+      record.heldAt ?? "held at not recorded",
+      record.chairperson ?? "chairperson not recorded",
+      record.latestSignoffApprovalStatus,
+      record.accountableManagerName ?? "accountable manager not recorded",
+      record.signedAt ?? "signed at not recorded",
+      record.reviewNotes ?? "no review notes",
+    ].join(" | ");
   }
 
   private buildMeetingPackReportSections(

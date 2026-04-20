@@ -219,6 +219,18 @@ export interface AirSafetyMeetingApprovalRollupExport {
   records: AirSafetyMeetingApprovalRollupRecord[];
 }
 
+export interface AirSafetyMeetingApprovalRollupRenderedReport {
+  renderType: "air_safety_meeting_approval_rollup_report";
+  formatVersion: 1;
+  generatedAt: string;
+  sourceExport: AirSafetyMeetingApprovalRollupExport;
+  report: {
+    title: string;
+    sections: AirSafetyMeetingReportSection[];
+    plainText: string;
+  };
+}
+
 export interface AirSafetyMeetingReportField {
   label: string;
   value: string | number | boolean | null;

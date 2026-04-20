@@ -732,6 +732,196 @@ describe("air safety meetings", () => {
     expect(await countRows()).toEqual(before);
   });
 
+  it("renders an empty governance approval rollup without mutating source records", async () => {
+    const before = await countRows();
+
+    const response = await request(app).get(
+      "/air-safety-meetings/approval-rollup/render",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report).toMatchObject({
+      renderType: "air_safety_meeting_approval_rollup_report",
+      formatVersion: 1,
+      sourceExport: {
+        exportType: "air_safety_meeting_approval_rollup",
+        records: [],
+      },
+      report: {
+        title: "Air safety meeting approval assurance summary",
+        sections: expect.arrayContaining([
+          expect.objectContaining({
+            heading: "Approval rollup summary",
+            fields: expect.arrayContaining([
+              { label: "Total meetings", value: 0 },
+              { label: "Approved meetings", value: 0 },
+              { label: "Rejected meetings", value: 0 },
+              { label: "Requires follow-up meetings", value: 0 },
+              { label: "Unsigned meetings", value: 0 },
+            ]),
+          }),
+          {
+            heading: "Approval rollup records",
+            fields: [
+              {
+                label: "Meetings",
+                value: "No air safety meetings recorded",
+              },
+            ],
+          },
+        ]),
+      },
+    });
+    expect(response.body.report.generatedAt).toEqual(expect.any(String));
+    expect(response.body.report.report.plainText).toContain(
+      "Meetings: No air safety meetings recorded",
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("renders governance approval rollup as an assurance summary with stable ordering", async () => {
+    const approvedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "event_triggered_safety_review",
+      dueAt: "2026-04-24T10:00:00.000Z",
+      chairperson: "Safety Manager",
+      createdBy: "safety-admin",
+    });
+    const rejectedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "sop_breach_review",
+      dueAt: "2026-04-23T10:00:00.000Z",
+      chairperson: "Chief Pilot",
+      createdBy: "safety-admin",
+    });
+    const followUpMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "training_review",
+      dueAt: "2026-04-22T10:00:00.000Z",
+      chairperson: "Training Manager",
+      createdBy: "safety-admin",
+    });
+    const unsignedMeeting = await request(app).post("/air-safety-meetings").send({
+      meetingType: "maintenance_safety_review",
+      dueAt: "2026-04-21T10:00:00.000Z",
+      chairperson: "Engineering Lead",
+      createdBy: "safety-admin",
+    });
+
+    expect(approvedMeeting.status).toBe(201);
+    expect(rejectedMeeting.status).toBe(201);
+    expect(followUpMeeting.status).toBe(201);
+    expect(unsignedMeeting.status).toBe(201);
+
+    const approvedSignoff = await createMeetingSignoff(approvedMeeting.body.meeting.id, {
+      accountableManagerName: "Alex Morgan",
+      reviewDecision: "approved",
+      signedAt: "2026-04-24T11:00:00.000Z",
+      reviewNotes: "Approved for governance closure.",
+    });
+    const rejectedSignoff = await createMeetingSignoff(rejectedMeeting.body.meeting.id, {
+      accountableManagerName: "Jordan Lee",
+      reviewDecision: "rejected",
+      signedAt: "2026-04-23T11:00:00.000Z",
+      reviewNotes: "Rejected pending corrective action.",
+    });
+    const followUpSignoff = await createMeetingSignoff(followUpMeeting.body.meeting.id, {
+      accountableManagerName: "Taylor Shaw",
+      reviewDecision: "requires_follow_up",
+      signedAt: "2026-04-22T11:00:00.000Z",
+      reviewNotes: "Follow-up review required.",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get(
+      "/air-safety-meetings/approval-rollup/render",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.sourceExport.records).toEqual([
+      expect.objectContaining({
+        meetingId: approvedMeeting.body.meeting.id,
+        latestSignoffId: approvedSignoff.id,
+        latestSignoffApprovalStatus: "approved",
+      }),
+      expect.objectContaining({
+        meetingId: rejectedMeeting.body.meeting.id,
+        latestSignoffId: rejectedSignoff.id,
+        latestSignoffApprovalStatus: "rejected",
+      }),
+      expect.objectContaining({
+        meetingId: followUpMeeting.body.meeting.id,
+        latestSignoffId: followUpSignoff.id,
+        latestSignoffApprovalStatus: "requires_follow_up",
+      }),
+      expect.objectContaining({
+        meetingId: unsignedMeeting.body.meeting.id,
+        latestSignoffId: null,
+        latestSignoffApprovalStatus: "unsigned",
+      }),
+    ]);
+    expect(response.body.report.report.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          heading: "Approval rollup summary",
+          fields: expect.arrayContaining([
+            { label: "Total meetings", value: 4 },
+            { label: "Approved meetings", value: 1 },
+            { label: "Rejected meetings", value: 1 },
+            { label: "Requires follow-up meetings", value: 1 },
+            { label: "Unsigned meetings", value: 1 },
+          ]),
+        }),
+        expect.objectContaining({
+          heading: "Approved meetings",
+          fields: [
+            {
+              label: "Meetings",
+              value: expect.stringContaining(approvedMeeting.body.meeting.id),
+            },
+          ],
+        }),
+        expect.objectContaining({
+          heading: "Rejected meetings",
+          fields: [
+            {
+              label: "Meetings",
+              value: expect.stringContaining(rejectedMeeting.body.meeting.id),
+            },
+          ],
+        }),
+        expect.objectContaining({
+          heading: "Requires follow-up meetings",
+          fields: [
+            {
+              label: "Meetings",
+              value: expect.stringContaining(followUpMeeting.body.meeting.id),
+            },
+          ],
+        }),
+        expect.objectContaining({
+          heading: "Unsigned meetings",
+          fields: [
+            {
+              label: "Meetings",
+              value: expect.stringContaining(unsignedMeeting.body.meeting.id),
+            },
+          ],
+        }),
+      ]),
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Meetings: ${approvedMeeting.body.meeting.id} | event_triggered_safety_review | scheduled | 2026-04-24T10:00:00.000Z`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Meetings: ${rejectedMeeting.body.meeting.id} | sop_breach_review | scheduled | 2026-04-23T10:00:00.000Z`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Meetings: ${followUpMeeting.body.meeting.id} | training_review | scheduled | 2026-04-22T10:00:00.000Z`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Meetings: ${unsignedMeeting.body.meeting.id} | maintenance_safety_review | scheduled | 2026-04-21T10:00:00.000Z`,
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
   it("exports an empty safety meeting pack without mutating source records", async () => {
     const meeting = await createEventTriggeredMeeting();
     const before = await countRows();
