@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add operator live operations map view so replay and future live telemetry can be reviewed separately from planning and dispatch workspace controls.",
+ "nextBuildStep": "Add mission-linked live operations alert overlay so replay and future live telemetry can surface airspace, readiness, and dispatch risk states on the operator map view.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
