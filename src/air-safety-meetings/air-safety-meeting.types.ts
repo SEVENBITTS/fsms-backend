@@ -267,6 +267,18 @@ export interface AirSafetyMeetingApprovalRollupSummary {
   unsignedMeetings: AirSafetyMeetingApprovalRollupRecord[];
 }
 
+export interface AirSafetyMeetingApprovalRollupSummaryRenderedReport {
+  renderType: "air_safety_meeting_approval_rollup_summary_report";
+  formatVersion: 1;
+  generatedAt: string;
+  sourceSummary: AirSafetyMeetingApprovalRollupSummary;
+  report: {
+    title: string;
+    sections: AirSafetyMeetingReportSection[];
+    plainText: string;
+  };
+}
+
 export interface AirSafetyMeetingApprovalRollupRenderedReport {
   renderType: "air_safety_meeting_approval_rollup_report";
   formatVersion: 1;

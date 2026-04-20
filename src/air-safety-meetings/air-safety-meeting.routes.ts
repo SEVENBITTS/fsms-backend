@@ -11,6 +11,7 @@ export function createAirSafetyMeetingRouter(
   router.post("/approval-rollup/signoffs", controller.createGovernanceApprovalRollupSignoff);
   router.get("/approval-rollup/signoffs", controller.listGovernanceApprovalRollupSignoffs);
   router.get("/approval-rollup/pdf", controller.generateAirSafetyMeetingApprovalRollupPdf);
+  router.get("/approval-rollup/summary/render", controller.renderAirSafetyMeetingApprovalRollupSummary);
   router.get("/approval-rollup/render", controller.renderAirSafetyMeetingApprovalRollup);
   router.get("/approval-rollup/summary", controller.summarizeAirSafetyMeetingApprovalRollup);
   router.get("/approval-rollup", controller.exportAirSafetyMeetingApprovalRollup);
