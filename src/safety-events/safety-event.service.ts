@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import {
   SafetyEventAgendaLinkConflictError,
   SafetyEventAgendaLinkNotFoundError,
@@ -512,7 +512,7 @@ export class SafetyEventService {
   }
 
   private async validateReferences(
-    client: Awaited<ReturnType<Pool["connect"]>>,
+    client: PoolClient,
     input: ReturnType<typeof validateCreateSafetyEventInput>,
   ): Promise<void> {
     await this.validateReference(client, "missions", input.missionId, "mission");
@@ -538,7 +538,7 @@ export class SafetyEventService {
   }
 
   private async validateReference(
-    client: Awaited<ReturnType<Pool["connect"]>>,
+    client: PoolClient,
     tableName:
       | "missions"
       | "platforms"
@@ -575,7 +575,7 @@ export class SafetyEventService {
   }
 
   private async getValidatedAgendaLink(
-    client: Awaited<ReturnType<Pool["connect"]>>,
+    client: PoolClient,
     eventId: string,
     agendaLinkId: string,
   ): Promise<SafetyEventAgendaLink> {
@@ -602,7 +602,7 @@ export class SafetyEventService {
   }
 
   private async getValidatedProposal(
-    client: Awaited<ReturnType<Pool["connect"]>>,
+    client: PoolClient,
     eventId: string,
     agendaLinkId: string,
     proposalId: string,

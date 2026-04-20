@@ -63,7 +63,7 @@ function optionalPositiveInteger(value: unknown, fieldName: string): number | nu
     return null;
   }
 
-  if (!Number.isInteger(value) || value <= 0) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new PlatformValidationError(`${fieldName} must be a positive integer`);
   }
 

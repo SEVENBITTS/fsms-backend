@@ -33,7 +33,7 @@ function requiredEnum<T extends string>(
 }
 
 function requiredNonNegativeInteger(value: unknown, fieldName: string): number {
-  if (!Number.isInteger(value) || value < 0) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     throw new AirspaceComplianceValidationError(
       `${fieldName} must be a non-negative integer`,
     );
