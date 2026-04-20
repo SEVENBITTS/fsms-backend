@@ -180,3 +180,9 @@ export interface AirSafetyMeetingPackRenderedReport {
     plainText: string;
   };
 }
+
+export interface AirSafetyMeetingPackPdf {
+  fileName: string;
+  contentType: "application/pdf";
+  content: Buffer;
+}

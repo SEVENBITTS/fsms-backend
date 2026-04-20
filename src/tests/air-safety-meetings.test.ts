@@ -4,6 +4,19 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 import { randomUUID } from "crypto";
 
+const parseBinaryResponse = (
+  res: NodeJS.ReadableStream,
+  callback: (error: Error | null, body?: Buffer) => void,
+) => {
+  const chunks: Buffer[] = [];
+
+  res.on("data", (chunk) => {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  });
+  res.on("end", () => callback(null, Buffer.concat(chunks)));
+  res.on("error", (error) => callback(error));
+};
+
 const clearTables = async () => {
   await pool.query("delete from safety_action_implementation_evidence");
   await pool.query("delete from safety_action_decisions");
@@ -739,6 +752,120 @@ describe("air safety meetings", () => {
     expect(JSON.stringify(response.body.report)).not.toContain(
       secondSource.event.id,
     );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("generates a populated safety meeting pack PDF without mutating source records", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const source = await createCompletedActionWithEvidence(meeting.id);
+    const before = await countRows();
+
+    const response = await request(app)
+      .get(`/air-safety-meetings/${meeting.id}/export/pdf`)
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    expect(response.headers["content-disposition"]).toContain("attachment");
+    expect(response.headers["content-disposition"]).toContain(
+      `air-safety-meeting-${meeting.id}-pack.pdf`,
+    );
+    expect(Buffer.isBuffer(response.body)).toBe(true);
+    expect(response.body.toString("latin1", 0, 8)).toBe("%PDF-1.4");
+    expect(response.body.toString("latin1")).toContain(
+      `Air safety meeting pack for meeting ${meeting.id}`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Agenda link ID:",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      source.agendaLink.id,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Decision history: accepted |",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "accountable-manager",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Implementation closure evidence: sop_implementation | Procedure update completed",
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("generates an empty safety meeting pack PDF with explicit empty-state wording", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+
+    const response = await request(app)
+      .get(`/air-safety-meetings/${meeting.id}/export/pdf`)
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    expect(response.body.toString("latin1")).toContain(
+      `Air safety meeting pack for meeting ${meeting.id}`,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Agenda-linked safety events",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "agenda-linked safety events recorded",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "No safety action proposals",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "No implementation closure evidence recorded",
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("does not leak safety meeting pack PDF records from other meetings", async () => {
+    const firstMeeting = await createEventTriggeredMeeting();
+    const secondMeeting = await createEventTriggeredMeeting();
+    const secondSource = await createCompletedActionWithEvidence(
+      secondMeeting.id,
+      {
+        eventType: "maintenance_concern",
+        proposalType: "maintenance_action",
+        evidenceCategory: "maintenance_completion",
+      },
+    );
+    const before = await countRows();
+
+    const response = await request(app)
+      .get(`/air-safety-meetings/${firstMeeting.id}/export/pdf`)
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    expect(response.body.toString("latin1")).toContain(
+      `Air safety meeting pack for meeting ${firstMeeting.id}`,
+    );
+    expect(response.body.toString("latin1")).not.toContain(secondSource.event.id);
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("rejects invalid or missing safety meeting pack PDF IDs", async () => {
+    const before = await countRows();
+    const invalidResponse = await request(app).get(
+      "/air-safety-meetings/not-a-uuid/export/pdf",
+    );
+    const missingResponse = await request(app).get(
+      `/air-safety-meetings/${randomUUID()}/export/pdf`,
+    );
+
+    expect(invalidResponse.status).toBe(400);
+    expect(invalidResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(missingResponse.status).toBe(404);
+    expect(missingResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_not_found",
+    });
     expect(await countRows()).toEqual(before);
   });
 
