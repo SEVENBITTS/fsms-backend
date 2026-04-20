@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add operator evidence creation helpers so approval and dispatch evidence links can be created from the workspace instead of outside it.",
+ "nextBuildStep": "Add mission-linked operator evidence creation helpers so approval and dispatch evidence links can be created from the workspace instead of outside it.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
