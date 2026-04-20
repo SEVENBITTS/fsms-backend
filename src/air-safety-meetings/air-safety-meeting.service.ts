@@ -3,7 +3,11 @@ import { AirSafetyMeetingNotFoundError } from "./air-safety-meeting.errors";
 import { AirSafetyMeetingRepository } from "./air-safety-meeting.repository";
 import type {
   AirSafetyMeeting,
+  AirSafetyMeetingPackExportActionProposal,
+  AirSafetyMeetingPackExportAgendaItem,
   AirSafetyMeetingPackExport,
+  AirSafetyMeetingPackRenderedReport,
+  AirSafetyMeetingReportSection,
   CreateAirSafetyMeetingInput,
   QuarterlyAirSafetyMeetingCompliance,
   QuarterlyComplianceStatus,
@@ -99,6 +103,25 @@ export class AirSafetyMeetingService {
     }
   }
 
+  async renderAirSafetyMeetingPack(
+    meetingIdInput: unknown,
+  ): Promise<AirSafetyMeetingPackRenderedReport> {
+    const meetingExport = await this.exportAirSafetyMeetingPack(meetingIdInput);
+    const sections = this.buildMeetingPackReportSections(meetingExport);
+
+    return {
+      renderType: "air_safety_meeting_pack_report",
+      formatVersion: 1,
+      generatedAt: new Date().toISOString(),
+      sourceExport: meetingExport,
+      report: {
+        title: `Air safety meeting pack for meeting ${meetingExport.meetingId}`,
+        sections,
+        plainText: this.renderSectionsAsPlainText(sections),
+      },
+    };
+  }
+
   private buildQuarterlyCompliance(
     asOf: Date,
     lastCompletedMeeting: AirSafetyMeeting | null,
@@ -173,5 +196,230 @@ export class AirSafetyMeetingService {
     const result = new Date(value.getTime());
     result.setUTCMonth(result.getUTCMonth() + months);
     return result;
+  }
+
+  private buildMeetingPackReportSections(
+    meetingExport: AirSafetyMeetingPackExport,
+  ): AirSafetyMeetingReportSection[] {
+    const meeting = meetingExport.meeting;
+    const sections: AirSafetyMeetingReportSection[] = [
+      {
+        heading: "Meeting summary",
+        fields: [
+          { label: "Meeting ID", value: meeting.id },
+          { label: "Meeting type", value: meeting.meetingType },
+          { label: "Status", value: meeting.status },
+          { label: "Due at", value: meeting.dueAt },
+          { label: "Held at", value: meeting.heldAt },
+          { label: "Chairperson", value: meeting.chairperson },
+          {
+            label: "Attendees",
+            value:
+              meeting.attendees.length > 0
+                ? meeting.attendees.join(", ")
+                : "No attendees recorded",
+          },
+          { label: "Created by", value: meeting.createdBy },
+          { label: "Created at", value: meeting.createdAt },
+          { label: "Closed at", value: meeting.closedAt },
+          { label: "Export generated at", value: meetingExport.generatedAt },
+        ],
+      },
+      {
+        heading: "Meeting metadata",
+        fields: [
+          {
+            label: "Scheduled period start",
+            value: meeting.scheduledPeriodStart,
+          },
+          {
+            label: "Scheduled period end",
+            value: meeting.scheduledPeriodEnd,
+          },
+          {
+            label: "Standing agenda",
+            value:
+              meeting.agenda.length > 0
+                ? meeting.agenda.join("; ")
+                : "No standing agenda recorded",
+          },
+          { label: "Minutes", value: meeting.minutes },
+        ],
+      },
+    ];
+
+    if (meetingExport.agendaItems.length === 0) {
+      sections.push({
+        heading: "Agenda-linked safety events",
+        fields: [
+          {
+            label: "Agenda items",
+            value: "No agenda-linked safety events recorded",
+          },
+          {
+            label: "Action proposals",
+            value: "No safety action proposals recorded",
+          },
+          {
+            label: "Implementation closure evidence",
+            value: "No implementation closure evidence recorded",
+          },
+        ],
+      });
+      return sections;
+    }
+
+    meetingExport.agendaItems.forEach((item, index) => {
+      sections.push(this.buildAgendaItemSection(item, index));
+
+      if (item.actionProposals.length === 0) {
+        sections.push({
+          heading: `Agenda item ${index + 1} actions`,
+          fields: [
+            {
+              label: "Action proposals",
+              value: "No safety action proposals recorded",
+            },
+            {
+              label: "Decision history",
+              value: "No action decisions recorded",
+            },
+            {
+              label: "Implementation closure evidence",
+              value: "No implementation closure evidence recorded",
+            },
+          ],
+        });
+        return;
+      }
+
+      item.actionProposals.forEach((proposal, proposalIndex) => {
+        sections.push(
+          this.buildActionProposalSection(index, proposalIndex, proposal),
+        );
+      });
+    });
+
+    return sections;
+  }
+
+  private buildAgendaItemSection(
+    item: AirSafetyMeetingPackExportAgendaItem,
+    index: number,
+  ): AirSafetyMeetingReportSection {
+    return {
+      heading: `Agenda item ${index + 1}`,
+      fields: [
+        { label: "Agenda link ID", value: item.link.id },
+        { label: "Agenda item", value: item.link.agendaItem },
+        { label: "Linked by", value: item.link.linkedBy },
+        { label: "Linked at", value: item.link.linkedAt },
+        { label: "Safety event ID", value: item.safetyEvent.id },
+        { label: "Safety event type", value: item.safetyEvent.eventType },
+        { label: "Severity", value: item.safetyEvent.severity },
+        { label: "Event status", value: item.safetyEvent.status },
+        { label: "Event summary", value: item.safetyEvent.summary },
+        { label: "SOP reference", value: item.safetyEvent.sopReference },
+        { label: "Meeting required", value: item.meetingTrigger.meetingRequired },
+        {
+          label: "Recommended meeting type",
+          value: item.meetingTrigger.recommendedMeetingType,
+        },
+        {
+          label: "Trigger reasons",
+          value:
+            item.meetingTrigger.triggerReasons.length > 0
+              ? item.meetingTrigger.triggerReasons.join(", ")
+              : "No trigger reasons recorded",
+        },
+        {
+          label: "Review flags",
+          value: this.renderReviewFlags(item.meetingTrigger.reviewFlags),
+        },
+        { label: "Assessed by", value: item.meetingTrigger.assessedBy },
+        { label: "Assessed at", value: item.meetingTrigger.assessedAt },
+      ],
+    };
+  }
+
+  private buildActionProposalSection(
+    agendaIndex: number,
+    proposalIndex: number,
+    proposal: AirSafetyMeetingPackExportActionProposal,
+  ): AirSafetyMeetingReportSection {
+    const prefix = `Agenda item ${agendaIndex + 1} action ${proposalIndex + 1}`;
+
+    return {
+      heading: prefix,
+      fields: [
+        { label: "Action proposal ID", value: proposal.id },
+        { label: "Proposal type", value: proposal.proposalType },
+        { label: "Proposal status", value: proposal.status },
+        { label: "Proposal summary", value: proposal.summary },
+        { label: "Rationale", value: proposal.rationale },
+        { label: "Proposed owner", value: proposal.proposedOwner },
+        { label: "Proposed due at", value: proposal.proposedDueAt },
+        { label: "Created by", value: proposal.createdBy },
+        {
+          label: "Decision history",
+          value:
+            proposal.decisions.length > 0
+              ? proposal.decisions
+                  .map((decision) =>
+                    [
+                      decision.decision,
+                      decision.decidedBy ?? "actor not recorded",
+                      decision.decidedAt,
+                      decision.decisionNotes ?? "no notes",
+                    ].join(" | "),
+                  )
+                  .join("; ")
+              : "No action decisions recorded",
+        },
+        {
+          label: "Implementation closure evidence",
+          value:
+            proposal.implementationEvidence.length > 0
+              ? proposal.implementationEvidence
+                  .map((evidence) =>
+                    [
+                      evidence.evidenceCategory,
+                      evidence.implementationSummary,
+                      evidence.evidenceReference ?? "no reference",
+                      evidence.completedBy ?? "completed by not recorded",
+                      evidence.completedAt,
+                      evidence.reviewedBy ?? "reviewer not recorded",
+                      evidence.reviewNotes ?? "no review notes",
+                    ].join(" | "),
+                  )
+                  .join("; ")
+              : "No implementation closure evidence recorded",
+        },
+      ],
+    };
+  }
+
+  private renderReviewFlags(flags: Record<string, boolean>): string {
+    const enabledFlags = Object.entries(flags)
+      .filter(([, enabled]) => enabled)
+      .map(([flag]) => flag);
+
+    return enabledFlags.length > 0
+      ? enabledFlags.join(", ")
+      : "No review flags recorded";
+  }
+
+  private renderSectionsAsPlainText(
+    sections: AirSafetyMeetingReportSection[],
+  ): string {
+    return sections
+      .map((section) => {
+        const fields = section.fields
+          .map((field) => `${field.label}: ${field.value ?? "Not recorded"}`)
+          .join("\n");
+
+        return `${section.heading}\n${fields}`;
+      })
+      .join("\n\n");
   }
 }

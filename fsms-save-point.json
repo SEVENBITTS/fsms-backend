@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add safety meeting pack rendered report endpoint so meeting exports can be reviewed as regulator-ready meeting packs.",
+ "nextBuildStep": "Add safety meeting pack PDF generation endpoint so rendered meeting packs can be downloaded for formal review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

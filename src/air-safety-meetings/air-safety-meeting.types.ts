@@ -158,3 +158,25 @@ export interface AirSafetyMeetingPackExport {
   meeting: AirSafetyMeeting;
   agendaItems: AirSafetyMeetingPackExportAgendaItem[];
 }
+
+export interface AirSafetyMeetingReportField {
+  label: string;
+  value: string | number | boolean | null;
+}
+
+export interface AirSafetyMeetingReportSection {
+  heading: string;
+  fields: AirSafetyMeetingReportField[];
+}
+
+export interface AirSafetyMeetingPackRenderedReport {
+  renderType: "air_safety_meeting_pack_report";
+  formatVersion: 1;
+  generatedAt: string;
+  sourceExport: AirSafetyMeetingPackExport;
+  report: {
+    title: string;
+    sections: AirSafetyMeetingReportSection[];
+    plainText: string;
+  };
+}

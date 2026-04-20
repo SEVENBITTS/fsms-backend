@@ -542,6 +542,226 @@ describe("air safety meetings", () => {
     expect(await countRows()).toEqual(before);
   });
 
+  it("renders an empty safety meeting pack without mutating source records", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report).toMatchObject({
+      renderType: "air_safety_meeting_pack_report",
+      formatVersion: 1,
+      sourceExport: {
+        exportType: "air_safety_meeting_pack",
+        meetingId: meeting.id,
+        agendaItems: [],
+      },
+      report: {
+        title: `Air safety meeting pack for meeting ${meeting.id}`,
+        sections: [
+          expect.objectContaining({
+            heading: "Meeting summary",
+            fields: expect.arrayContaining([
+              { label: "Meeting ID", value: meeting.id },
+              { label: "Meeting type", value: "event_triggered_safety_review" },
+              { label: "Status", value: "scheduled" },
+            ]),
+          }),
+          expect.objectContaining({
+            heading: "Meeting metadata",
+            fields: expect.arrayContaining([
+              {
+                label: "Standing agenda",
+                value: "Review safety events; Review action closure",
+              },
+            ]),
+          }),
+          {
+            heading: "Agenda-linked safety events",
+            fields: [
+              {
+                label: "Agenda items",
+                value: "No agenda-linked safety events recorded",
+              },
+              {
+                label: "Action proposals",
+                value: "No safety action proposals recorded",
+              },
+              {
+                label: "Implementation closure evidence",
+                value: "No implementation closure evidence recorded",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(response.body.report.generatedAt).toEqual(expect.any(String));
+    expect(response.body.report.report.plainText).toContain(
+      "Agenda items: No agenda-linked safety events recorded",
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("renders agenda events, trigger rationale, decisions, and closure evidence", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const source = await createCompletedActionWithEvidence(meeting.id);
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          heading: "Agenda item 1",
+          fields: expect.arrayContaining([
+            { label: "Agenda link ID", value: source.agendaLink.id },
+            {
+              label: "Agenda item",
+              value: "Review completed action evidence",
+            },
+            { label: "Safety event ID", value: source.event.id },
+            { label: "Safety event type", value: "sop_breach" },
+            { label: "Severity", value: "high" },
+            { label: "Event summary", value: "Safety event for meeting pack" },
+            { label: "Recommended meeting type", value: "sop_breach_review" },
+            {
+              label: "Trigger reasons",
+              value: "severity:high, event_type:sop_breach",
+            },
+            { label: "Review flags", value: "sopReviewRequired" },
+          ]),
+        }),
+        expect.objectContaining({
+          heading: "Agenda item 1 action 1",
+          fields: expect.arrayContaining([
+            { label: "Action proposal ID", value: source.proposal.id },
+            { label: "Proposal type", value: "sop_change" },
+            { label: "Proposal status", value: "completed" },
+            { label: "Proposal summary", value: "Update safety procedure" },
+            {
+              label: "Decision history",
+              value: expect.stringContaining("accepted | accountable-manager"),
+            },
+            {
+              label: "Implementation closure evidence",
+              value: expect.stringContaining(
+                "sop_implementation | Procedure update completed",
+              ),
+            },
+          ]),
+        }),
+      ]),
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Meeting summary",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Decision history: accepted | accountable-manager",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Implementation closure evidence: sop_implementation | Procedure update completed",
+    );
+    expect(response.body.report.report.title).toBe(
+      `Air safety meeting pack for meeting ${meeting.id}`,
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("renders multiple agenda items and empty action states clearly", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const sop = await createAgendaLinkedEvent(meeting.id, {
+      eventType: "sop_breach",
+      agendaItem: "Review SOP breach",
+    });
+    const training = await createAgendaLinkedEvent(meeting.id, {
+      eventType: "training_need",
+      severity: "medium",
+      agendaItem: "Review training need",
+    });
+    const proposalResponse = await request(app)
+      .post(`/safety-events/${training.event.id}/agenda-links/${training.agendaLink.id}/action-proposals`)
+      .send({
+        proposalType: "training_action",
+        summary: "Training action proposed",
+      });
+
+    expect(proposalResponse.status).toBe(201);
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.sourceExport.agendaItems).toHaveLength(2);
+    expect(response.body.report.report.plainText).toContain(
+      `Safety event ID: ${sop.event.id}`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Safety event ID: ${training.event.id}`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Decision history: No action decisions recorded",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Implementation closure evidence: No implementation closure evidence recorded",
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("does not leak rendered safety meeting pack records from other meetings", async () => {
+    const firstMeeting = await createEventTriggeredMeeting();
+    const secondMeeting = await createEventTriggeredMeeting();
+    const secondSource = await createCompletedActionWithEvidence(
+      secondMeeting.id,
+      {
+        eventType: "maintenance_concern",
+        proposalType: "maintenance_action",
+        evidenceCategory: "maintenance_completion",
+      },
+    );
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${firstMeeting.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.sourceExport.meetingId).toBe(firstMeeting.id);
+    expect(response.body.report.sourceExport.agendaItems).toEqual([]);
+    expect(JSON.stringify(response.body.report)).not.toContain(
+      secondSource.event.id,
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("rejects invalid or missing rendered meeting pack IDs", async () => {
+    const before = await countRows();
+    const invalidResponse = await request(app).get(
+      "/air-safety-meetings/not-a-uuid/export/render",
+    );
+    const missingResponse = await request(app).get(
+      `/air-safety-meetings/${randomUUID()}/export/render`,
+    );
+
+    expect(invalidResponse.status).toBe(400);
+    expect(invalidResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(missingResponse.status).toBe(404);
+    expect(missingResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_not_found",
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
   it("rejects invalid air safety meeting records", async () => {
     const completedWithoutHeldAt = await request(app)
       .post("/air-safety-meetings")
