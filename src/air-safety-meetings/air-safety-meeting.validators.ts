@@ -1,8 +1,10 @@
 import { AirSafetyMeetingValidationError } from "./air-safety-meeting.errors";
 import type {
   AirSafetyMeetingStatus,
+  AirSafetyMeetingSignoffDecision,
   AirSafetyMeetingType,
   CreateAirSafetyMeetingInput,
+  CreateAirSafetyMeetingSignoffInput,
 } from "./air-safety-meeting.types";
 
 const MEETING_TYPES = new Set<AirSafetyMeetingType>([
@@ -18,6 +20,12 @@ const MEETING_STATUSES = new Set<AirSafetyMeetingStatus>([
   "scheduled",
   "completed",
   "cancelled",
+]);
+
+const SIGNOFF_DECISIONS = new Set<AirSafetyMeetingSignoffDecision>([
+  "approved",
+  "rejected",
+  "requires_follow_up",
 ]);
 
 const UUID_RE =
@@ -36,6 +44,14 @@ function optionalTrimmed(value: unknown, fieldName: string): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function requiredString(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new AirSafetyMeetingValidationError(`${fieldName} is required`);
+  }
+
+  return value.trim();
+}
+
 function requiredDate(value: unknown, fieldName: string): Date {
   if (typeof value !== "string" || Number.isNaN(Date.parse(value))) {
     throw new AirSafetyMeetingValidationError(
@@ -52,6 +68,33 @@ function optionalDate(value: unknown, fieldName: string): Date | null {
   }
 
   return requiredDate(value, fieldName);
+}
+
+function requiredIsoDate(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new AirSafetyMeetingValidationError(`${fieldName} is required`);
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    throw new AirSafetyMeetingValidationError(`${fieldName} must be a valid date`);
+  }
+
+  return parsed.toISOString();
+}
+
+function requiredSignoffDecision(
+  value: unknown,
+): AirSafetyMeetingSignoffDecision {
+  if (
+    typeof value !== "string" ||
+    !SIGNOFF_DECISIONS.has(value as AirSafetyMeetingSignoffDecision)
+  ) {
+    throw new AirSafetyMeetingValidationError("reviewDecision is not supported");
+  }
+
+  return value as AirSafetyMeetingSignoffDecision;
 }
 
 function optionalDateOnly(value: unknown, fieldName: string): string | null {
@@ -159,6 +202,33 @@ export function validateCreateAirSafetyMeetingInput(
     attendees: optionalStringArray(input.attendees, "attendees"),
     agenda: optionalStringArray(input.agenda, "agenda"),
     minutes: optionalTrimmed(input.minutes, "minutes"),
+    createdBy: optionalTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+export function validateCreateAirSafetyMeetingSignoffInput(
+  input: CreateAirSafetyMeetingSignoffInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new AirSafetyMeetingValidationError("Request body must be an object");
+  }
+
+  return {
+    accountableManagerName: requiredString(
+      input.accountableManagerName,
+      "accountableManagerName",
+    ),
+    accountableManagerRole: requiredString(
+      input.accountableManagerRole,
+      "accountableManagerRole",
+    ),
+    reviewDecision: requiredSignoffDecision(input.reviewDecision),
+    signedAt: requiredIsoDate(input.signedAt, "signedAt"),
+    signatureReference: optionalTrimmed(
+      input.signatureReference,
+      "signatureReference",
+    ),
+    reviewNotes: optionalTrimmed(input.reviewNotes, "reviewNotes"),
     createdBy: optionalTrimmed(input.createdBy, "createdBy"),
   };
 }

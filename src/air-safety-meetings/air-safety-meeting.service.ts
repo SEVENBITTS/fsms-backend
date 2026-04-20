@@ -3,6 +3,7 @@ import { AirSafetyMeetingNotFoundError } from "./air-safety-meeting.errors";
 import { AirSafetyMeetingRepository } from "./air-safety-meeting.repository";
 import type {
   AirSafetyMeeting,
+  AirSafetyMeetingSignoff,
   AirSafetyMeetingPackExportActionProposal,
   AirSafetyMeetingPackExportAgendaItem,
   AirSafetyMeetingPackExport,
@@ -10,12 +11,14 @@ import type {
   AirSafetyMeetingPackRenderedReport,
   AirSafetyMeetingReportSection,
   CreateAirSafetyMeetingInput,
+  CreateAirSafetyMeetingSignoffInput,
   QuarterlyAirSafetyMeetingCompliance,
   QuarterlyComplianceStatus,
 } from "./air-safety-meeting.types";
 import {
   validateAirSafetyMeetingId,
   validateCreateAirSafetyMeetingInput,
+  validateCreateAirSafetyMeetingSignoffInput,
   validateQuarterlyComplianceQuery,
 } from "./air-safety-meeting.validators";
 
@@ -50,6 +53,73 @@ export class AirSafetyMeetingService {
 
     try {
       return await this.airSafetyMeetingRepository.listAirSafetyMeetings(client);
+    } finally {
+      client.release();
+    }
+  }
+
+  async createAirSafetyMeetingSignoff(
+    meetingIdInput: unknown,
+    input: CreateAirSafetyMeetingSignoffInput | undefined,
+  ): Promise<AirSafetyMeetingSignoff> {
+    const meetingId = validateAirSafetyMeetingId(meetingIdInput);
+    const validated = validateCreateAirSafetyMeetingSignoffInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const meeting = await this.airSafetyMeetingRepository.getAirSafetyMeetingById(
+        client,
+        meetingId,
+      );
+
+      if (!meeting) {
+        throw new AirSafetyMeetingNotFoundError(meetingId);
+      }
+
+      const signoff = await this.airSafetyMeetingRepository
+        .insertAirSafetyMeetingSignoff(client, {
+          airSafetyMeetingId: meetingId,
+          accountableManagerName: validated.accountableManagerName,
+          accountableManagerRole: validated.accountableManagerRole,
+          reviewDecision: validated.reviewDecision,
+          signedAt: validated.signedAt,
+          signatureReference: validated.signatureReference,
+          reviewNotes: validated.reviewNotes,
+          createdBy: validated.createdBy,
+        });
+
+      await client.query("COMMIT");
+      return signoff;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAirSafetyMeetingSignoffs(
+    meetingIdInput: unknown,
+  ): Promise<AirSafetyMeetingSignoff[]> {
+    const meetingId = validateAirSafetyMeetingId(meetingIdInput);
+    const client = await this.pool.connect();
+
+    try {
+      const meeting = await this.airSafetyMeetingRepository.getAirSafetyMeetingById(
+        client,
+        meetingId,
+      );
+
+      if (!meeting) {
+        throw new AirSafetyMeetingNotFoundError(meetingId);
+      }
+
+      return await this.airSafetyMeetingRepository.listAirSafetyMeetingSignoffs(
+        client,
+        meetingId,
+      );
     } finally {
       client.release();
     }
