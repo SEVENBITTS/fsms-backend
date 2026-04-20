@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add governance-facing summary approval rendered report so downstream audit and governance users can review summary decisions in a human-readable assurance format.",
+ "nextBuildStep": "Add governance-facing summary approval PDF export so the rendered assurance summary can be circulated as a formal review artifact.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -5,6 +5,7 @@ import type {
   AirSafetyMeeting,
   AirSafetyMeetingApprovalRollupExport,
   AirSafetyMeetingApprovalRollupSummary,
+  AirSafetyMeetingApprovalRollupSummaryRenderedReport,
   AirSafetyMeetingApprovalRollupPdf,
   AirSafetyMeetingApprovalRollupRecord,
   AirSafetyMeetingApprovalRollupRenderedReport,
@@ -143,6 +144,23 @@ export class AirSafetyMeetingService {
       rejectedMeetings,
       requiresFollowUpMeetings,
       unsignedMeetings,
+    };
+  }
+
+  async renderAirSafetyMeetingApprovalRollupSummary(): Promise<AirSafetyMeetingApprovalRollupSummaryRenderedReport> {
+    const summary = await this.summarizeAirSafetyMeetingApprovalRollup();
+    const sections = this.buildApprovalRollupSummaryReportSections(summary);
+
+    return {
+      renderType: "air_safety_meeting_approval_rollup_summary_report",
+      formatVersion: 1,
+      generatedAt: new Date().toISOString(),
+      sourceSummary: summary,
+      report: {
+        title: "Governance summary approval assurance report",
+        sections,
+        plainText: this.renderSectionsAsPlainText(sections),
+      },
     };
   }
 
@@ -531,6 +549,108 @@ export class AirSafetyMeetingService {
                     .map((record) => this.renderApprovalRollupRecord(record))
                     .join("; ")
                 : `No ${status.replaceAll("_", " ")} meetings`,
+          },
+        ],
+      });
+    });
+
+    return sections;
+  }
+
+  private buildApprovalRollupSummaryReportSections(
+    summary: AirSafetyMeetingApprovalRollupSummary,
+  ): AirSafetyMeetingReportSection[] {
+    const pendingSignoff = "Pending sign-off";
+    const signoff = summary.governanceSignoffApproval.latestSignoff;
+    const sections: AirSafetyMeetingReportSection[] = [
+      {
+        heading: "Summary approval overview",
+        fields: [
+          { label: "Summary generated at", value: summary.generatedAt },
+          {
+            label: "Governance summary approval status",
+            value: summary.governanceSignoffApproval.status,
+          },
+          { label: "Total meetings", value: summary.counts.total },
+          { label: "Approved meetings", value: summary.counts.approved },
+          { label: "Rejected meetings", value: summary.counts.rejected },
+          {
+            label: "Requires follow-up meetings",
+            value: summary.counts.requiresFollowUp,
+          },
+          { label: "Unsigned meetings", value: summary.counts.unsigned },
+        ],
+      },
+      {
+        heading: "Latest governance summary sign-off",
+        fields: [
+          {
+            label: "Accountable manager name",
+            value: signoff?.accountableManagerName ?? pendingSignoff,
+          },
+          {
+            label: "Role/title",
+            value: signoff?.accountableManagerRole ?? pendingSignoff,
+          },
+          {
+            label: "Signature",
+            value: signoff?.signatureReference ?? pendingSignoff,
+          },
+          {
+            label: "Signed date/time",
+            value: signoff?.signedAt ?? pendingSignoff,
+          },
+          {
+            label: "Review decision/status",
+            value: signoff?.reviewDecision ?? pendingSignoff,
+          },
+          {
+            label: "Review notes/comments",
+            value: signoff?.reviewNotes ?? pendingSignoff,
+          },
+        ],
+      },
+    ];
+
+    const groupedSections: Array<{
+      heading: string;
+      records: AirSafetyMeetingApprovalRollupRecord[];
+      emptyLabel: string;
+    }> = [
+      {
+        heading: "Approved meetings",
+        records: summary.approvedMeetings,
+        emptyLabel: "No approved meetings",
+      },
+      {
+        heading: "Rejected meetings",
+        records: summary.rejectedMeetings,
+        emptyLabel: "No rejected meetings",
+      },
+      {
+        heading: "Requires follow-up meetings",
+        records: summary.requiresFollowUpMeetings,
+        emptyLabel: "No requires follow-up meetings",
+      },
+      {
+        heading: "Unsigned meetings",
+        records: summary.unsignedMeetings,
+        emptyLabel: "No unsigned meetings",
+      },
+    ];
+
+    groupedSections.forEach(({ heading, records, emptyLabel }) => {
+      sections.push({
+        heading,
+        fields: [
+          {
+            label: "Meetings",
+            value:
+              records.length > 0
+                ? records
+                    .map((record) => this.renderApprovalRollupRecord(record))
+                    .join("; ")
+                : emptyLabel,
           },
         ],
       });
