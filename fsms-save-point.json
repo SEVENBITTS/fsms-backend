@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add operator live operations map view so replay and future live telemetry can be reviewed separately from planning and dispatch workspace controls.",
+ "nextBuildStep": "Add operator evidence creation helpers so approval and dispatch evidence links can be created from the workspace instead of outside it.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

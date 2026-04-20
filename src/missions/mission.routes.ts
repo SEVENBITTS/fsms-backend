@@ -6,6 +6,7 @@ export function createMissionRouter(
 ): Router {
   const router = Router();
 
+  router.get("/", missionController.listMissions);
   router.post("/:missionId/submit", missionController.submitMission);
   router.post("/:missionId/approve", missionController.approveMission);
   router.post("/:missionId/launch", missionController.launchMission);

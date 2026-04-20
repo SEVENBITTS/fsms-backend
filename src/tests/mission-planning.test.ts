@@ -1827,6 +1827,83 @@ describe("mission planning drafts", () => {
     });
   });
 
+  it("lists recent missions for operator search and selection", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+
+    const firstDraftResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "search-alpha",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+    const secondDraftResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "search-bravo",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(firstDraftResponse.status).toBe(201);
+    expect(secondDraftResponse.status).toBe(201);
+
+    const response = await request(app).get("/missions");
+
+    expect(response.status).toBe(200);
+    expect(response.body.missions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          missionPlanId: "search-alpha",
+          status: "draft",
+          platformId: platform.id,
+          platformName: "Planning UAV",
+          pilotId: pilot.id,
+          pilotDisplayName: "Planning Pilot",
+        }),
+        expect.objectContaining({
+          missionPlanId: "search-bravo",
+          status: "draft",
+        }),
+      ]),
+    );
+    expect(response.body.limit).toBe(20);
+  });
+
+  it("filters listed missions by operator search query", async () => {
+    const platform = await createPlatform();
+    const pilot = await createPilot();
+
+    const alphaResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "ops-alpha",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+    const bravoResponse = await request(app).post("/mission-plans/drafts").send({
+      missionPlanId: "ops-bravo",
+      platformId: platform.id,
+      pilotId: pilot.id,
+      riskInput: lowRiskInput,
+      airspaceInput: clearAirspaceInput,
+    });
+
+    expect(alphaResponse.status).toBe(201);
+    expect(bravoResponse.status).toBe(201);
+
+    const response = await request(app).get("/missions").query({ q: "bravo" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.query).toBe("bravo");
+    expect(response.body.missions).toHaveLength(1);
+    expect(response.body.missions[0]).toMatchObject({
+      missionPlanId: "ops-bravo",
+      status: "draft",
+    });
+  });
+
   it("serves the operator mission workspace screen", async () => {
     const response = await request(app).get("/operator/mission-workspace");
 
@@ -1834,6 +1911,9 @@ describe("mission planning drafts", () => {
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.text).toContain("Operator Mission Workspace");
     expect(response.text).toContain("Mission Lifecycle Actions");
+    expect(response.text).toContain("Mission Search and Selection");
+    expect(response.text).toContain("mission-search-input");
+    expect(response.text).toContain("mission-browser-list");
     expect(response.text).toContain("/static/operator-mission-workspace.js");
   });
 
@@ -1850,5 +1930,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/transitions/${action}/check");
     expect(response.text).toContain('["submit", "approve", "launch", "complete", "abort"]');
     expect(response.text).toContain("/missions/${missionId}/${action}");
+    expect(response.text).toContain('getElementById("mission-search-input")');
+    expect(response.text).toContain('fetchJson(`/missions?${params.toString()}`)');
+    expect(response.text).toContain('data-open-mission');
   });
 });

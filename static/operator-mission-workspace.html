@@ -171,6 +171,12 @@
       gap: 12px;
     }
 
+    .mission-browser-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1.3fr);
+      gap: 16px;
+    }
+
     .metric {
       min-height: 132px;
       padding: 18px;
@@ -428,6 +434,69 @@
       gap: 10px;
     }
 
+    .mission-browser-toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 160px;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .mission-browser-toolbar input,
+    .mission-browser-toolbar button {
+      min-height: 42px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font: inherit;
+      padding: 0 12px;
+    }
+
+    .mission-browser-toolbar button {
+      background: var(--bg-accent);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .mission-browser-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .mission-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 130px;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      align-items: center;
+    }
+
+    .mission-row-title {
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .mission-row-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .mission-row button {
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-accent);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
     .timeline-item {
       display: grid;
       grid-template-columns: 170px 120px 1fr;
@@ -525,6 +594,31 @@
         </div>
       </div>
     </header>
+
+    <section class="band">
+      <div class="band-inner">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Mission Search and Selection</h3>
+            <p>Browse recent missions, filter by mission plan, status, platform, pilot, or ID, then open a mission into the operator workspace.</p>
+          </div>
+          <div class="panel-body mission-browser-grid">
+            <section>
+              <div class="mission-browser-toolbar">
+                <input id="mission-search-input" type="text" placeholder="Search mission ID, plan, status, platform, or pilot" />
+                <button id="mission-search-btn" type="button">Search</button>
+              </div>
+              <div id="mission-browser-list" class="mission-browser-list"></div>
+            </section>
+            <section>
+              <div id="mission-browser-detail" class="empty-state">
+                Select a mission from the list to load its planning workspace, dispatch state, and operations timeline.
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section class="band">
       <div class="band-inner">
