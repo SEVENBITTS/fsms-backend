@@ -49,4 +49,20 @@ export class AirSafetyMeetingController {
       next(error);
     }
   };
+
+  exportAirSafetyMeetingPack = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const meetingExport =
+        await this.airSafetyMeetingService.exportAirSafetyMeetingPack(
+          req.params.meetingId,
+        );
+      res.status(200).json({ export: meetingExport });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

@@ -20,6 +20,9 @@ const MEETING_STATUSES = new Set<AirSafetyMeetingStatus>([
   "cancelled",
 ]);
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function optionalTrimmed(value: unknown, fieldName: string): string | null {
   if (value === undefined || value === null) {
     return null;
@@ -164,4 +167,20 @@ export function validateQuarterlyComplianceQuery(input: {
   asOf?: unknown;
 }): Date {
   return optionalDate(input.asOf, "asOf") ?? new Date();
+}
+
+export function validateAirSafetyMeetingId(value: unknown): string {
+  const normalized = optionalTrimmed(value, "meetingId");
+
+  if (!normalized) {
+    throw new AirSafetyMeetingValidationError("meetingId is required");
+  }
+
+  if (!UUID_RE.test(normalized)) {
+    throw new AirSafetyMeetingValidationError(
+      "meetingId must be a valid UUID",
+    );
+  }
+
+  return normalized;
 }

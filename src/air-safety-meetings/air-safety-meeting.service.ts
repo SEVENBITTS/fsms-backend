@@ -1,12 +1,15 @@
 import type { Pool } from "pg";
+import { AirSafetyMeetingNotFoundError } from "./air-safety-meeting.errors";
 import { AirSafetyMeetingRepository } from "./air-safety-meeting.repository";
 import type {
   AirSafetyMeeting,
+  AirSafetyMeetingPackExport,
   CreateAirSafetyMeetingInput,
   QuarterlyAirSafetyMeetingCompliance,
   QuarterlyComplianceStatus,
 } from "./air-safety-meeting.types";
 import {
+  validateAirSafetyMeetingId,
   validateCreateAirSafetyMeetingInput,
   validateQuarterlyComplianceQuery,
 } from "./air-safety-meeting.validators";
@@ -61,6 +64,36 @@ export class AirSafetyMeetingService {
         );
 
       return this.buildQuarterlyCompliance(asOf, lastCompletedMeeting);
+    } finally {
+      client.release();
+    }
+  }
+
+  async exportAirSafetyMeetingPack(
+    meetingIdInput: unknown,
+  ): Promise<AirSafetyMeetingPackExport> {
+    const meetingId = validateAirSafetyMeetingId(meetingIdInput);
+    const client = await this.pool.connect();
+
+    try {
+      const meeting = await this.airSafetyMeetingRepository
+        .getAirSafetyMeetingById(client, meetingId);
+
+      if (!meeting) {
+        throw new AirSafetyMeetingNotFoundError(meetingId);
+      }
+
+      const agendaItems = await this.airSafetyMeetingRepository
+        .listAirSafetyMeetingPackAgendaItems(client, meetingId);
+
+      return {
+        exportType: "air_safety_meeting_pack",
+        formatVersion: 1,
+        generatedAt: new Date().toISOString(),
+        meetingId,
+        meeting,
+        agendaItems,
+      };
     } finally {
       client.release();
     }

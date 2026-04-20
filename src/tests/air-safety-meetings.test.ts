@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
+import { randomUUID } from "crypto";
 
 const clearTables = async () => {
   await pool.query("delete from safety_action_implementation_evidence");
@@ -28,6 +29,161 @@ const createCompletedQuarterlyMeeting = async (heldAt: string) => {
 
   expect(response.status).toBe(201);
   return response.body.meeting;
+};
+
+const countRows = async () => {
+  const result = await pool.query(
+    `
+    select
+      (select count(*)::int from air_safety_meetings) as meeting_count,
+      (select count(*)::int from safety_events) as safety_event_count,
+      (select count(*)::int from safety_event_meeting_triggers) as trigger_count,
+      (select count(*)::int from safety_event_agenda_links) as agenda_link_count,
+      (select count(*)::int from safety_action_proposals) as proposal_count,
+      (select count(*)::int from safety_action_decisions) as decision_count,
+      (select count(*)::int from safety_action_implementation_evidence) as implementation_evidence_count
+    `,
+  );
+
+  return result.rows[0] as {
+    meeting_count: number;
+    safety_event_count: number;
+    trigger_count: number;
+    agenda_link_count: number;
+    proposal_count: number;
+    decision_count: number;
+    implementation_evidence_count: number;
+  };
+};
+
+const createEventTriggeredMeeting = async () => {
+  const response = await request(app).post("/air-safety-meetings").send({
+    meetingType: "event_triggered_safety_review",
+    dueAt: "2026-04-20T10:00:00.000Z",
+    chairperson: "Safety Manager",
+    attendees: ["Accountable Manager", "Chief Pilot"],
+    agenda: ["Review safety events", "Review action closure"],
+    createdBy: "safety-admin",
+  });
+
+  expect(response.status).toBe(201);
+  return response.body.meeting as { id: string };
+};
+
+const createAgendaLinkedEvent = async (
+  meetingId: string,
+  params?: {
+    eventType?: string;
+    severity?: string;
+    summary?: string;
+    agendaItem?: string;
+  },
+) => {
+  const eventResponse = await request(app).post("/safety-events").send({
+    eventType: params?.eventType ?? "sop_breach",
+    severity: params?.severity ?? "high",
+    eventOccurredAt: "2026-04-19T09:00:00.000Z",
+    reportedBy: "safety-manager",
+    summary: params?.summary ?? "Safety event for meeting pack",
+    sopReference: "OPS-SOP-LAUNCH-001",
+  });
+
+  expect(eventResponse.status).toBe(201);
+
+  const triggerResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/meeting-trigger`)
+    .send({
+      assessedBy: "safety-manager",
+    });
+
+  expect(triggerResponse.status).toBe(201);
+
+  const agendaLinkResponse = await request(app)
+    .post(`/safety-events/${eventResponse.body.event.id}/meeting-triggers/${triggerResponse.body.trigger.id}/agenda-links`)
+    .send({
+      airSafetyMeetingId: meetingId,
+      agendaItem: params?.agendaItem ?? "Review safety action",
+      linkedBy: "safety-coordinator",
+    });
+
+  expect(agendaLinkResponse.status).toBe(201);
+
+  return {
+    event: eventResponse.body.event,
+    trigger: triggerResponse.body.trigger,
+    agendaLink: agendaLinkResponse.body.link,
+  };
+};
+
+const createCompletedActionWithEvidence = async (
+  meetingId: string,
+  params?: {
+    eventType?: string;
+    proposalType?: string;
+    evidenceCategory?: string;
+    implementationSummary?: string;
+  },
+) => {
+  const source = await createAgendaLinkedEvent(meetingId, {
+    eventType: params?.eventType ?? "sop_breach",
+    agendaItem: "Review completed action evidence",
+  });
+
+  const proposalResponse = await request(app)
+    .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals`)
+    .send({
+      proposalType: params?.proposalType ?? "sop_change",
+      summary: "Update safety procedure",
+      rationale: "Meeting review identified required follow-up.",
+      proposedOwner: "Safety Manager",
+      proposedDueAt: "2026-05-01T10:00:00.000Z",
+      createdBy: "safety-manager",
+    });
+
+  expect(proposalResponse.status).toBe(201);
+
+  const acceptResponse = await request(app)
+    .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${proposalResponse.body.proposal.id}/decisions`)
+    .send({
+      decision: "accepted",
+      decidedBy: "accountable-manager",
+      decisionNotes: "Accepted for implementation.",
+    });
+
+  expect(acceptResponse.status).toBe(201);
+
+  const completeResponse = await request(app)
+    .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${proposalResponse.body.proposal.id}/decisions`)
+    .send({
+      decision: "completed",
+      decidedBy: "safety-manager",
+      decisionNotes: "Action completed.",
+    });
+
+  expect(completeResponse.status).toBe(201);
+
+  const evidenceResponse = await request(app)
+    .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals/${proposalResponse.body.proposal.id}/implementation-evidence`)
+    .send({
+      evidenceCategory: params?.evidenceCategory ?? "sop_implementation",
+      implementationSummary:
+        params?.implementationSummary ?? "Procedure update completed",
+      evidenceReference: "DOC-SAFETY-001",
+      completedBy: "safety-manager",
+      completedAt: "2026-05-02T09:00:00.000Z",
+      reviewedBy: "accountable-manager",
+      reviewNotes: "Closure evidence reviewed.",
+    });
+
+  expect(evidenceResponse.status).toBe(201);
+
+  return {
+    ...source,
+    proposal: completeResponse.body.proposal,
+    acceptDecision: acceptResponse.body.decision,
+    completeDecision: completeResponse.body.decision,
+    implementationEvidence: evidenceResponse.body.evidence,
+  };
 };
 
 describe("air safety meetings", () => {
@@ -166,6 +322,224 @@ describe("air safety meetings", () => {
       lastCompletedMeeting: null,
       nextDueAt: null,
     });
+  });
+
+  it("exports an empty safety meeting pack without mutating source records", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export).toMatchObject({
+      exportType: "air_safety_meeting_pack",
+      formatVersion: 1,
+      meetingId: meeting.id,
+      meeting: {
+        id: meeting.id,
+        meetingType: "event_triggered_safety_review",
+        status: "scheduled",
+        chairperson: "Safety Manager",
+      },
+      agendaItems: [],
+    });
+    expect(response.body.export.generatedAt).toEqual(expect.any(String));
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports agenda-linked safety events, triggers, proposals, decisions, and closure evidence", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const source = await createCompletedActionWithEvidence(meeting.id);
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.agendaItems).toHaveLength(1);
+    expect(response.body.export.agendaItems[0]).toMatchObject({
+      link: {
+        id: source.agendaLink.id,
+        safetyEventId: source.event.id,
+        safetyEventMeetingTriggerId: source.trigger.id,
+        airSafetyMeetingId: meeting.id,
+        agendaItem: "Review completed action evidence",
+        linkedBy: "safety-coordinator",
+      },
+      safetyEvent: {
+        id: source.event.id,
+        eventType: "sop_breach",
+        severity: "high",
+        status: "open",
+        summary: "Safety event for meeting pack",
+        sopReference: "OPS-SOP-LAUNCH-001",
+      },
+      meetingTrigger: {
+        id: source.trigger.id,
+        safetyEventId: source.event.id,
+        meetingRequired: true,
+        recommendedMeetingType: "sop_breach_review",
+        triggerReasons: expect.arrayContaining([
+          "severity:high",
+          "event_type:sop_breach",
+        ]),
+        reviewFlags: {
+          sopReviewRequired: true,
+        },
+        assessedBy: "safety-manager",
+      },
+      actionProposals: [
+        {
+          id: source.proposal.id,
+          proposalType: "sop_change",
+          status: "completed",
+          summary: "Update safety procedure",
+          rationale: "Meeting review identified required follow-up.",
+          proposedOwner: "Safety Manager",
+          createdBy: "safety-manager",
+          decisions: [
+            expect.objectContaining({
+              id: source.acceptDecision.id,
+              decision: "accepted",
+              decidedBy: "accountable-manager",
+              decisionNotes: "Accepted for implementation.",
+            }),
+            expect.objectContaining({
+              id: source.completeDecision.id,
+              decision: "completed",
+              decidedBy: "safety-manager",
+              decisionNotes: "Action completed.",
+            }),
+          ],
+          implementationEvidence: [
+            expect.objectContaining({
+              id: source.implementationEvidence.id,
+              evidenceCategory: "sop_implementation",
+              implementationSummary: "Procedure update completed",
+              evidenceReference: "DOC-SAFETY-001",
+              completedBy: "safety-manager",
+              reviewedBy: "accountable-manager",
+              reviewNotes: "Closure evidence reviewed.",
+            }),
+          ],
+        },
+      ],
+    });
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("exports multiple agenda-linked safety events for one meeting", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const sop = await createAgendaLinkedEvent(meeting.id, {
+      eventType: "sop_breach",
+      summary: "SOP breach review",
+      agendaItem: "Review SOP breach",
+    });
+    const training = await createAgendaLinkedEvent(meeting.id, {
+      eventType: "training_need",
+      severity: "medium",
+      summary: "Training action review",
+      agendaItem: "Review training need",
+    });
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.agendaItems).toHaveLength(2);
+    expect(
+      response.body.export.agendaItems.map(
+        (item: { safetyEvent: { id: string } }) => item.safetyEvent.id,
+      ),
+    ).toEqual(expect.arrayContaining([sop.event.id, training.event.id]));
+    expect(
+      response.body.export.agendaItems.map(
+        (item: { link: { agendaItem: string } }) => item.link.agendaItem,
+      ),
+    ).toEqual(
+      expect.arrayContaining(["Review SOP breach", "Review training need"]),
+    );
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("represents missing proposals, decisions, and closure evidence as empty arrays", async () => {
+    const meeting = await createEventTriggeredMeeting();
+    const source = await createAgendaLinkedEvent(meeting.id);
+    const proposalResponse = await request(app)
+      .post(`/safety-events/${source.event.id}/agenda-links/${source.agendaLink.id}/action-proposals`)
+      .send({
+        proposalType: "general_safety_action",
+        summary: "Track meeting action without decision yet",
+      });
+
+    expect(proposalResponse.status).toBe(201);
+    const before = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${meeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.agendaItems[0].actionProposals).toEqual([
+      expect.objectContaining({
+        id: proposalResponse.body.proposal.id,
+        status: "proposed",
+        decisions: [],
+        implementationEvidence: [],
+      }),
+    ]);
+    expect(await countRows()).toEqual(before);
+  });
+
+  it("does not leak meeting pack records from other meetings", async () => {
+    const firstMeeting = await createEventTriggeredMeeting();
+    const secondMeeting = await createEventTriggeredMeeting();
+    const secondSource = await createCompletedActionWithEvidence(
+      secondMeeting.id,
+      {
+        eventType: "maintenance_concern",
+        proposalType: "maintenance_action",
+        evidenceCategory: "maintenance_completion",
+      },
+    );
+    const firstBefore = await countRows();
+
+    const response = await request(app).get(
+      `/air-safety-meetings/${firstMeeting.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.meetingId).toBe(firstMeeting.id);
+    expect(response.body.export.agendaItems).toEqual([]);
+    expect(JSON.stringify(response.body.export)).not.toContain(
+      secondSource.event.id,
+    );
+    expect(await countRows()).toEqual(firstBefore);
+  });
+
+  it("rejects invalid or missing meeting pack export IDs", async () => {
+    const before = await countRows();
+    const invalidResponse = await request(app).get(
+      "/air-safety-meetings/not-a-uuid/export",
+    );
+    const missingResponse = await request(app).get(
+      `/air-safety-meetings/${randomUUID()}/export`,
+    );
+
+    expect(invalidResponse.status).toBe(400);
+    expect(invalidResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_validation_failed",
+    });
+    expect(missingResponse.status).toBe(404);
+    expect(missingResponse.body.error).toMatchObject({
+      type: "air_safety_meeting_not_found",
+    });
+    expect(await countRows()).toEqual(before);
   });
 
   it("rejects invalid air safety meeting records", async () => {
