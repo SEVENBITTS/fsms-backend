@@ -353,6 +353,7 @@ export class AirSafetyMeetingService {
     rollupExport: AirSafetyMeetingApprovalRollupExport,
   ): AirSafetyMeetingReportSection[] {
     const records = rollupExport.records;
+    const pendingSignoff = "Pending sign-off";
     const statuses: Array<AirSafetyMeetingApprovalRollupRecord["latestSignoffApprovalStatus"]> = [
       "approved",
       "rejected",
@@ -390,6 +391,35 @@ export class AirSafetyMeetingService {
             value: records.filter(
               (record) => record.latestSignoffApprovalStatus === "unsigned",
             ).length,
+          },
+        ],
+      },
+      {
+        heading: "Accountable manager sign-off",
+        fields: [
+          {
+            label: "Accountable manager name",
+            value: pendingSignoff,
+          },
+          {
+            label: "Role/title",
+            value: pendingSignoff,
+          },
+          {
+            label: "Signature",
+            value: pendingSignoff,
+          },
+          {
+            label: "Signed date/time",
+            value: pendingSignoff,
+          },
+          {
+            label: "Review decision/status",
+            value: pendingSignoff,
+          },
+          {
+            label: "Review notes/comments",
+            value: pendingSignoff,
           },
         ],
       },

@@ -760,6 +760,26 @@ describe("air safety meetings", () => {
               { label: "Unsigned meetings", value: 0 },
             ]),
           }),
+          expect.objectContaining({
+            heading: "Accountable manager sign-off",
+            fields: expect.arrayContaining([
+              {
+                label: "Accountable manager name",
+                value: "Pending sign-off",
+              },
+              { label: "Role/title", value: "Pending sign-off" },
+              { label: "Signature", value: "Pending sign-off" },
+              { label: "Signed date/time", value: "Pending sign-off" },
+              {
+                label: "Review decision/status",
+                value: "Pending sign-off",
+              },
+              {
+                label: "Review notes/comments",
+                value: "Pending sign-off",
+              },
+            ]),
+          }),
           {
             heading: "Approval rollup records",
             fields: [
@@ -773,6 +793,9 @@ describe("air safety meetings", () => {
       },
     });
     expect(response.body.report.generatedAt).toEqual(expect.any(String));
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager sign-off",
+    );
     expect(response.body.report.report.plainText).toContain(
       "Meetings: No air safety meetings recorded",
     );
@@ -905,7 +928,26 @@ describe("air safety meetings", () => {
             },
           ],
         }),
+        expect.objectContaining({
+          heading: "Accountable manager sign-off",
+          fields: expect.arrayContaining([
+            {
+              label: "Accountable manager name",
+              value: "Pending sign-off",
+            },
+            {
+              label: "Review decision/status",
+              value: "Pending sign-off",
+            },
+          ]),
+        }),
       ]),
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Review decision/status: Pending sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
       `Meetings: ${approvedMeeting.body.meeting.id} | event_triggered_safety_review | scheduled | 2026-04-24T10:00:00.000Z`,
@@ -943,6 +985,12 @@ describe("air safety meetings", () => {
     );
     expect(response.body.toString("latin1")).toContain(
       "Approval rollup summary",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Pending sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
       "Total meetings:",
@@ -1019,6 +1067,12 @@ describe("air safety meetings", () => {
     );
     expect(response.body.toString("latin1")).toContain(
       "Air safety meeting approval assurance summary",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Accountable manager sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Pending sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
       "Total meetings:",
