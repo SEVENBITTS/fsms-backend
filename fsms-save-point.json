@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add accountable-manager signature block to safety meeting pack PDF reports so formal meeting reviews can be signed off.",
+ "nextBuildStep": "Add stored safety meeting sign-off records so accountable-manager meeting pack approvals can be captured and audited.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
