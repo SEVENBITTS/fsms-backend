@@ -85,7 +85,11 @@ export class AirSafetyMeetingService {
 
   async renderAirSafetyMeetingApprovalRollup(): Promise<AirSafetyMeetingApprovalRollupRenderedReport> {
     const rollupExport = await this.exportAirSafetyMeetingApprovalRollup();
-    const sections = this.buildApprovalRollupReportSections(rollupExport);
+    const governanceSignoff = await this.getLatestGovernanceApprovalRollupSignoff();
+    const sections = this.buildApprovalRollupReportSections(
+      rollupExport,
+      governanceSignoff,
+    );
 
     return {
       renderType: "air_safety_meeting_approval_rollup_report",
@@ -381,6 +385,7 @@ export class AirSafetyMeetingService {
 
   private buildApprovalRollupReportSections(
     rollupExport: AirSafetyMeetingApprovalRollupExport,
+    governanceSignoff: GovernanceApprovalRollupSignoff | null,
   ): AirSafetyMeetingReportSection[] {
     const records = rollupExport.records;
     const pendingSignoff = "Pending sign-off";
@@ -429,27 +434,27 @@ export class AirSafetyMeetingService {
         fields: [
           {
             label: "Accountable manager name",
-            value: pendingSignoff,
+            value: governanceSignoff?.accountableManagerName ?? pendingSignoff,
           },
           {
             label: "Role/title",
-            value: pendingSignoff,
+            value: governanceSignoff?.accountableManagerRole ?? pendingSignoff,
           },
           {
             label: "Signature",
-            value: pendingSignoff,
+            value: governanceSignoff?.signatureReference ?? pendingSignoff,
           },
           {
             label: "Signed date/time",
-            value: pendingSignoff,
+            value: governanceSignoff?.signedAt ?? pendingSignoff,
           },
           {
             label: "Review decision/status",
-            value: pendingSignoff,
+            value: governanceSignoff?.reviewDecision ?? pendingSignoff,
           },
           {
             label: "Review notes/comments",
-            value: pendingSignoff,
+            value: governanceSignoff?.reviewNotes ?? pendingSignoff,
           },
         ],
       },
@@ -854,6 +859,19 @@ export class AirSafetyMeetingService {
         client,
         meetingId,
       );
+    } finally {
+      client.release();
+    }
+  }
+
+  private async getLatestGovernanceApprovalRollupSignoff(): Promise<
+    GovernanceApprovalRollupSignoff | null
+  > {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.airSafetyMeetingRepository
+        .getLatestGovernanceApprovalRollupSignoff(client);
     } finally {
       client.release();
     }

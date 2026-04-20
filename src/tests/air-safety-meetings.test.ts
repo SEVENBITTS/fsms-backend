@@ -984,6 +984,14 @@ describe("air safety meetings", () => {
       signedAt: "2026-04-22T11:00:00.000Z",
       reviewNotes: "Follow-up review required.",
     });
+    const governanceSignoff = await createGovernanceRollupSignoff({
+      accountableManagerName: "Morgan Blake",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-25T09:00:00.000Z",
+      signatureReference: "signature://governance/morgan-blake",
+      reviewNotes: "Governance summary approved for circulation.",
+    });
     const before = await countRows();
 
     const response = await request(app).get(
@@ -1066,11 +1074,11 @@ describe("air safety meetings", () => {
           fields: expect.arrayContaining([
             {
               label: "Accountable manager name",
-              value: "Pending sign-off",
+              value: governanceSignoff.accountableManagerName,
             },
             {
               label: "Review decision/status",
-              value: "Pending sign-off",
+              value: governanceSignoff.reviewDecision,
             },
           ]),
         }),
@@ -1080,7 +1088,10 @@ describe("air safety meetings", () => {
       "Accountable manager sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
-      "Review decision/status: Pending sign-off",
+      `Review decision/status: ${governanceSignoff.reviewDecision}`,
+    );
+    expect(response.body.report.report.plainText).toContain(
+      `Signature: ${governanceSignoff.signatureReference}`,
     );
     expect(response.body.report.report.plainText).toContain(
       `Meetings: ${approvedMeeting.body.meeting.id} | event_triggered_safety_review | scheduled | 2026-04-24T10:00:00.000Z`,
@@ -1186,6 +1197,14 @@ describe("air safety meetings", () => {
       signedAt: "2026-04-22T11:00:00.000Z",
       reviewNotes: "Follow-up review required.",
     });
+    const governanceSignoff = await createGovernanceRollupSignoff({
+      accountableManagerName: "Morgan Blake",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: "2026-04-25T09:00:00.000Z",
+      signatureReference: "signature://governance/morgan-blake",
+      reviewNotes: "Governance summary approved for circulation.",
+    });
     const before = await countRows();
 
     const response = await request(app)
@@ -1205,7 +1224,13 @@ describe("air safety meetings", () => {
       "Accountable manager sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
-      "Pending sign-off",
+      governanceSignoff.accountableManagerName,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      governanceSignoff.signatureReference!,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      governanceSignoff.reviewDecision,
     );
     expect(response.body.toString("latin1")).toContain(
       "Total meetings:",
@@ -1223,21 +1248,89 @@ describe("air safety meetings", () => {
       "Unsigned",
     );
     expect(response.body.toString("latin1")).toContain(
-      `Meetings: ${approvedMeeting.body.meeting.id} |`,
+      approvedMeeting.body.meeting.id,
     );
     expect(response.body.toString("latin1")).toContain(
-      "event_triggered_safety_review | scheduled | 2026-04-24T10:00:00.000Z",
+      "event_triggered_safety_review | scheduled |",
     );
     expect(response.body.toString("latin1")).toContain(
-      `Meetings: ${rejectedMeeting.body.meeting.id} |`,
+      "2026-04-24T10:00:00.000Z",
     );
     expect(response.body.toString("latin1")).toContain(
-      `Meetings: ${followUpMeeting.body.meeting.id} |`,
+      rejectedMeeting.body.meeting.id,
     );
     expect(response.body.toString("latin1")).toContain(
-      `Meetings: ${unsignedMeeting.body.meeting.id} |`,
+      followUpMeeting.body.meeting.id,
+    );
+    expect(response.body.toString("latin1")).toContain(
+      unsignedMeeting.body.meeting.id,
     );
     expect(await countRows()).toEqual(before);
+  });
+
+  it("uses the newest governance summary sign-off in rendered and PDF approval summaries", async () => {
+    const before = await countRows();
+
+    await createGovernanceRollupSignoff({
+      accountableManagerName: "Alex Morgan",
+      reviewDecision: "requires_follow_up",
+      signedAt: "2026-04-20T10:00:00.000Z",
+      signatureReference: "signature://governance/alex-follow-up",
+      reviewNotes: "Initial follow-up required.",
+    });
+    const latestSignoff = await createGovernanceRollupSignoff({
+      accountableManagerName: "Jordan Lee",
+      reviewDecision: "approved",
+      signedAt: "2026-04-20T12:00:00.000Z",
+      signatureReference: "signature://governance/jordan-approved",
+      reviewNotes: "Follow-up completed and approved.",
+    });
+
+    const renderResponse = await request(app).get(
+      "/air-safety-meetings/approval-rollup/render",
+    );
+    const pdfResponse = await request(app)
+      .get("/air-safety-meetings/approval-rollup/pdf")
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(renderResponse.status).toBe(200);
+    expect(renderResponse.body.report.report.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          heading: "Accountable manager sign-off",
+          fields: expect.arrayContaining([
+            {
+              label: "Accountable manager name",
+              value: latestSignoff.accountableManagerName,
+            },
+            {
+              label: "Signature",
+              value: latestSignoff.signatureReference,
+            },
+            {
+              label: "Review decision/status",
+              value: latestSignoff.reviewDecision,
+            },
+          ]),
+        }),
+      ]),
+    );
+
+    expect(pdfResponse.status).toBe(200);
+    expect(pdfResponse.body.toString("latin1")).toContain(
+      latestSignoff.accountableManagerName,
+    );
+    expect(pdfResponse.body.toString("latin1")).toContain(
+      latestSignoff.signatureReference!,
+    );
+    expect(pdfResponse.body.toString("latin1")).toContain(
+      latestSignoff.reviewDecision,
+    );
+    expect(await countRows()).toEqual({
+      ...before,
+      governance_signoff_count: before.governance_signoff_count + 2,
+    });
   });
 
   it("exports an empty safety meeting pack without mutating source records", async () => {

@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Connect migration-backed governance-summary sign-off records into rendered and PDF approval summaries so placeholders are replaced by audited approval data.",
+ "nextBuildStep": "Add governance-summary sign-off approval export context so downstream audit and governance outputs can distinguish approved, rejected, and follow-up summary decisions.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
