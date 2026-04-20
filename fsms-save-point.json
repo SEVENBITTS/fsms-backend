@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add safety meeting pack export endpoint so meeting agenda, triggered events, action proposals, decisions, and closure evidence can be reviewed together.",
+ "nextBuildStep": "Add safety meeting pack rendered report endpoint so meeting exports can be reviewed as regulator-ready meeting packs.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

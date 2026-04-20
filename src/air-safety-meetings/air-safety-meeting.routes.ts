@@ -9,6 +9,7 @@ export function createAirSafetyMeetingRouter(
   router.post("/", controller.createAirSafetyMeeting);
   router.get("/", controller.listAirSafetyMeetings);
   router.get("/quarterly-compliance", controller.getQuarterlyCompliance);
+  router.get("/:meetingId/export", controller.exportAirSafetyMeetingPack);
 
   return router;
 }

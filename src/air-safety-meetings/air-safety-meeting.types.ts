@@ -57,3 +57,104 @@ export interface QuarterlyAirSafetyMeetingCompliance {
   nextDueAt: string | null;
   message: string;
 }
+
+export interface AirSafetyMeetingPackExportAgendaLink {
+  id: string;
+  safetyEventId: string;
+  safetyEventMeetingTriggerId: string;
+  airSafetyMeetingId: string;
+  agendaItem: string;
+  linkedBy: string | null;
+  linkedAt: string;
+  createdAt: string;
+}
+
+export interface AirSafetyMeetingPackExportSafetyEvent {
+  id: string;
+  eventType: string;
+  severity: string;
+  status: string;
+  missionId: string | null;
+  platformId: string | null;
+  pilotId: string | null;
+  postOperationEvidenceSnapshotId: string | null;
+  reportedBy: string | null;
+  eventOccurredAt: string;
+  reportedAt: string;
+  summary: string;
+  description: string | null;
+  immediateActionTaken: string | null;
+  sopReference: string | null;
+  meetingRequired: boolean;
+  sopReviewRequired: boolean;
+  trainingRequired: boolean;
+  maintenanceReviewRequired: boolean;
+  accountableManagerReviewRequired: boolean;
+  regulatorReportableReviewRequired: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AirSafetyMeetingPackExportMeetingTrigger {
+  id: string;
+  safetyEventId: string;
+  meetingRequired: boolean;
+  recommendedMeetingType: string | null;
+  triggerReasons: string[];
+  reviewFlags: Record<string, boolean>;
+  assessedBy: string | null;
+  assessedAt: string;
+  createdAt: string;
+}
+
+export interface AirSafetyMeetingPackExportActionDecision {
+  id: string;
+  decision: string;
+  decidedBy: string | null;
+  decisionNotes: string | null;
+  decidedAt: string;
+  createdAt: string;
+}
+
+export interface AirSafetyMeetingPackExportImplementationEvidence {
+  id: string;
+  evidenceCategory: string;
+  implementationSummary: string;
+  evidenceReference: string | null;
+  completedBy: string | null;
+  completedAt: string;
+  reviewedBy: string | null;
+  reviewNotes: string | null;
+  createdAt: string;
+}
+
+export interface AirSafetyMeetingPackExportActionProposal {
+  id: string;
+  proposalType: string;
+  status: string;
+  summary: string;
+  rationale: string | null;
+  proposedOwner: string | null;
+  proposedDueAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  decisions: AirSafetyMeetingPackExportActionDecision[];
+  implementationEvidence: AirSafetyMeetingPackExportImplementationEvidence[];
+}
+
+export interface AirSafetyMeetingPackExportAgendaItem {
+  link: AirSafetyMeetingPackExportAgendaLink;
+  safetyEvent: AirSafetyMeetingPackExportSafetyEvent;
+  meetingTrigger: AirSafetyMeetingPackExportMeetingTrigger;
+  actionProposals: AirSafetyMeetingPackExportActionProposal[];
+}
+
+export interface AirSafetyMeetingPackExport {
+  exportType: "air_safety_meeting_pack";
+  formatVersion: 1;
+  generatedAt: string;
+  meetingId: string;
+  meeting: AirSafetyMeeting;
+  agendaItems: AirSafetyMeetingPackExportAgendaItem[];
+}
