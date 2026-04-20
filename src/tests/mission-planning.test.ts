@@ -1919,6 +1919,17 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/static/operator-mission-workspace.js");
   });
 
+  it("serves the operator live operations map screen", async () => {
+    const response = await request(app).get("/operator/live-operations-map");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.text).toContain("Operator Live Operations View");
+    expect(response.text).toContain("Map and Replay Surface");
+    expect(response.text).toContain("Telemetry and Risk Status");
+    expect(response.text).toContain("/static/operator-live-operations-map.js");
+  });
+
   it("serves the operator mission workspace javascript bundle", async () => {
     const response = await request(app).get(
       "/static/operator-mission-workspace.js",
@@ -1939,5 +1950,20 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/readiness/audit-snapshots");
     expect(response.text).toContain("/approval-handoff");
     expect(response.text).toContain('payload.decisionType = "dispatch"');
+  });
+
+  it("serves the operator live operations javascript bundle", async () => {
+    const response = await request(app).get(
+      "/static/operator-live-operations-map.js",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("javascript");
+    expect(response.text).toContain("/missions/${missionId}/replay");
+    expect(response.text).toContain("/missions/${missionId}/telemetry/latest");
+    expect(response.text).toContain("/missions/${missionId}/planning-workspace");
+    expect(response.text).toContain("/missions/${missionId}/dispatch-workspace");
+    expect(response.text).toContain("/missions/${missionId}/operations-timeline");
+    expect(response.text).toContain("/operator/missions/${encodeURIComponent(missionId)}");
   });
 });

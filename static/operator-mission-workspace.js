@@ -2,6 +2,7 @@ const missionIdInput = document.getElementById("mission-id-input");
 const loadWorkspaceButton = document.getElementById("load-workspace-btn");
 const copyLinkButton = document.getElementById("copy-link-btn");
 const openApiButton = document.getElementById("open-api-btn");
+const openLiveOpsButton = document.getElementById("open-live-ops-btn");
 const connectionStatus = document.getElementById("connection-status");
 const loadedMissionPill = document.getElementById("loaded-mission-pill");
 const overviewMetrics = document.getElementById("overview-metrics");
@@ -1198,6 +1199,14 @@ openApiButton.addEventListener("click", () => {
   }
 
   window.open(`/missions/${missionId}/planning-workspace`, "_blank", "noopener");
+});
+
+openLiveOpsButton?.addEventListener("click", () => {
+  const missionId = missionIdInput.value.trim();
+  const target = missionId
+    ? `/operator/missions/${encodeURIComponent(missionId)}/live-operations`
+    : "/operator/live-operations-map";
+  window.location.assign(target);
 });
 
 const initialMissionId = getMissionIdFromLocation();

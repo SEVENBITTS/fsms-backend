@@ -222,6 +222,16 @@ app.get("/operator/missions/:missionId", (_req, res) => {
     path.resolve(process.cwd(), "static", "operator-mission-workspace.html"),
   );
 });
+app.get("/operator/live-operations-map", (_req, res) => {
+  res.sendFile(
+    path.resolve(process.cwd(), "static", "operator-live-operations-map.html"),
+  );
+});
+app.get("/operator/missions/:missionId/live-operations", (_req, res) => {
+  res.sendFile(
+    path.resolve(process.cwd(), "static", "operator-live-operations-map.html"),
+  );
+});
 app.get("/", (_req, res) => {
   res.status(200).send("FSMS backend is running");
 });
