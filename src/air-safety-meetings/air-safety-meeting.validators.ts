@@ -4,6 +4,7 @@ import type {
   AirSafetyMeetingSignoffDecision,
   AirSafetyMeetingType,
   CreateAirSafetyMeetingInput,
+  CreateGovernanceApprovalRollupSignoffInput,
   CreateAirSafetyMeetingSignoffInput,
 } from "./air-safety-meeting.types";
 
@@ -208,6 +209,33 @@ export function validateCreateAirSafetyMeetingInput(
 
 export function validateCreateAirSafetyMeetingSignoffInput(
   input: CreateAirSafetyMeetingSignoffInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new AirSafetyMeetingValidationError("Request body must be an object");
+  }
+
+  return {
+    accountableManagerName: requiredString(
+      input.accountableManagerName,
+      "accountableManagerName",
+    ),
+    accountableManagerRole: requiredString(
+      input.accountableManagerRole,
+      "accountableManagerRole",
+    ),
+    reviewDecision: requiredSignoffDecision(input.reviewDecision),
+    signedAt: requiredIsoDate(input.signedAt, "signedAt"),
+    signatureReference: optionalTrimmed(
+      input.signatureReference,
+      "signatureReference",
+    ),
+    reviewNotes: optionalTrimmed(input.reviewNotes, "reviewNotes"),
+    createdBy: optionalTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+export function validateCreateGovernanceApprovalRollupSignoffInput(
+  input: CreateGovernanceApprovalRollupSignoffInput | undefined,
 ) {
   if (!input || typeof input !== "object") {
     throw new AirSafetyMeetingValidationError("Request body must be an object");

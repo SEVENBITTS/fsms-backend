@@ -8,6 +8,8 @@ import type {
   AirSafetyMeetingApprovalRollupRecord,
   AirSafetyMeetingApprovalRollupRenderedReport,
   AirSafetyMeetingSignoff,
+  CreateGovernanceApprovalRollupSignoffInput,
+  GovernanceApprovalRollupSignoff,
   AirSafetyMeetingPackExportActionProposal,
   AirSafetyMeetingPackExportAgendaItem,
   AirSafetyMeetingPackExport,
@@ -22,6 +24,7 @@ import type {
 import {
   validateAirSafetyMeetingId,
   validateCreateAirSafetyMeetingInput,
+  validateCreateGovernanceApprovalRollupSignoffInput,
   validateCreateAirSafetyMeetingSignoffInput,
   validateQuarterlyComplianceQuery,
 } from "./air-safety-meeting.validators";
@@ -154,6 +157,20 @@ export class AirSafetyMeetingService {
     }
   }
 
+  async createGovernanceApprovalRollupSignoff(
+    input: CreateGovernanceApprovalRollupSignoffInput | undefined,
+  ): Promise<GovernanceApprovalRollupSignoff> {
+    const validated = validateCreateGovernanceApprovalRollupSignoffInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      return await this.airSafetyMeetingRepository
+        .insertGovernanceApprovalRollupSignoff(client, validated);
+    } finally {
+      client.release();
+    }
+  }
+
   async listAirSafetyMeetingSignoffs(
     meetingIdInput: unknown,
   ): Promise<AirSafetyMeetingSignoff[]> {
@@ -174,6 +191,19 @@ export class AirSafetyMeetingService {
         client,
         meetingId,
       );
+    } finally {
+      client.release();
+    }
+  }
+
+  async listGovernanceApprovalRollupSignoffs(): Promise<
+    GovernanceApprovalRollupSignoff[]
+  > {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.airSafetyMeetingRepository
+        .listGovernanceApprovalRollupSignoffs(client);
     } finally {
       client.release();
     }

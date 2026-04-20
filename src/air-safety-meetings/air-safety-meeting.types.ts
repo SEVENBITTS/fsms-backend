@@ -45,6 +45,16 @@ export interface CreateAirSafetyMeetingSignoffInput {
   createdBy?: string | null;
 }
 
+export interface CreateGovernanceApprovalRollupSignoffInput {
+  accountableManagerName?: string;
+  accountableManagerRole?: string;
+  reviewDecision?: AirSafetyMeetingSignoffDecision;
+  signedAt?: string;
+  signatureReference?: string | null;
+  reviewNotes?: string | null;
+  createdBy?: string | null;
+}
+
 export interface AirSafetyMeeting {
   id: string;
   meetingType: AirSafetyMeetingType;
@@ -65,6 +75,18 @@ export interface AirSafetyMeeting {
 export interface AirSafetyMeetingSignoff {
   id: string;
   airSafetyMeetingId: string;
+  accountableManagerName: string;
+  accountableManagerRole: string;
+  reviewDecision: AirSafetyMeetingSignoffDecision;
+  signedAt: string;
+  signatureReference: string | null;
+  reviewNotes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface GovernanceApprovalRollupSignoff {
+  id: string;
   accountableManagerName: string;
   accountableManagerRole: string;
   reviewDecision: AirSafetyMeetingSignoffDecision;

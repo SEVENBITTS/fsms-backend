@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add stored governance-summary sign-off records so formal approval of circulated safety meeting assurance summaries can be captured and audited.",
+ "nextBuildStep": "Connect migration-backed governance-summary sign-off records into rendered and PDF approval summaries so placeholders are replaced by audited approval data.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
