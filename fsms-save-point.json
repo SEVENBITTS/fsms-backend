@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Reduce empty-state duplication and generic-route fetch failure in the live operations entry flow so the live operations view shows a proper mission selection or empty state before a valid mission UUID is loaded.",
+  "nextBuildStep": "Fix the live operations entry flow so the generic live operations route shows mission selection or an empty state instead of fetching with placeholder mission IDs.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
