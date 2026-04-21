@@ -1927,6 +1927,9 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Operator Live Operations View");
     expect(response.text).toContain("Map and Replay Surface");
     expect(response.text).toContain("Telemetry and Risk Status");
+    expect(response.text).toContain("live-ops-replay-play-btn");
+    expect(response.text).toContain("live-ops-replay-slider");
+    expect(response.text).toContain("live-ops-replay-progress");
     expect(response.text).toContain("map-alert-stack");
     expect(response.text).toContain("map-terrain");
     expect(response.text).toContain("map-compass");
@@ -1973,6 +1976,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("map-alert-card");
     expect(response.text).toContain("severityStroke");
     expect(response.text).toContain("alertTrackHighlight");
+    expect(response.text).toContain("renderReplayControls");
+    expect(response.text).toContain("replayPlayButton");
+    expect(response.text).toContain("replaySlider");
+    expect(response.text).toContain("setInterval");
     expect(response.text).toContain("map-terrain");
   });
 });
