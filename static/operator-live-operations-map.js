@@ -9,6 +9,7 @@ const mapPanel = document.getElementById("live-ops-map");
 const statusPanel = document.getElementById("live-ops-status");
 const timelinePanel = document.getElementById("live-ops-timeline");
 const alertCorrelationPanel = document.getElementById("live-ops-alert-correlation");
+const conflictAssessmentPanel = document.getElementById("live-ops-conflict-assessment");
 const jumpControlsPanel = document.getElementById("live-ops-jump-controls");
 const replayPlayButton = document.getElementById("live-ops-replay-play-btn");
 const replayPauseButton = document.getElementById("live-ops-replay-pause-btn");
@@ -29,6 +30,7 @@ const uiState = {
   latestTelemetry: null,
   alerts: [],
   externalOverlays: [],
+  conflictAssessment: null,
   replayPlayback: {
     index: 0,
     playing: false,
@@ -362,6 +364,57 @@ const droneTrafficSummary = () => {
   };
 };
 
+const currentConflictAssessment = () => uiState.conflictAssessment?.assessment ?? null;
+
+const conflictAssessmentItems = () =>
+  currentConflictAssessment()?.conflicts ?? [];
+
+const activeConflictAssessmentItems = () => {
+  const replayPoint = activeReplayPoint();
+  const replayTime = replayPoint?.timestamp ? Date.parse(replayPoint.timestamp) : null;
+
+  return conflictAssessmentItems()
+    .map((conflict) => {
+      const conflictTime = Date.parse(conflict.referenceTimestamp ?? "");
+      const timeDeltaSeconds =
+        replayTime != null && Number.isFinite(conflictTime)
+          ? Math.abs(replayTime - conflictTime) / 1000
+          : conflict.metrics?.timeDeltaSeconds ?? Number.POSITIVE_INFINITY;
+
+      return {
+        ...conflict,
+        replayRelevant: timeDeltaSeconds <= 600,
+        replayTimeDeltaSeconds: Math.round(timeDeltaSeconds),
+      };
+    })
+    .sort((left, right) => {
+      if (left.replayRelevant !== right.replayRelevant) {
+        return left.replayRelevant ? -1 : 1;
+      }
+
+      const order = { critical: 3, caution: 2, info: 1 };
+      return (order[right.severity] ?? 0) - (order[left.severity] ?? 0);
+    });
+};
+
+const conflictAssessmentSummary = () => {
+  const conflicts = activeConflictAssessmentItems();
+  if (conflicts.length === 0) {
+    return {
+      label: "Conflict assessment clear",
+      tone: "pass",
+      detail: "No current traffic conflict candidates are assessed for the selected mission context.",
+    };
+  }
+
+  const highest = conflicts[0];
+  return {
+    label: `${conflicts.length} conflict candidate${conflicts.length === 1 ? "" : "s"}`,
+    tone: highest.severity,
+    detail: `${highest.overlayLabel} · ${highest.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${highest.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+  };
+};
+
 const replayTrack = () =>
   (uiState.replay?.replay ?? []).filter(
     (point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng),
@@ -667,6 +720,7 @@ const buildOverlayCards = () => {
     crewedTrafficSummary(),
     droneTrafficSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
+    conflictAssessmentSummary(),
   ];
 
   return cards
@@ -755,6 +809,8 @@ const renderOverview = () => {
   const activeDroneTraffic = activeDroneTrafficOverlays();
   const primaryDroneTraffic = activeDroneTraffic[0];
   const primaryDroneMeta = primaryDroneTraffic?.metadata ?? null;
+  const conflicts = activeConflictAssessmentItems();
+  const primaryConflict = conflicts[0];
 
   overviewPanel.innerHTML = `
     <article class="metric">
@@ -834,6 +890,19 @@ const renderOverview = () => {
         primaryDroneMeta
           ? `${primaryDroneMeta.operatorReference ?? primaryDroneMeta.trafficId ?? "Unknown"} at ${formatDateTime(primaryDroneTraffic.observedAt)}`
           : "No drone traffic overlay loaded for this mission.",
+      )}</div>
+    </article>
+    <article class="metric">
+      <div class="label">Conflict assessment</div>
+      <div class="value ${toneClass(primaryConflict?.severity ?? "clear")}">${escapeHtml(
+        conflicts.length === 0
+          ? "Clear"
+          : `${conflicts.length} candidate${conflicts.length === 1 ? "" : "s"}`,
+      )}</div>
+      <div class="meta">${escapeHtml(
+        primaryConflict
+          ? `${primaryConflict.overlayLabel} at ${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m lateral / ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`
+          : "No current interpreted traffic conflict candidates.",
       )}</div>
     </article>
   `;
@@ -1128,9 +1197,17 @@ const renderStatus = () => {
   const dispatchWorkspace = uiState.dispatchWorkspace;
   const currentReplayPoint = activeReplayPoint();
   const latestTelemetry = uiState.latestTelemetry?.telemetry;
+  const weatherState = weatherSummary();
+  const trafficState = crewedTrafficSummary();
+  const droneState = droneTrafficSummary();
+  const conflictState = conflictAssessmentSummary();
   const alertSignals = (uiState.alerts ?? []).map((alert) => ({
     label: `${alert.alertType} - ${alert.severity}`,
     value: `${alert.status}: ${alert.message}`,
+  }));
+  const conflictSignals = activeConflictAssessmentItems().map((conflict) => ({
+    label: `${conflict.overlayKind} ${conflict.severity}`,
+    value: `${conflict.summary}: ${conflict.explanation}`,
   }));
   const riskSignals = [
     ...((planningWorkspace.blockingReasons ?? []).map((reason) => ({
@@ -1146,6 +1223,7 @@ const renderStatus = () => {
       value: reason,
     }))),
     ...alertSignals,
+    ...conflictSignals,
   ];
 
   statusPanel.innerHTML = `
@@ -1270,6 +1348,24 @@ const renderStatus = () => {
               ? formatDateTime(activeDroneTrafficOverlays()[0].observedAt)
               : "Not recorded",
           )}</div>
+          <div class="k">Conflict assessment</div>
+          <div>${renderBadge(conflictState.label)}</div>
+          <div class="k">Primary conflict</div>
+          <div>${escapeHtml(
+            activeConflictAssessmentItems()[0]?.overlayLabel ?? "Clear",
+          )}</div>
+          <div class="k">Separation</div>
+          <div>${escapeHtml(
+            activeConflictAssessmentItems()[0]
+              ? `${activeConflictAssessmentItems()[0].metrics?.lateralDistanceMeters ?? "?"} m · ${activeConflictAssessmentItems()[0].metrics?.altitudeDeltaFt ?? "?"} ft`
+              : "Not recorded",
+          )}</div>
+          <div class="k">Assessment time</div>
+          <div>${escapeHtml(
+            activeConflictAssessmentItems()[0]
+              ? formatDateTime(activeConflictAssessmentItems()[0].assessedAt)
+              : "Not recorded",
+          )}</div>
         </div>
       </section>
     </div>
@@ -1381,6 +1477,60 @@ const renderAlertCorrelation = () => {
   `;
 };
 
+const renderConflictAssessment = () => {
+  const assessment = currentConflictAssessment();
+  const conflicts = activeConflictAssessmentItems();
+
+  if (!assessment) {
+    conflictAssessmentPanel.innerHTML =
+      '<div class="empty-state">Conflict assessment has not been loaded for this mission yet.</div>';
+    return;
+  }
+
+  if (conflicts.length === 0) {
+    conflictAssessmentPanel.innerHTML = `
+      <div class="empty-state">
+        No interpreted crewed or drone traffic conflict candidates are currently assessed.
+        Reference telemetry: ${escapeHtml(formatDateTime(assessment.reference?.telemetry?.timestamp))}
+      </div>
+    `;
+    return;
+  }
+
+  conflictAssessmentPanel.innerHTML = `
+    <div class="stack">
+      <section class="correlation-card">
+        <h4>Assessment Reference</h4>
+        <div class="kv">
+          <div class="k">Assessed at</div>
+          <div>${escapeHtml(formatDateTime(assessment.assessedAt))}</div>
+          <div class="k">Reference telemetry</div>
+          <div>${escapeHtml(formatDateTime(assessment.reference?.telemetry?.timestamp))}</div>
+          <div class="k">Replay points</div>
+          <div>${escapeHtml(String(assessment.reference?.replayPointCount ?? 0))}</div>
+        </div>
+      </section>
+      ${conflicts
+        .slice(0, 6)
+        .map(
+          (conflict) => `
+            <article class="alert-window ${toneClass(conflict.severity)}">
+              <strong>${escapeHtml(conflict.summary)}</strong>
+              <div>${escapeHtml(conflict.explanation)}</div>
+              <div class="alert-window-meta">
+                Source: ${escapeHtml(conflict.relatedSource.provider)} / ${escapeHtml(conflict.relatedSource.sourceType)}<br />
+                Observed: ${escapeHtml(formatDateTime(conflict.overlayObservedAt))}<br />
+                Separation: ${escapeHtml(`${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`)}<br />
+                Replay relevance: ${escapeHtml(conflict.replayRelevant ? "Current replay window" : `${conflict.replayTimeDeltaSeconds} s from replay cursor`)}
+              </div>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+};
+
 const renderTimeline = () => {
   const items = uiState.timeline?.items ?? [];
   const relevant = items.slice(-8).reverse();
@@ -1423,6 +1573,7 @@ const renderLiveOperations = () => {
   renderJumpControls();
   renderStatus();
   renderAlertCorrelation();
+  renderConflictAssessment();
   renderTimeline();
 };
 
@@ -1432,6 +1583,7 @@ const clearPanels = (message) => {
   jumpControlsPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   statusPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   alertCorrelationPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+  conflictAssessmentPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   timelinePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   renderReplayControls();
 };
@@ -1448,6 +1600,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.latestTelemetry = null;
     uiState.alerts = [];
     uiState.externalOverlays = [];
+    uiState.conflictAssessment = null;
     uiState.replayPlayback.index = 0;
     setLoadedMission("");
     setConnectionState("Enter a mission UUID", "tone-warn");
@@ -1469,6 +1622,7 @@ const loadLiveOperationsView = async (missionId) => {
       latestTelemetryResponse,
       alertsResponse,
       externalOverlayResponse,
+      conflictAssessmentResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${missionId}/planning-workspace`),
       fetchJson(`/missions/${missionId}/dispatch-workspace`),
@@ -1477,6 +1631,7 @@ const loadLiveOperationsView = async (missionId) => {
       fetchJson(`/missions/${missionId}/telemetry/latest`),
       fetchJson(`/missions/${missionId}/alerts`),
       fetchJson(`/missions/${missionId}/external-overlays`),
+      fetchJson(`/missions/${missionId}/conflict-assessment`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -1486,6 +1641,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.latestTelemetry = latestTelemetryResponse;
     uiState.alerts = alertsResponse.alerts ?? [];
     uiState.externalOverlays = externalOverlayResponse.overlays ?? [];
+    uiState.conflictAssessment = conflictAssessmentResponse;
     uiState.replayPlayback.index = 0;
     renderLiveOperations();
     setConnectionState("Live operations view loaded", "tone-ok");
@@ -1499,6 +1655,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.latestTelemetry = null;
     uiState.alerts = [];
     uiState.externalOverlays = [];
+    uiState.conflictAssessment = null;
     uiState.replayPlayback.index = 0;
     clearPanels(message);
     setConnectionState(message, "tone-bad");

@@ -66,6 +66,9 @@ import { ExternalOverlayRepository } from "./external-overlays/external-overlay.
 import { ExternalOverlayService } from "./external-overlays/external-overlay.service";
 import { ExternalOverlayController } from "./external-overlays/external-overlay.controller";
 import { createExternalOverlayRouter } from "./external-overlays/external-overlay.routes";
+import { TrafficConflictAssessmentService } from "./conflict-assessment/traffic-conflict-assessment.service";
+import { TrafficConflictAssessmentController } from "./conflict-assessment/traffic-conflict-assessment.controller";
+import { createTrafficConflictAssessmentRouter } from "./conflict-assessment/traffic-conflict-assessment.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -206,6 +209,14 @@ const externalOverlayService = new ExternalOverlayService(
 const externalOverlayController = new ExternalOverlayController(
   externalOverlayService,
 );
+const trafficConflictAssessmentService = new TrafficConflictAssessmentService(
+  pool,
+  missionRepo,
+  missionTelemetryRepo,
+  externalOverlayRepository,
+);
+const trafficConflictAssessmentController =
+  new TrafficConflictAssessmentController(trafficConflictAssessmentService);
 
 app.use("/mission-plans", createMissionPlanningRouter(missionPlanningController));
 app.use("/sms", createSmsFrameworkRouter(smsFrameworkController));
@@ -216,6 +227,10 @@ app.use(
 app.use("/safety-events", createSafetyEventRouter(safetyEventController));
 app.use("/missions", createMissionRouter(missionController));
 app.use("/missions", createExternalOverlayRouter(externalOverlayController));
+app.use(
+  "/missions",
+  createTrafficConflictAssessmentRouter(trafficConflictAssessmentController),
+);
 app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
 app.use("/missions", createAuditEvidenceRouter(auditEvidenceController));
