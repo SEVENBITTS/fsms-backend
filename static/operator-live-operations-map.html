@@ -329,6 +329,17 @@
     .replay-marker.info { background: var(--info); }
     .replay-marker.warning { background: var(--warn); }
     .replay-marker.critical { background: var(--bad); }
+    .replay-marker.conflict {
+      width: 12px;
+      height: 12px;
+      top: 1px;
+      background: transparent;
+      border: 2px solid #f8fafc;
+      box-shadow: 0 0 0 2px rgba(9,17,27,0.48);
+    }
+    .replay-marker.conflict.info { border-color: var(--info); }
+    .replay-marker.conflict.caution { border-color: var(--warn); }
+    .replay-marker.conflict.critical { border-color: var(--bad); }
     .replay-progress {
       min-width: 126px;
       text-align: right;
@@ -455,6 +466,22 @@
       padding: 14px 16px;
       border: 1px solid var(--border);
       background: var(--bg-band);
+    }
+    .timeline-item.conflict-relevant {
+      border-color: rgba(245, 158, 11, 0.45);
+      box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.85);
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.08), var(--bg-band) 24%);
+    }
+    .timeline-item.conflict-critical {
+      border-color: rgba(239, 68, 68, 0.45);
+      box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.92);
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.08), var(--bg-band) 24%);
+    }
+    .timeline-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
     }
     .correlation-card {
       padding: 14px 16px;

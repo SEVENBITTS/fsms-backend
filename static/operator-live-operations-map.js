@@ -180,8 +180,8 @@ const renderReplayControls = () => {
   replayMarkers.innerHTML =
     pointCount === 0 || replayStart == null || replayEnd == null
       ? ""
-      : (uiState.alerts ?? [])
-          .map((alert) => {
+      : [
+          ...(uiState.alerts ?? []).map((alert) => {
             const markerTime = Date.parse(alert.triggeredAt);
             if (!Number.isFinite(markerTime)) {
               return "";
@@ -191,8 +191,9 @@ const renderReplayControls = () => {
             return `<span class="replay-marker ${escapeHtml(
               alert.severity,
             )}" style="left:${Math.max(0, Math.min(left, 100))}%"></span>`;
-          })
-          .join("");
+          }),
+          ...conflictReplayMarkers(replayStart, replaySpan),
+        ].join("");
 };
 
 const missionDisplayName = (mission) =>
@@ -462,6 +463,85 @@ const conflictAdvisorySummary = () => {
     tone: primary.tone,
     detail: `${primary.recommendation} · ${primary.relatedObject} · ${primary.summary}`,
   };
+};
+
+const currentConflictReplayRelation = () => {
+  const conflicts = activeConflictAssessmentItems();
+
+  if (conflicts.length === 0) {
+    return {
+      label: "Outside conflict relevance",
+      tone: "pass",
+      detail: "No assessed conflict candidate currently aligns with the replay cursor.",
+    };
+  }
+
+  const primary = conflicts[0];
+  if (primary.replayRelevant) {
+    return {
+      label: "Inside conflict relevance",
+      tone: primary.severity,
+      detail: `${primary.overlayLabel} is aligned with the current replay window.`,
+    };
+  }
+
+  return {
+    label: "Near conflict relevance",
+    tone: primary.severity === "critical" ? "warning" : "info",
+    detail: `${primary.overlayLabel} is ${primary.replayTimeDeltaSeconds} s from the current replay cursor.`,
+  };
+};
+
+const conflictReplayMarkers = (replayStart, replaySpan) =>
+  conflictAssessmentItems().map((conflict) => {
+    const markerTime = Date.parse(conflict.referenceTimestamp ?? "");
+    if (!Number.isFinite(markerTime)) {
+      return "";
+    }
+
+    const left = ((markerTime - replayStart) / replaySpan) * 100;
+    return `<span class="replay-marker conflict ${escapeHtml(
+      conflict.severity,
+    )}" style="left:${Math.max(0, Math.min(left, 100))}%"></span>`;
+  });
+
+const correlatedConflictTimelineItems = () => {
+  const timelineItems = uiState.timeline?.items ?? [];
+  const conflicts = activeConflictAssessmentItems();
+
+  return timelineItems
+    .map((item) => {
+      const itemTime = item?.occurredAt ? Date.parse(item.occurredAt) : NaN;
+      const nearestConflict = conflicts
+        .map((conflict) => {
+          const conflictTime = Date.parse(conflict.referenceTimestamp ?? "");
+          const deltaSeconds =
+            Number.isFinite(itemTime) && Number.isFinite(conflictTime)
+              ? Math.abs(itemTime - conflictTime) / 1000
+              : Number.POSITIVE_INFINITY;
+
+          return {
+            conflict,
+            deltaSeconds,
+          };
+        })
+        .sort((left, right) => left.deltaSeconds - right.deltaSeconds)[0];
+
+      return {
+        ...item,
+        nearestConflict: nearestConflict?.conflict ?? null,
+        conflictDeltaSeconds: nearestConflict?.deltaSeconds ?? Number.POSITIVE_INFINITY,
+        conflictRelevant: (nearestConflict?.deltaSeconds ?? Number.POSITIVE_INFINITY) <= 900,
+      };
+    })
+    .sort((left, right) => {
+      if (left.conflictRelevant !== right.conflictRelevant) {
+        return left.conflictRelevant ? -1 : 1;
+      }
+
+      return Date.parse(right.occurredAt ?? "") - Date.parse(left.occurredAt ?? "");
+    })
+    .slice(0, 8);
 };
 
 const replayTrack = () =>
@@ -863,6 +943,7 @@ const renderOverview = () => {
   const primaryConflict = conflicts[0];
   const advisories = deriveConflictAdvisories();
   const primaryAdvisory = advisories[0];
+  const replayConflictRelation = currentConflictReplayRelation();
 
   overviewPanel.innerHTML = `
     <article class="metric">
@@ -969,6 +1050,13 @@ const renderOverview = () => {
           ? `${primaryAdvisory.relatedObject} · ${primaryAdvisory.summary}`
           : "No advisory-grade conflict presentation is currently required.",
       )}</div>
+    </article>
+    <article class="metric">
+      <div class="label">Replay conflict relation</div>
+      <div class="value ${toneClass(replayConflictRelation.tone)}">${escapeHtml(
+        replayConflictRelation.label,
+      )}</div>
+      <div class="meta">${escapeHtml(replayConflictRelation.detail)}</div>
     </article>
   `;
 };
@@ -1267,6 +1355,7 @@ const renderStatus = () => {
   const droneState = droneTrafficSummary();
   const conflictState = conflictAssessmentSummary();
   const advisoryState = conflictAdvisorySummary();
+  const replayConflictRelation = currentConflictReplayRelation();
   const alertSignals = (uiState.alerts ?? []).map((alert) => ({
     label: `${alert.alertType} - ${alert.severity}`,
     value: `${alert.status}: ${alert.message}`,
@@ -1442,6 +1531,10 @@ const renderStatus = () => {
           <div>${escapeHtml(
             deriveConflictAdvisories()[0]?.relatedObject ?? "None",
           )}</div>
+          <div class="k">Replay relation</div>
+          <div>${renderBadge(replayConflictRelation.label)}</div>
+          <div class="k">Replay relevance detail</div>
+          <div>${escapeHtml(replayConflictRelation.detail)}</div>
         </div>
       </section>
     </div>
@@ -1609,6 +1702,7 @@ const renderConflictAssessment = () => {
 
 const renderConflictAdvisory = () => {
   const advisories = deriveConflictAdvisories();
+  const replayConflictRelation = currentConflictReplayRelation();
 
   if (advisories.length === 0) {
     conflictAdvisoryPanel.innerHTML =
@@ -1618,6 +1712,15 @@ const renderConflictAdvisory = () => {
 
   conflictAdvisoryPanel.innerHTML = `
     <div class="stack">
+      <section class="correlation-card">
+        <h4>Replay Relation</h4>
+        <div class="kv">
+          <div class="k">Current state</div>
+          <div>${renderBadge(replayConflictRelation.label)}</div>
+          <div class="k">Detail</div>
+          <div>${escapeHtml(replayConflictRelation.detail)}</div>
+        </div>
+      </section>
       ${advisories.map(
         (advisory) => `
           <article class="alert-window ${toneClass(advisory.tone)}">
@@ -1638,8 +1741,7 @@ const renderConflictAdvisory = () => {
 };
 
 const renderTimeline = () => {
-  const items = uiState.timeline?.items ?? [];
-  const relevant = items.slice(-8).reverse();
+  const relevant = correlatedConflictTimelineItems();
 
   if (relevant.length === 0) {
     timelinePanel.innerHTML =
@@ -1652,7 +1754,7 @@ const renderTimeline = () => {
       ${relevant
         .map(
           (item) => `
-            <article class="timeline-item">
+            <article class="timeline-item ${item.conflictRelevant ? "conflict-relevant" : ""} ${item.nearestConflict?.severity === "critical" ? "conflict-critical" : ""}">
               <div class="timeline-time">${escapeHtml(formatDateTime(item.occurredAt))}</div>
               <div class="timeline-phase ${toneClass(item.phase)}">${escapeHtml(
                 item.phase.replaceAll("_", " "),
@@ -1662,6 +1764,18 @@ const renderTimeline = () => {
                 <div class="timeline-meta">
                   Type: ${escapeHtml(item.type)}<br />
                   Source: ${escapeHtml(item.source)}
+                </div>
+                <div class="timeline-chip-row">
+                  ${
+                    item.conflictRelevant
+                      ? `<span class="badge ${toneClass(item.nearestConflict?.severity ?? "info")}">Conflict-relevant ${escapeHtml(`${Math.round(item.conflictDeltaSeconds)} s`)}</span>`
+                      : ""
+                  }
+                  ${
+                    item.nearestConflict
+                      ? `<span class="badge ${toneClass(item.nearestConflict.severity)}">${escapeHtml(item.nearestConflict.overlayLabel)}</span>`
+                      : ""
+                  }
                 </div>
               </div>
             </article>

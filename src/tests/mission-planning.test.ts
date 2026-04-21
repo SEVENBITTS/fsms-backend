@@ -1992,6 +1992,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("replayPlayButton");
     expect(response.text).toContain("replaySlider");
     expect(response.text).toContain("replayMarkers");
+    expect(response.text).toContain("conflictReplayMarkers");
     expect(response.text).toContain("correlatedAlertWindows");
     expect(response.text).toContain("renderAlertCorrelation");
     expect(response.text).toContain("replaySpeedSelect");
@@ -2015,7 +2016,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("droneTrafficSummary");
     expect(response.text).toContain("conflictAssessmentSummary");
     expect(response.text).toContain("conflictAdvisorySummary");
+    expect(response.text).toContain("currentConflictReplayRelation");
+    expect(response.text).toContain("correlatedConflictTimelineItems");
     expect(response.text).toContain("renderConflictAssessment");
     expect(response.text).toContain("renderConflictAdvisory");
+    expect(response.text).toContain("timeline-chip-row");
   });
 });
