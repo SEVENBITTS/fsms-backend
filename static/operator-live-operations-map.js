@@ -11,10 +11,13 @@ const timelinePanel = document.getElementById("live-ops-timeline");
 const alertCorrelationPanel = document.getElementById("live-ops-alert-correlation");
 const replayPlayButton = document.getElementById("live-ops-replay-play-btn");
 const replayPauseButton = document.getElementById("live-ops-replay-pause-btn");
+const replayStepBackButton = document.getElementById("live-ops-replay-step-back-btn");
+const replayStepForwardButton = document.getElementById("live-ops-replay-step-forward-btn");
 const replaySlider = document.getElementById("live-ops-replay-slider");
 const replayTimeReadout = document.getElementById("live-ops-replay-time");
 const replayProgress = document.getElementById("live-ops-replay-progress");
 const replayMarkers = document.getElementById("live-ops-replay-markers");
+const replaySpeedSelect = document.getElementById("live-ops-replay-speed");
 
 const uiState = {
   missionId: "",
@@ -28,6 +31,7 @@ const uiState = {
     index: 0,
     playing: false,
     timerId: null,
+    speed: 1,
   },
 };
 
@@ -125,6 +129,9 @@ const setLoadedMission = (missionId) => {
   loadedMissionPill.textContent = missionId || "None";
 };
 
+const replayPlaybackIntervalMs = () =>
+  Math.max(150, Math.round(900 / (uiState.replayPlayback.speed || 1)));
+
 const renderReplayControls = () => {
   const points = replayTrack();
   const pointCount = points.length;
@@ -141,13 +148,17 @@ const renderReplayControls = () => {
   replaySlider.disabled = pointCount <= 1;
   replayPlayButton.disabled = pointCount <= 1 || uiState.replayPlayback.playing;
   replayPauseButton.disabled = !uiState.replayPlayback.playing;
+  replayStepBackButton.disabled = pointCount <= 1 || uiState.replayPlayback.index <= 0;
+  replayStepForwardButton.disabled =
+    pointCount <= 1 || uiState.replayPlayback.index >= pointCount - 1;
+  replaySpeedSelect.value = String(uiState.replayPlayback.speed);
   replayTimeReadout.textContent = activePoint?.timestamp
     ? `Replay time: ${formatDateTime(activePoint.timestamp)}`
     : "Replay time: not loaded";
   replayProgress.textContent =
     pointCount === 0
       ? "0 / 0"
-      : `${uiState.replayPlayback.index + 1} / ${pointCount}`;
+      : `${uiState.replayPlayback.index + 1} / ${pointCount} · ${uiState.replayPlayback.speed}x`;
   replayMarkers.innerHTML =
     pointCount === 0 || replayStart == null || replayEnd == null
       ? ""
@@ -193,6 +204,33 @@ const stopReplayPlayback = () => {
     uiState.replayPlayback.timerId = null;
   }
   uiState.replayPlayback.playing = false;
+};
+
+const startReplayPlayback = () => {
+  const points = replayTrack();
+  if (points.length <= 1) {
+    renderReplayControls();
+    return;
+  }
+
+  if (uiState.replayPlayback.index >= points.length - 1) {
+    setReplayIndex(0);
+  }
+
+  stopReplayPlayback();
+  uiState.replayPlayback.playing = true;
+  renderReplayControls();
+  uiState.replayPlayback.timerId = window.setInterval(() => {
+    const currentPoints = replayTrack();
+    if (uiState.replayPlayback.index >= currentPoints.length - 1) {
+      stopReplayPlayback();
+      renderLiveOperations();
+      return;
+    }
+
+    setReplayIndex(uiState.replayPlayback.index + 1);
+    renderLiveOperations();
+  }, replayPlaybackIntervalMs());
 };
 
 const setReplayIndex = (nextIndex) => {
@@ -997,34 +1035,35 @@ replaySlider.addEventListener("input", () => {
 });
 
 replayPlayButton.addEventListener("click", () => {
-  const points = replayTrack();
-  if (points.length <= 1) {
-    renderReplayControls();
-    return;
-  }
-
-  if (uiState.replayPlayback.index >= points.length - 1) {
-    setReplayIndex(0);
-  }
-
-  stopReplayPlayback();
-  uiState.replayPlayback.playing = true;
-  renderReplayControls();
-  uiState.replayPlayback.timerId = window.setInterval(() => {
-    const currentPoints = replayTrack();
-    if (uiState.replayPlayback.index >= currentPoints.length - 1) {
-      stopReplayPlayback();
-      renderLiveOperations();
-      return;
-    }
-
-    setReplayIndex(uiState.replayPlayback.index + 1);
-    renderLiveOperations();
-  }, 900);
+  startReplayPlayback();
 });
 
 replayPauseButton.addEventListener("click", () => {
   stopReplayPlayback();
+  renderReplayControls();
+});
+
+replayStepBackButton.addEventListener("click", () => {
+  stopReplayPlayback();
+  setReplayIndex(uiState.replayPlayback.index - 1);
+  renderLiveOperations();
+});
+
+replayStepForwardButton.addEventListener("click", () => {
+  stopReplayPlayback();
+  setReplayIndex(uiState.replayPlayback.index + 1);
+  renderLiveOperations();
+});
+
+replaySpeedSelect.addEventListener("change", () => {
+  const nextSpeed = Number(replaySpeedSelect.value);
+  uiState.replayPlayback.speed = Number.isFinite(nextSpeed) && nextSpeed > 0 ? nextSpeed : 1;
+
+  if (uiState.replayPlayback.playing) {
+    startReplayPlayback();
+    return;
+  }
+
   renderReplayControls();
 });
 
