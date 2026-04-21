@@ -1933,6 +1933,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Conflict Advisory Guidance");
     expect(response.text).toContain("Enter mission UUID");
     expect(response.text).toContain("Open workspace");
+    expect(response.text).toContain("live-ops-mission-search-input");
+    expect(response.text).toContain("live-ops-mission-search-btn");
+    expect(response.text).toContain("live-ops-mission-browser-list");
+    expect(response.text).toContain("live-ops-mission-browser-detail");
     expect(response.text).toContain("live-ops-replay-play-btn");
     expect(response.text).toContain("live-ops-replay-slider");
     expect(response.text).toContain("live-ops-replay-markers");
@@ -1992,6 +1996,11 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("isPlaceholderMissionId");
     expect(response.text).toContain("hasSelectedMissionId");
     expect(response.text).toContain("renderEntryState");
+    expect(response.text).toContain("loadMissionList");
+    expect(response.text).toContain("renderMissionBrowser");
+    expect(response.text).toContain('fetchJson(`/missions?${params.toString()}`)');
+    expect(response.text).toContain('data-open-mission');
+    expect(response.text).toContain("live-ops-mission-search-input");
     expect(response.text).toContain("map-alert-card");
     expect(response.text).toContain("severityStroke");
     expect(response.text).toContain("alertTrackHighlight");

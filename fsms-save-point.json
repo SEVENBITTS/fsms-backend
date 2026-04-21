@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add mission selection integration to the live operations entry flow so operators can choose a mission from the live operations route without manual UUID entry.",
+  "nextBuildStep": "Add mission-focused filters to the live operations entry browser so operators can narrow the live operations mission list by status and current activity without leaving the route.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

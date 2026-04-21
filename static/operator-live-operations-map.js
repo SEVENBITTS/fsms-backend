@@ -21,6 +21,10 @@ const replayTimeReadout = document.getElementById("live-ops-replay-time");
 const replayProgress = document.getElementById("live-ops-replay-progress");
 const replayMarkers = document.getElementById("live-ops-replay-markers");
 const replaySpeedSelect = document.getElementById("live-ops-replay-speed");
+const missionSearchInput = document.getElementById("live-ops-mission-search-input");
+const missionSearchButton = document.getElementById("live-ops-mission-search-btn");
+const missionBrowserList = document.getElementById("live-ops-mission-browser-list");
+const missionBrowserDetail = document.getElementById("live-ops-mission-browser-detail");
 const missionRoutePattern = /^\/operator\/missions\/([^/]+)\/live-operations$/;
 
 const uiState = {
@@ -33,6 +37,8 @@ const uiState = {
   alerts: [],
   externalOverlays: [],
   conflictAssessment: null,
+  missionList: [],
+  missionQuery: "",
   replayPlayback: {
     index: 0,
     playing: false,
@@ -88,6 +94,9 @@ const escapeHtml = (value) =>
 
 const renderBadge = (value) =>
   `<span class="badge ${toneClass(value)}">${escapeHtml(value ?? "Unknown")}</span>`;
+
+const missionDisplayName = (mission) =>
+  mission?.missionPlanId || mission?.id || "Unknown mission";
 
 const weatherOverlays = () =>
   (uiState.externalOverlays ?? []).filter((overlay) => overlay.kind === "weather");
@@ -176,6 +185,152 @@ const resetLiveOperationsState = () => {
   uiState.replayPlayback.index = 0;
 };
 
+const renderMissionBrowser = () => {
+  const missions = uiState.missionList ?? [];
+
+  if (!missionBrowserList || !missionBrowserDetail) {
+    return;
+  }
+
+  if (missions.length === 0) {
+    missionBrowserList.innerHTML =
+      '<div class="empty-state">No missions match the current filter.</div>';
+    missionBrowserDetail.innerHTML = `
+      <div class="empty-state">
+        Search recent missions or clear the filter to choose a mission for the live operations view.
+      </div>
+    `;
+    return;
+  }
+
+  missionBrowserList.innerHTML = `
+    <div class="stack">
+      ${missions
+        .map((mission) => {
+          const loaded = mission.id === uiState.missionId;
+          const lastEvent = mission.latestEventSummary ?? "No lifecycle events yet";
+          const platform =
+            mission.platform?.name ?? mission.platform?.id ?? "Platform not assigned";
+          const pilot =
+            mission.pilot?.displayName ?? mission.pilot?.id ?? "Pilot not assigned";
+
+          return `
+            <article class="mission-row" data-mission-id="${escapeHtml(mission.id)}">
+              <div class="mission-row-title">
+                <div>
+                  <strong>${escapeHtml(missionDisplayName(mission))}</strong>
+                  <div class="mission-row-meta">Mission ID: ${escapeHtml(mission.id)}</div>
+                </div>
+                <div>${renderBadge(mission.status ?? "Unknown")}</div>
+              </div>
+              <div class="mission-row-meta">
+                Platform: ${escapeHtml(platform)}<br />
+                Pilot: ${escapeHtml(pilot)}<br />
+                Last event: ${escapeHtml(lastEvent)}<br />
+                Updated: ${escapeHtml(formatDateTime(mission.latestEventAt ?? mission.updatedAt))}
+              </div>
+              <div style="margin-top: 10px;">
+                <button class="action-button" type="button" data-open-mission="${escapeHtml(
+                  mission.id,
+                )}">
+                  ${loaded ? "Loaded" : "Load live ops"}
+                </button>
+              </div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  missionBrowserList.querySelectorAll("[data-open-mission]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const missionId = button.getAttribute("data-open-mission");
+      if (!missionId) {
+        return;
+      }
+
+      missionIdInput.value = missionId;
+      loadLiveOperationsView(missionId);
+    });
+  });
+
+  const selectedMission =
+    missions.find((mission) => mission.id === uiState.missionId) ?? missions[0];
+  const selectedPlatform =
+    selectedMission.platform?.name ??
+    selectedMission.platform?.id ??
+    "Platform not assigned";
+  const selectedPilot =
+    selectedMission.pilot?.displayName ??
+    selectedMission.pilot?.id ??
+    "Pilot not assigned";
+
+  missionBrowserDetail.innerHTML = `
+    <section class="summary-block">
+      <h4>Selected Mission</h4>
+      <div class="kv">
+        <div class="k">Mission</div>
+        <div>${escapeHtml(missionDisplayName(selectedMission))}</div>
+        <div class="k">Mission ID</div>
+        <div>${escapeHtml(selectedMission.id)}</div>
+        <div class="k">Status</div>
+        <div>${renderBadge(selectedMission.status ?? "Unknown")}</div>
+        <div class="k">Platform</div>
+        <div>${escapeHtml(selectedPlatform)}</div>
+        <div class="k">Pilot</div>
+        <div>${escapeHtml(selectedPilot)}</div>
+        <div class="k">Latest event</div>
+        <div>${escapeHtml(selectedMission.latestEventSummary ?? "No lifecycle events yet")}</div>
+      </div>
+      <div style="margin-top: 12px;">
+        <button class="action-button" type="button" data-load-selected-mission="${escapeHtml(
+          selectedMission.id,
+        )}">
+          ${selectedMission.id === uiState.missionId ? "Reload live ops" : "Load selected mission"}
+        </button>
+      </div>
+    </section>
+  `;
+
+  missionBrowserDetail
+    .querySelector("[data-load-selected-mission]")
+    ?.addEventListener("click", () => {
+      missionIdInput.value = selectedMission.id;
+      loadLiveOperationsView(selectedMission.id);
+    });
+};
+
+const loadMissionList = async (query = "") => {
+  uiState.missionQuery = query;
+
+  if (!missionBrowserList || !missionBrowserDetail) {
+    return;
+  }
+
+  missionBrowserList.innerHTML =
+    '<div class="empty-state">Loading mission list...</div>';
+
+  const params = new URLSearchParams();
+  if (query) {
+    params.set("q", query);
+  }
+  params.set("limit", "12");
+
+  try {
+    const response = await fetchJson(`/missions?${params.toString()}`);
+    uiState.missionList = response.missions ?? [];
+    renderMissionBrowser();
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load mission list";
+    uiState.missionList = [];
+    missionBrowserList.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    missionBrowserDetail.innerHTML =
+      '<div class="empty-state">Mission selection is unavailable because the mission list did not load.</div>';
+  }
+};
+
 const replayPlaybackIntervalMs = () =>
   Math.max(150, Math.round(900 / (uiState.replayPlayback.speed || 1)));
 
@@ -224,9 +379,6 @@ const renderReplayControls = () => {
           ...conflictReplayMarkers(replayStart, replaySpan),
         ].join("");
 };
-
-const missionDisplayName = (mission) =>
-  mission?.missionPlanId || mission?.id || "Unknown mission";
 
 const activeWeatherOverlay = () => {
   const replayPoint = activeReplayPoint();
@@ -2203,6 +2355,7 @@ const renderEntryState = ({
   timelinePanel.innerHTML =
     '<div class="empty-state">Mission event context will appear after mission selection.</div>';
   renderReplayControls();
+  renderMissionBrowser();
 };
 
 const loadLiveOperationsView = async (missionId) => {
@@ -2259,6 +2412,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.externalOverlays = externalOverlayResponse.overlays ?? [];
     uiState.conflictAssessment = conflictAssessmentResponse;
     uiState.replayPlayback.index = 0;
+    renderMissionBrowser();
     renderLiveOperations();
     setConnectionState("Live operations view loaded", "tone-ok");
   } catch (error) {
@@ -2273,6 +2427,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.externalOverlays = [];
     uiState.conflictAssessment = null;
     uiState.replayPlayback.index = 0;
+    renderMissionBrowser();
     clearPanels(message);
     setConnectionState(message, "tone-bad");
   }
@@ -2285,6 +2440,16 @@ loadButton.addEventListener("click", () => {
 missionIdInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     loadLiveOperationsView(normalizeMissionId(missionIdInput.value));
+  }
+});
+
+missionSearchButton?.addEventListener("click", () => {
+  loadMissionList(normalizeMissionId(missionSearchInput?.value ?? ""));
+});
+
+missionSearchInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    loadMissionList(normalizeMissionId(missionSearchInput.value));
   }
 });
 
@@ -2374,6 +2539,8 @@ const initialMissionId = normalizeMissionId(getMissionIdFromLocation());
 if (initialMissionId) {
   missionIdInput.value = initialMissionId;
 }
+
+loadMissionList();
 
 if (hasSelectedMissionId(initialMissionId)) {
   loadLiveOperationsView(initialMissionId);
