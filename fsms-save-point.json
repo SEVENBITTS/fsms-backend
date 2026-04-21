@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Document and harden local dev startup checks so operator UI routes remain renderable after runtime and environment changes.",
+ "nextBuildStep": "Add mission-linked spatial alert geometry and basemap refinement so live operations overlays can move from status cards to clearer map-native alert cues.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
