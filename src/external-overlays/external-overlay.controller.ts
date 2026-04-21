@@ -29,9 +29,14 @@ export class ExternalOverlayController {
           req.params.missionId,
           req.body,
         );
+      } else if (req.body?.kind === "drone_traffic") {
+        overlay = await this.externalOverlayService.createDroneTrafficOverlay(
+          req.params.missionId,
+          req.body,
+        );
       } else {
         throw new Error(
-          "Supported overlay kinds are: weather, crewed_traffic",
+          "Supported overlay kinds are: weather, crewed_traffic, drone_traffic",
         );
       }
 

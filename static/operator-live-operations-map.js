@@ -93,6 +93,11 @@ const crewedTrafficOverlays = () =>
     (overlay) => overlay.kind === "crewed_traffic",
   );
 
+const droneTrafficOverlays = () =>
+  (uiState.externalOverlays ?? []).filter(
+    (overlay) => overlay.kind === "drone_traffic",
+  );
+
 const formatDateTime = (value) => {
   if (!value) {
     return "Not recorded";
@@ -300,6 +305,60 @@ const crewedTrafficSummary = () => {
     label: `${traffic.length} crewed traffic contact${traffic.length === 1 ? "" : "s"}`,
     tone: primary.severity ?? "info",
     detail: `${metadata.callsign ?? metadata.trafficId ?? "Unknown"} · ${primary.speedKnots ?? "?"} kt · ${primary.geometry?.altitudeMslFt ?? "?"} ft · observed ${formatDateTime(primary.observedAt)}`,
+  };
+};
+
+const activeDroneTrafficOverlays = () => {
+  const replayPoint = activeReplayPoint();
+  const replayTime = replayPoint?.timestamp ? Date.parse(replayPoint.timestamp) : null;
+
+  return droneTrafficOverlays()
+    .map((overlay) => {
+      const observedAt = Date.parse(overlay.observedAt ?? "");
+      const validFrom = overlay.validFrom ? Date.parse(overlay.validFrom) : observedAt;
+      const validTo = overlay.validTo ? Date.parse(overlay.validTo) : null;
+      const activeAtReplay =
+        replayTime != null &&
+        Number.isFinite(validFrom) &&
+        replayTime >= validFrom &&
+        (validTo == null || replayTime <= validTo);
+      const relativeMs =
+        replayTime == null || !Number.isFinite(observedAt)
+          ? Number.POSITIVE_INFINITY
+          : Math.abs(replayTime - observedAt);
+
+      return {
+        ...overlay,
+        activeAtReplay,
+        relativeMs,
+      };
+    })
+    .sort((left, right) => {
+      if (left.activeAtReplay !== right.activeAtReplay) {
+        return left.activeAtReplay ? -1 : 1;
+      }
+
+      return left.relativeMs - right.relativeMs;
+    })
+    .slice(0, 6);
+};
+
+const droneTrafficSummary = () => {
+  const traffic = activeDroneTrafficOverlays();
+  if (traffic.length === 0) {
+    return {
+      label: "Drone traffic missing",
+      tone: "warning",
+      detail: "No mission-linked drone traffic overlays are available for the current replay position.",
+    };
+  }
+
+  const primary = traffic[0];
+  const metadata = primary.metadata ?? {};
+  return {
+    label: `${traffic.length} drone traffic contact${traffic.length === 1 ? "" : "s"}`,
+    tone: primary.severity ?? "info",
+    detail: `${metadata.operatorReference ?? metadata.trafficId ?? "Unknown"} · ${primary.speedKnots ?? "?"} kt · ${primary.geometry?.altitudeMslFt ?? "?"} ft · observed ${formatDateTime(primary.observedAt)}`,
   };
 };
 
@@ -606,6 +665,7 @@ const buildOverlayCards = () => {
     summarizeDispatchState(dispatchWorkspace),
     weatherSummary(),
     crewedTrafficSummary(),
+    droneTrafficSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
   ];
 
@@ -692,6 +752,9 @@ const renderOverview = () => {
   const activeTraffic = activeCrewedTrafficOverlays();
   const primaryTraffic = activeTraffic[0];
   const primaryTrafficMeta = primaryTraffic?.metadata ?? null;
+  const activeDroneTraffic = activeDroneTrafficOverlays();
+  const primaryDroneTraffic = activeDroneTraffic[0];
+  const primaryDroneMeta = primaryDroneTraffic?.metadata ?? null;
 
   overviewPanel.innerHTML = `
     <article class="metric">
@@ -758,6 +821,19 @@ const renderOverview = () => {
         primaryTrafficMeta
           ? `${primaryTrafficMeta.callsign ?? primaryTrafficMeta.trafficId ?? "Unknown"} at ${formatDateTime(primaryTraffic.observedAt)}`
           : "No crewed traffic overlay loaded for this mission.",
+      )}</div>
+    </article>
+    <article class="metric">
+      <div class="label">Drone traffic</div>
+      <div class="value ${toneClass(primaryDroneTraffic?.severity ?? "missing")}">${escapeHtml(
+        activeDroneTraffic.length === 0
+          ? "Missing"
+          : `${activeDroneTraffic.length} contact${activeDroneTraffic.length === 1 ? "" : "s"}`,
+      )}</div>
+      <div class="meta">${escapeHtml(
+        primaryDroneMeta
+          ? `${primaryDroneMeta.operatorReference ?? primaryDroneMeta.trafficId ?? "Unknown"} at ${formatDateTime(primaryDroneTraffic.observedAt)}`
+          : "No drone traffic overlay loaded for this mission.",
       )}</div>
     </article>
   `;
@@ -842,6 +918,7 @@ const buildMapMarkup = () => {
     summarizeAirspaceState(uiState.planningWorkspace).label,
     weatherOverlays().length > 0 ? `Weather overlays ${weatherOverlays().length}` : "Weather overlays 0",
     crewedTrafficOverlays().length > 0 ? `Crewed traffic ${crewedTrafficOverlays().length}` : "Crewed traffic 0",
+    droneTrafficOverlays().length > 0 ? `Drone traffic ${droneTrafficOverlays().length}` : "Drone traffic 0",
   ];
 
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
@@ -866,6 +943,7 @@ const buildMapMarkup = () => {
   const airspaceState = summarizeAirspaceState(uiState.planningWorkspace);
   const weatherState = weatherSummary();
   const trafficState = crewedTrafficSummary();
+  const droneState = droneTrafficSummary();
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
   const weatherOverlay = activeWeatherOverlay();
@@ -969,6 +1047,33 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
+  const droneTrafficMarkers = activeDroneTrafficOverlays()
+    .map((overlay) => {
+      const trafficPoint =
+        Number.isFinite(overlay.geometry?.lat) &&
+        Number.isFinite(overlay.geometry?.lng)
+          ? toPoint(Number(overlay.geometry.lat), Number(overlay.geometry.lng))
+          : null;
+
+      if (!trafficPoint) {
+        return "";
+      }
+
+      const metadata = overlay.metadata ?? {};
+      return `
+        <g>
+          <circle cx="${trafficPoint.x}" cy="${trafficPoint.y}" r="9" fill="rgba(34,197,94,0.16)" stroke="#22c55e" stroke-width="2" />
+          <rect x="${trafficPoint.x - 5}" y="${trafficPoint.y - 5}" width="10" height="10" rx="2" fill="#22c55e" opacity="0.94" />
+          <text x="${trafficPoint.x + 12}" y="${trafficPoint.y - 2}" fill="#f8fafc" font-size="11" font-weight="700">${escapeHtml(
+            metadata.operatorReference ?? metadata.trafficId ?? "Drone",
+          )}</text>
+          <text x="${trafficPoint.x + 12}" y="${trafficPoint.y + 12}" fill="#d8ecff" font-size="10">${escapeHtml(
+            `${overlay.geometry?.altitudeMslFt ?? "?"}ft · ${overlay.speedKnots ?? "?"}kt`,
+          )}</text>
+        </g>
+      `;
+    })
+    .join("");
 
   return `
     <div class="map-grid"></div>
@@ -989,6 +1094,7 @@ const buildMapMarkup = () => {
       ${replayDots}
       ${weatherMarker}
       ${crewedTrafficMarkers}
+      ${droneTrafficMarkers}
       ${
         currentMapPoint
           ? `
@@ -1136,6 +1242,32 @@ const renderStatus = () => {
           <div>${escapeHtml(
             activeCrewedTrafficOverlays()[0]
               ? formatDateTime(activeCrewedTrafficOverlays()[0].observedAt)
+              : "Not recorded",
+          )}</div>
+          <div class="k">Drone traffic</div>
+          <div>${renderBadge(droneState.label)}</div>
+          <div class="k">Primary drone</div>
+          <div>${escapeHtml(
+            activeDroneTrafficOverlays()[0]
+              ? `${activeDroneTrafficOverlays()[0].metadata?.operatorReference ?? activeDroneTrafficOverlays()[0].metadata?.trafficId ?? "Unknown"}`
+              : "Missing",
+          )}</div>
+          <div class="k">Vehicle / speed</div>
+          <div>${escapeHtml(
+            activeDroneTrafficOverlays()[0]
+              ? `${activeDroneTrafficOverlays()[0].metadata?.vehicleType ?? "Unknown"} · ${activeDroneTrafficOverlays()[0].speedKnots ?? "?"} kt`
+              : "Missing",
+          )}</div>
+          <div class="k">Altitude</div>
+          <div>${escapeHtml(
+            activeDroneTrafficOverlays()[0]
+              ? `${activeDroneTrafficOverlays()[0].geometry?.altitudeMslFt ?? "?"} ft`
+              : "Missing",
+          )}</div>
+          <div class="k">Observed</div>
+          <div>${escapeHtml(
+            activeDroneTrafficOverlays()[0]
+              ? formatDateTime(activeDroneTrafficOverlays()[0].observedAt)
               : "Not recorded",
           )}</div>
         </div>

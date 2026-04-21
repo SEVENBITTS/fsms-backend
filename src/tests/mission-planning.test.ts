@@ -2007,5 +2007,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("crewedTrafficOverlays");
     expect(response.text).toContain("activeCrewedTrafficOverlays");
     expect(response.text).toContain("crewedTrafficSummary");
+    expect(response.text).toContain("droneTrafficOverlays");
+    expect(response.text).toContain("activeDroneTrafficOverlays");
+    expect(response.text).toContain("droneTrafficSummary");
   });
 });

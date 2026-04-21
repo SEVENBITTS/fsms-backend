@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add migration-backed drone traffic external overlay ingestion and live operations display using the mission-linked external overlay model.",
+ "nextBuildStep": "Add mission-linked traffic conflict assessment on top of weather, crewed traffic, and drone traffic overlays without introducing operator command automation.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
