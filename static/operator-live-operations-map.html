@@ -116,6 +116,65 @@
       background: rgba(255,255,255,0.04);
       color: var(--muted);
     }
+    .entry-browser {
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      box-shadow: var(--shadow);
+    }
+    .entry-browser-header {
+      display: flex;
+      align-items: end;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .entry-browser-header .field {
+      flex: 1;
+    }
+    .entry-browser-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 0;
+    }
+    .entry-browser-list,
+    .entry-browser-detail {
+      min-height: 220px;
+      padding: 16px 18px;
+    }
+    .entry-browser-detail {
+      border-left: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .mission-row {
+      padding: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+    }
+    .mission-row-title {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .mission-row-meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .action-button {
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-accent);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
     .band { padding: 18px 0; }
     .metric-grid {
       display: grid;
@@ -577,6 +636,7 @@
     }
     @media (max-width: 1120px) {
       .controls-grid,
+      .entry-browser-grid,
       .metric-grid,
       .live-grid,
       .summary-grid,
@@ -623,6 +683,22 @@
             <div id="live-ops-loaded-mission-pill" class="status-pill">None</div>
           </div>
         </div>
+        <section class="entry-browser">
+          <div class="entry-browser-header">
+            <div class="field">
+              <label for="live-ops-mission-search-input">Mission search</label>
+              <input id="live-ops-mission-search-input" type="text" placeholder="Search missions by plan ID, status, platform, or pilot" />
+            </div>
+            <div class="field" style="max-width: 180px;">
+              <label>&nbsp;</label>
+              <button id="live-ops-mission-search-btn" class="secondary" type="button">Search missions</button>
+            </div>
+          </div>
+          <div class="entry-browser-grid">
+            <div id="live-ops-mission-browser-list" class="entry-browser-list"></div>
+            <div id="live-ops-mission-browser-detail" class="entry-browser-detail"></div>
+          </div>
+        </section>
       </div>
     </header>
 
