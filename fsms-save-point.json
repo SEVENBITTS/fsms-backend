@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add live operations demo data seed path so operator replay, overlay, and conflict presentation can be reviewed against a mission with telemetry, alerts, and traffic context.",
+  "nextBuildStep": "Reduce empty-state duplication and generic-route fetch failure in the live operations entry flow so the live operations view shows a proper mission selection or empty state before a valid mission UUID is loaded.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
