@@ -1993,6 +1993,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("replaySlider");
     expect(response.text).toContain("replayMarkers");
     expect(response.text).toContain("conflictReplayMarkers");
+    expect(response.text).toContain("currentConflictWindowSummary");
+    expect(response.text).toContain("conflictTrackWindowPoints");
     expect(response.text).toContain("correlatedAlertWindows");
     expect(response.text).toContain("renderAlertCorrelation");
     expect(response.text).toContain("replaySpeedSelect");
@@ -2021,5 +2023,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("renderConflictAssessment");
     expect(response.text).toContain("renderConflictAdvisory");
     expect(response.text).toContain("timeline-chip-row");
+    expect(response.text).toContain("map-window-summary");
+    expect(response.text).toContain("conflictTrackHighlight");
   });
 });
