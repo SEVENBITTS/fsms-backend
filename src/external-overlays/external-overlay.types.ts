@@ -41,6 +41,14 @@ export interface CrewedTrafficOverlayMetadata {
   verticalRateFpm: number | null;
 }
 
+export interface DroneTrafficOverlayMetadata {
+  trafficId: string;
+  trackSource: string;
+  vehicleType: string | null;
+  operatorReference: string | null;
+  verticalRateFpm: number | null;
+}
+
 export interface ExternalOverlay {
   id: string;
   missionId: string;
@@ -104,6 +112,30 @@ export interface CreateCrewedTrafficExternalOverlayInput {
   confidence?: number | null;
   freshnessSeconds?: number | null;
   metadata: CrewedTrafficOverlayMetadata;
+}
+
+export interface CreateDroneTrafficExternalOverlayInput {
+  kind: "drone_traffic";
+  source: {
+    provider: string;
+    sourceType: string;
+    sourceRecordId?: string | null;
+  };
+  observedAt: string;
+  validFrom?: string | null;
+  validTo?: string | null;
+  geometry: {
+    type: "point";
+    lat: number;
+    lng: number;
+    altitudeMslFt?: number | null;
+  };
+  headingDegrees?: number | null;
+  speedKnots?: number | null;
+  severity?: ExternalOverlaySeverity | null;
+  confidence?: number | null;
+  freshnessSeconds?: number | null;
+  metadata: DroneTrafficOverlayMetadata;
 }
 
 export interface ListExternalOverlaysFilters {

@@ -293,6 +293,172 @@ describe("mission external overlays integration", () => {
     );
   });
 
+  it("creates and lists drone traffic overlays through the mission-linked external overlay boundary", async () => {
+    const missionId = await createMission();
+
+    const createResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "drone_traffic",
+        source: {
+          provider: "utm-hub",
+          sourceType: "remote_id",
+          sourceRecordId: "drone-4004",
+        },
+        observedAt: "2026-04-21T10:06:00.000Z",
+        geometry: {
+          type: "point",
+          lat: 51.5062,
+          lng: -0.1193,
+          altitudeMslFt: 420,
+        },
+        headingDegrees: 44,
+        speedKnots: 28,
+        severity: "info",
+        freshnessSeconds: 20,
+        metadata: {
+          trafficId: "drone-4004",
+          trackSource: "remote_id",
+          vehicleType: "multirotor",
+          operatorReference: "op-ref-77",
+          verticalRateFpm: 120,
+        },
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.overlay).toMatchObject({
+      missionId,
+      kind: "drone_traffic",
+      geometry: {
+        type: "point",
+        lat: 51.5062,
+        lng: -0.1193,
+        altitudeMslFt: 420,
+      },
+      headingDegrees: 44,
+      speedKnots: 28,
+      metadata: {
+        trafficId: "drone-4004",
+        trackSource: "remote_id",
+        vehicleType: "multirotor",
+        operatorReference: "op-ref-77",
+        verticalRateFpm: 120,
+      },
+    });
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=drone_traffic`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body).toMatchObject({
+      missionId,
+      overlays: [
+        expect.objectContaining({
+          kind: "drone_traffic",
+          headingDegrees: 44,
+          speedKnots: 28,
+          metadata: expect.objectContaining({
+            trafficId: "drone-4004",
+            operatorReference: "op-ref-77",
+            vehicleType: "multirotor",
+          }),
+        }),
+      ],
+    });
+  });
+
+  it("keeps weather, crewed traffic, and drone traffic paths intact when listed together", async () => {
+    const missionId = await createMission();
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "weather",
+        source: {
+          provider: "met-office",
+          sourceType: "surface_observation",
+        },
+        observedAt: "2026-04-21T10:00:00.000Z",
+        geometry: {
+          type: "point",
+          lat: 51.5074,
+          lng: -0.1278,
+        },
+        metadata: {
+          windSpeedKnots: 12,
+          windDirectionDegrees: 205,
+          temperatureC: 10,
+          precipitation: "none",
+        },
+      });
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "crewed_traffic",
+        source: {
+          provider: "traffic-hub",
+          sourceType: "adsb_exchange",
+        },
+        observedAt: "2026-04-21T10:03:00.000Z",
+        geometry: {
+          type: "point",
+          lat: 51.508,
+          lng: -0.12,
+          altitudeMslFt: 2400,
+        },
+        headingDegrees: 80,
+        speedKnots: 148,
+        metadata: {
+          trafficId: "traffic-3003",
+          callsign: "N123AB",
+          trackSource: "adsb_exchange",
+          aircraftCategory: "fixed_wing",
+          verticalRateFpm: null,
+        },
+      });
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "drone_traffic",
+        source: {
+          provider: "utm-hub",
+          sourceType: "remote_id",
+        },
+        observedAt: "2026-04-21T10:05:00.000Z",
+        geometry: {
+          type: "point",
+          lat: 51.5068,
+          lng: -0.1186,
+          altitudeMslFt: 390,
+        },
+        headingDegrees: 140,
+        speedKnots: 32,
+        metadata: {
+          trafficId: "drone-5005",
+          trackSource: "remote_id",
+          vehicleType: "multirotor",
+          operatorReference: "fleet-4",
+          verticalRateFpm: 90,
+        },
+      });
+
+    const listAllResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays`,
+    );
+
+    expect(listAllResponse.status).toBe(200);
+    expect(listAllResponse.body.overlays).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "weather" }),
+        expect.objectContaining({ kind: "crewed_traffic" }),
+        expect.objectContaining({ kind: "drone_traffic" }),
+      ]),
+    );
+  });
+
   it("returns 404 for missing missions on external overlay reads", async () => {
     const response = await request(app).get(
       `/missions/${randomUUID()}/external-overlays`,
