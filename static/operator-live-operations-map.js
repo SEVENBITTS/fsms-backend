@@ -588,6 +588,75 @@ const conflictTrackWindowPoints = () => {
   });
 };
 
+const conflictEnvelopeRadius = (conflict) => {
+  const lateralDistance = Number(conflict?.metrics?.lateralDistanceMeters);
+
+  if (!Number.isFinite(lateralDistance)) {
+    return 72;
+  }
+
+  return Math.max(42, Math.min(160, 28 + lateralDistance * 0.18));
+};
+
+const conflictSeverityBandRadii = (conflict) => {
+  const outerRadius = conflictEnvelopeRadius(conflict);
+
+  if (String(conflict?.severity ?? "").toLowerCase() === "critical") {
+    return [outerRadius, Math.max(28, outerRadius * 0.68), Math.max(16, outerRadius * 0.42)];
+  }
+
+  if (String(conflict?.severity ?? "").toLowerCase() === "caution") {
+    return [outerRadius, Math.max(24, outerRadius * 0.62)];
+  }
+
+  return [outerRadius];
+};
+
+const conflictOverlayForItem = (conflict) =>
+  (uiState.externalOverlays ?? []).find((overlay) => overlay.id === conflict?.overlayId) ?? null;
+
+const activeConflictEnvelopeTargets = () =>
+  activeConflictAssessmentItems()
+    .map((conflict) => {
+      const overlay = conflictOverlayForItem(conflict);
+      const lat = Number(overlay?.geometry?.lat);
+      const lng = Number(overlay?.geometry?.lng);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null;
+      }
+
+      return {
+        conflict,
+        overlay,
+        lat,
+        lng,
+        radii: conflictSeverityBandRadii(conflict),
+      };
+    })
+    .filter(Boolean);
+
+const conflictProximityEnvelopeSummary = () => {
+  const targets = activeConflictEnvelopeTargets();
+  const primary = targets[0] ?? null;
+
+  if (!primary) {
+    return {
+      headline: "No proximity envelope active",
+      tone: "pass",
+      detail: "No assessed conflict object currently has map-native proximity envelope rendering.",
+      meta: "Envelope bands clear.",
+    };
+  }
+
+  return {
+    headline: `${primary.conflict.overlayLabel} proximity`,
+    tone: primary.conflict.severity,
+    detail: `${primary.radii.length} severity band${primary.radii.length === 1 ? "" : "s"} · ${primary.conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primary.conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+    meta: primary.conflict.explanation,
+  };
+};
+
 const replayTrack = () =>
   (uiState.replay?.replay ?? []).filter(
     (point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng),
@@ -1212,6 +1281,8 @@ const buildMapMarkup = () => {
   const trafficState = crewedTrafficSummary();
   const droneState = droneTrafficSummary();
   const conflictWindowSummary = currentConflictWindowSummary();
+  const conflictEnvelopeSummary = conflictProximityEnvelopeSummary();
+  const conflictEnvelopeTargets = activeConflictEnvelopeTargets();
   const conflictTrackWindow = conflictTrackWindowPoints();
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
@@ -1361,6 +1432,63 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
+  const conflictSeverityBands = conflictEnvelopeTargets
+    .map((target) =>
+      target.radii
+        .map((radius, index) => {
+          const point = toPoint(target.lat, target.lng);
+          const stroke = severityStroke(target.conflict.severity);
+          const opacity = index === 0 ? 0.26 : index === 1 ? 0.18 : 0.12;
+          const dash = index === 0 ? "none" : index === 1 ? "8 8" : "4 10";
+
+          return `
+            <circle
+              class="conflict-severity-band conflict-severity-band-${escapeHtml(target.conflict.severity)}"
+              cx="${point.x}"
+              cy="${point.y}"
+              r="${radius}"
+              fill="${stroke}"
+              fill-opacity="${index === 0 ? 0.05 : 0.02}"
+              stroke="${stroke}"
+              stroke-width="${index === 0 ? 2.5 : 1.8}"
+              stroke-opacity="${opacity}"
+              stroke-dasharray="${dash}"
+            />
+          `;
+        })
+        .join(""),
+    )
+    .join("");
+  const conflictProximityEnvelope = conflictEnvelopeTargets
+    .map((target) => {
+      const point = toPoint(target.lat, target.lng);
+      const stroke = severityStroke(target.conflict.severity);
+      const envelopeRadius = target.radii[0] ?? conflictEnvelopeRadius(target.conflict);
+
+      return `
+        <g class="conflict-proximity-envelope">
+          <circle
+            class="conflict-proximity-envelope-core"
+            cx="${point.x}"
+            cy="${point.y}"
+            r="${Math.max(12, envelopeRadius * 0.22)}"
+            fill="${stroke}"
+            fill-opacity="0.1"
+            stroke="${stroke}"
+            stroke-width="2"
+            stroke-opacity="0.6"
+          />
+          <text
+            class="conflict-proximity-envelope-label"
+            x="${point.x}"
+            y="${point.y - envelopeRadius - 10}"
+            fill="${stroke}"
+            text-anchor="middle"
+          >${escapeHtml(target.conflict.severity.toUpperCase())}</text>
+        </g>
+      `;
+    })
+    .join("");
 
   return `
     <div class="map-grid"></div>
@@ -1381,8 +1509,10 @@ const buildMapMarkup = () => {
       ${alertTrackHighlight}
       ${replayDots}
       ${weatherMarker}
+      ${conflictSeverityBands}
       ${crewedTrafficMarkers}
       ${droneTrafficMarkers}
+      ${conflictProximityEnvelope}
       ${
         currentMapPoint
           ? `
@@ -1398,6 +1528,11 @@ const buildMapMarkup = () => {
       <strong>${escapeHtml(conflictWindowSummary.headline)}</strong>
       <div>${escapeHtml(conflictWindowSummary.detail)}</div>
       <div class="meta">${escapeHtml(conflictWindowSummary.meta)}</div>
+    </div>
+    <div class="map-window-summary map-envelope-summary ${toneClass(conflictEnvelopeSummary.tone)}">
+      <strong>${escapeHtml(conflictEnvelopeSummary.headline)}</strong>
+      <div>${escapeHtml(conflictEnvelopeSummary.detail)}</div>
+      <div class="meta">${escapeHtml(conflictEnvelopeSummary.meta)}</div>
     </div>
     <div class="map-overlay">
       ${overlays.map((item) => `<div class="overlay-pill">${escapeHtml(item)}</div>`).join("")}
