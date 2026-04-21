@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Update the live operations entry flow so the generic live operations route shows mission selection or an empty state instead of fetching with placeholder mission IDs.",
+  "nextBuildStep": "Add mission selection integration to the live operations entry flow so operators can choose a mission from the live operations route without manual UUID entry.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

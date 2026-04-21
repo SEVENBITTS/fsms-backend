@@ -1931,6 +1931,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Alert Timeline Correlation");
     expect(response.text).toContain("Conflict Assessment");
     expect(response.text).toContain("Conflict Advisory Guidance");
+    expect(response.text).toContain("Enter mission UUID");
+    expect(response.text).toContain("Open workspace");
     expect(response.text).toContain("live-ops-replay-play-btn");
     expect(response.text).toContain("live-ops-replay-slider");
     expect(response.text).toContain("live-ops-replay-markers");
@@ -1975,16 +1977,21 @@ describe("mission planning drafts", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain("javascript");
-    expect(response.text).toContain("/missions/${missionId}/replay");
-    expect(response.text).toContain("/missions/${missionId}/telemetry/latest");
-    expect(response.text).toContain("/missions/${missionId}/alerts");
-    expect(response.text).toContain("/missions/${missionId}/external-overlays");
-    expect(response.text).toContain("/missions/${missionId}/conflict-assessment");
-    expect(response.text).toContain("/missions/${missionId}/planning-workspace");
-    expect(response.text).toContain("/missions/${missionId}/dispatch-workspace");
-    expect(response.text).toContain("/missions/${missionId}/operations-timeline");
+    expect(response.text).toContain("/missions/${");
+    expect(response.text).toContain("/replay");
+    expect(response.text).toContain("/telemetry/latest");
+    expect(response.text).toContain("/alerts");
+    expect(response.text).toContain("/external-overlays");
+    expect(response.text).toContain("/conflict-assessment");
+    expect(response.text).toContain("/planning-workspace");
+    expect(response.text).toContain("/dispatch-workspace");
+    expect(response.text).toContain("/operations-timeline");
     expect(response.text).toContain("/operator/missions/${encodeURIComponent(missionId)}");
     expect(response.text).toContain("buildOverlayCards");
+    expect(response.text).toContain("normalizeMissionId");
+    expect(response.text).toContain("isPlaceholderMissionId");
+    expect(response.text).toContain("hasSelectedMissionId");
+    expect(response.text).toContain("renderEntryState");
     expect(response.text).toContain("map-alert-card");
     expect(response.text).toContain("severityStroke");
     expect(response.text).toContain("alertTrackHighlight");
@@ -2040,5 +2047,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("conflictProximityEnvelopeSummary");
     expect(response.text).toContain("conflictEnvelopeRadius");
     expect(response.text).toContain("map-envelope-summary");
+    expect(response.text).toContain(
+      "No mission-specific fetch is attempted until a valid mission ID is provided.",
+    );
   });
 });
