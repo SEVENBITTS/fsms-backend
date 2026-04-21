@@ -2025,5 +2025,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("timeline-chip-row");
     expect(response.text).toContain("map-window-summary");
     expect(response.text).toContain("conflictTrackHighlight");
+    expect(response.text).toContain("conflictSeverityBands");
+    expect(response.text).toContain("conflictProximityEnvelope");
+    expect(response.text).toContain("conflictProximityEnvelopeSummary");
+    expect(response.text).toContain("conflictEnvelopeRadius");
+    expect(response.text).toContain("map-envelope-summary");
   });
 });
