@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Fix the live operations entry flow so the generic live operations route shows mission selection or an empty state instead of fetching with placeholder mission IDs.",
+  "nextBuildStep": "Update the live operations entry flow so the generic live operations route shows mission selection or an empty state instead of fetching with placeholder mission IDs.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
