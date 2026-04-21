@@ -17,14 +17,23 @@ export class ExternalOverlayController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      if (req.body?.kind !== "weather") {
-        throw new Error("Only weather overlays are supported in the first implementation slice");
-      }
+      let overlay;
 
-      const overlay = await this.externalOverlayService.createWeatherOverlay(
-        req.params.missionId,
-        req.body,
-      );
+      if (req.body?.kind === "weather") {
+        overlay = await this.externalOverlayService.createWeatherOverlay(
+          req.params.missionId,
+          req.body,
+        );
+      } else if (req.body?.kind === "crewed_traffic") {
+        overlay = await this.externalOverlayService.createCrewedTrafficOverlay(
+          req.params.missionId,
+          req.body,
+        );
+      } else {
+        throw new Error(
+          "Supported overlay kinds are: weather, crewed_traffic",
+        );
+      }
 
       res.status(201).json({ overlay });
     } catch (error) {
