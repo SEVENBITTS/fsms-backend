@@ -116,6 +116,34 @@ This dev entrypoint now:
 
 This is intended for UI rendering and route verification. API-backed mission data still requires a working local database setup.
 
+## Live ops demo seed
+
+To create a mission with replay, alerts, external overlays, and conflict-relevant context for operator UI review, run:
+
+```powershell
+npm run seed:liveops-demo
+```
+
+The script:
+
+- runs migrations
+- creates a mission with planning/approval/dispatch state
+- launches the mission
+- records replay telemetry
+- creates weather, crewed traffic, and drone traffic overlays
+- prints the mission UUID and local review URLs
+
+After the seed finishes, start the app:
+
+```powershell
+npm run dev
+```
+
+Then open the seeded mission in:
+
+- `/operator/missions/<mission-id>/live-operations`
+- `/operator/missions/<mission-id>`
+
 Activate the virtual environment:
 
 
