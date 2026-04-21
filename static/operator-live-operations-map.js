@@ -9,6 +9,7 @@ const mapPanel = document.getElementById("live-ops-map");
 const statusPanel = document.getElementById("live-ops-status");
 const timelinePanel = document.getElementById("live-ops-timeline");
 const alertCorrelationPanel = document.getElementById("live-ops-alert-correlation");
+const jumpControlsPanel = document.getElementById("live-ops-jump-controls");
 const replayPlayButton = document.getElementById("live-ops-replay-play-btn");
 const replayPauseButton = document.getElementById("live-ops-replay-pause-btn");
 const replayStepBackButton = document.getElementById("live-ops-replay-step-back-btn");
@@ -239,6 +240,74 @@ const setReplayIndex = (nextIndex) => {
     points.length === 0 ? 0 : Math.max(0, Math.min(nextIndex, points.length - 1));
   uiState.replayPlayback.index = boundedIndex;
   replaySlider.value = String(boundedIndex);
+};
+
+const findNearestReplayIndexForTime = (timestamp) => {
+  const targetTime = Date.parse(timestamp ?? "");
+  const points = replayTrack();
+
+  if (!Number.isFinite(targetTime) || points.length === 0) {
+    return null;
+  }
+
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  points.forEach((point, index) => {
+    const pointTime = Date.parse(point.timestamp ?? "");
+    if (!Number.isFinite(pointTime)) {
+      return;
+    }
+
+    const distance = Math.abs(pointTime - targetTime);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+};
+
+const replayMilestones = () => {
+  const timelineItems = uiState.timeline?.items ?? [];
+  const eventMilestones = timelineItems
+    .filter((item) => {
+      const eventType = item?.details?.eventType;
+      return (
+        eventType === "mission.launched" ||
+        eventType === "mission.completed" ||
+        eventType === "mission.aborted"
+      );
+    })
+    .map((item) => ({
+      key: `${item.type}-${item.occurredAt}`,
+      label:
+        item?.details?.eventType === "mission.launched"
+          ? "Launch"
+          : item?.details?.eventType === "mission.completed"
+            ? "Completion"
+            : "Abort",
+      timestamp: item.occurredAt,
+      tone:
+        item?.details?.eventType === "mission.aborted"
+          ? "fail"
+          : "info",
+    }));
+
+  const alertMilestones = (uiState.alerts ?? [])
+    .slice(0, 4)
+    .map((alert) => ({
+      key: `alert-${alert.id}`,
+      label: `${alert.alertType.replaceAll("_", " ")}`,
+      timestamp: alert.triggeredAt,
+      tone: alert.severity,
+    }));
+
+  return [...eventMilestones, ...alertMilestones].filter(
+    (milestone, index, list) =>
+      index === list.findIndex((candidate) => candidate.key === milestone.key),
+  );
 };
 
 const updateUrl = (missionId) => {
@@ -827,6 +896,34 @@ const renderStatus = () => {
   `;
 };
 
+const renderJumpControls = () => {
+  const milestones = replayMilestones();
+
+  if (milestones.length === 0) {
+    jumpControlsPanel.innerHTML =
+      '<div class="empty-state">No launch, completion, abort, or alert-linked milestones are available for replay jumping yet.</div>';
+    return;
+  }
+
+  jumpControlsPanel.innerHTML = `
+    <div class="jump-control-grid">
+      ${milestones
+        .map(
+          (milestone) => `
+            <button
+              type="button"
+              class="control-button ${toneClass(milestone.tone)}"
+              data-jump-timestamp="${escapeHtml(milestone.timestamp)}"
+            >
+              ${escapeHtml(milestone.label)}
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+};
+
 const renderAlertCorrelation = () => {
   const replayPoint = activeReplayPoint();
   const alertWindows = correlatedAlertWindows();
@@ -940,6 +1037,7 @@ const renderLiveOperations = () => {
   renderReplayControls();
   renderOverview();
   renderMap();
+  renderJumpControls();
   renderStatus();
   renderAlertCorrelation();
   renderTimeline();
@@ -948,6 +1046,7 @@ const renderLiveOperations = () => {
 const clearPanels = (message) => {
   overviewPanel.innerHTML = "";
   mapPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+  jumpControlsPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   statusPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   alertCorrelationPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   timelinePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
@@ -1065,6 +1164,27 @@ replaySpeedSelect.addEventListener("change", () => {
   }
 
   renderReplayControls();
+});
+
+jumpControlsPanel.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const timestamp = target.dataset.jumpTimestamp;
+  if (!timestamp) {
+    return;
+  }
+
+  const nextIndex = findNearestReplayIndexForTime(timestamp);
+  if (nextIndex == null) {
+    return;
+  }
+
+  stopReplayPlayback();
+  setReplayIndex(nextIndex);
+  renderLiveOperations();
 });
 
 openWorkspaceButton.addEventListener("click", () => {

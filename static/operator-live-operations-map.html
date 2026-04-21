@@ -468,6 +468,11 @@
       letter-spacing: 0.08em;
       color: var(--muted);
     }
+    .jump-control-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
     .alert-window-list {
       display: grid;
       gap: 10px;
@@ -563,7 +568,7 @@
       </div>
     </section>
 
-    <section class="band">
+      <section class="band">
       <div class="band-inner live-grid">
         <div class="panel">
           <div class="panel-header">
@@ -593,6 +598,13 @@
           </div>
         </div>
         <div class="stack">
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Replay Milestones</h3>
+              <p>Jump directly to launch, completion, abort, and alert-linked moments.</p>
+            </div>
+            <div id="live-ops-jump-controls" class="panel-body"></div>
+          </div>
           <div class="panel">
             <div class="panel-header">
               <h3>Telemetry and Risk Status</h3>
