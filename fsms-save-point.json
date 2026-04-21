@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add operator live operations event jump controls so replay review can move directly to launch, completion, and alert-linked mission milestones.",
+ "nextBuildStep": "Add grouped live operations milestone navigation so replay review can jump by lifecycle phase and alert category rather than a flat milestone list.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
