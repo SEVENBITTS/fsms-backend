@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission-linked alert timeline correlation so replay controls and map-native cues can be reviewed against explicit alert periods and operational events.",
+ "nextBuildStep": "Add operator live operations replay speed controls and segment stepping so alert-correlated mission review can move faster than one fixed playback pace.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

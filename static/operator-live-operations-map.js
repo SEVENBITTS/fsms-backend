@@ -8,11 +8,13 @@ const overviewPanel = document.getElementById("live-ops-overview");
 const mapPanel = document.getElementById("live-ops-map");
 const statusPanel = document.getElementById("live-ops-status");
 const timelinePanel = document.getElementById("live-ops-timeline");
+const alertCorrelationPanel = document.getElementById("live-ops-alert-correlation");
 const replayPlayButton = document.getElementById("live-ops-replay-play-btn");
 const replayPauseButton = document.getElementById("live-ops-replay-pause-btn");
 const replaySlider = document.getElementById("live-ops-replay-slider");
 const replayTimeReadout = document.getElementById("live-ops-replay-time");
 const replayProgress = document.getElementById("live-ops-replay-progress");
+const replayMarkers = document.getElementById("live-ops-replay-markers");
 
 const uiState = {
   missionId: "",
@@ -128,6 +130,12 @@ const renderReplayControls = () => {
   const pointCount = points.length;
   const activePoint = activeReplayPoint();
   const sliderMax = Math.max(pointCount - 1, 0);
+  const replayStart = points[0]?.timestamp ? Date.parse(points[0].timestamp) : null;
+  const replayEnd = points[pointCount - 1]?.timestamp
+    ? Date.parse(points[pointCount - 1].timestamp)
+    : replayStart;
+  const replaySpan =
+    replayStart != null && replayEnd != null ? Math.max(replayEnd - replayStart, 1) : 1;
 
   replaySlider.max = String(sliderMax);
   replaySlider.disabled = pointCount <= 1;
@@ -140,6 +148,22 @@ const renderReplayControls = () => {
     pointCount === 0
       ? "0 / 0"
       : `${uiState.replayPlayback.index + 1} / ${pointCount}`;
+  replayMarkers.innerHTML =
+    pointCount === 0 || replayStart == null || replayEnd == null
+      ? ""
+      : (uiState.alerts ?? [])
+          .map((alert) => {
+            const markerTime = Date.parse(alert.triggeredAt);
+            if (!Number.isFinite(markerTime)) {
+              return "";
+            }
+
+            const left = ((markerTime - replayStart) / replaySpan) * 100;
+            return `<span class="replay-marker ${escapeHtml(
+              alert.severity,
+            )}" style="left:${Math.max(0, Math.min(left, 100))}%"></span>`;
+          })
+          .join("");
 };
 
 const missionDisplayName = (mission) =>
@@ -364,6 +388,64 @@ const buildOverlayCards = () => {
       `,
     )
     .join("");
+};
+
+const correlatedAlertWindows = () => {
+  const replayPoints = replayTrack();
+  const activePoint = activeReplayPoint();
+  const activeTime = activePoint?.timestamp ? Date.parse(activePoint.timestamp) : null;
+  const lastReplayTimestamp =
+    replayPoints[replayPoints.length - 1]?.timestamp
+      ? Date.parse(replayPoints[replayPoints.length - 1].timestamp)
+      : activeTime;
+
+  return (uiState.alerts ?? [])
+    .map((alert) => {
+      const start = Date.parse(alert.triggeredAt);
+      const end = alert.resolvedAt
+        ? Date.parse(alert.resolvedAt)
+        : lastReplayTimestamp ?? start;
+      const activeAtReplay =
+        activeTime != null &&
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        activeTime >= start &&
+        activeTime <= end;
+      const relativeMs =
+        activeTime == null || !Number.isFinite(start) ? Number.POSITIVE_INFINITY : Math.abs(activeTime - start);
+
+      return {
+        ...alert,
+        activeAtReplay,
+        relativeMs,
+      };
+    })
+    .sort((left, right) => {
+      if (left.activeAtReplay !== right.activeAtReplay) {
+        return left.activeAtReplay ? -1 : 1;
+      }
+      return left.relativeMs - right.relativeMs;
+    });
+};
+
+const correlatedTimelineEvents = () => {
+  const activePoint = activeReplayPoint();
+  const activeTime = activePoint?.timestamp ? Date.parse(activePoint.timestamp) : null;
+
+  return (uiState.timeline?.items ?? [])
+    .map((item) => {
+      const itemTime = item?.occurredAt ? Date.parse(item.occurredAt) : NaN;
+      const relativeMs =
+        activeTime == null || !Number.isFinite(itemTime) ? Number.POSITIVE_INFINITY : Math.abs(itemTime - activeTime);
+
+      return {
+        ...item,
+        relativeMs,
+      };
+    })
+    .filter((item) => Number.isFinite(item.relativeMs))
+    .sort((left, right) => left.relativeMs - right.relativeMs)
+    .slice(0, 4);
 };
 
 const renderOverview = () => {
@@ -707,6 +789,80 @@ const renderStatus = () => {
   `;
 };
 
+const renderAlertCorrelation = () => {
+  const replayPoint = activeReplayPoint();
+  const alertWindows = correlatedAlertWindows();
+  const nearbyEvents = correlatedTimelineEvents();
+
+  if (!replayPoint) {
+    alertCorrelationPanel.innerHTML =
+      '<div class="empty-state">Load a mission replay before alert windows and event correlation can be reviewed.</div>';
+    return;
+  }
+
+  const currentAlerts = alertWindows.filter((alert) => alert.activeAtReplay).slice(0, 3);
+  const recentWindows = (currentAlerts.length > 0 ? currentAlerts : alertWindows.slice(0, 3))
+    .map(
+      (alert) => `
+        <article class="alert-window ${toneClass(alert.severity)}">
+          <strong>${escapeHtml(alert.alertType.replaceAll("_", " "))} ${escapeHtml(alert.status)}</strong>
+          <div>${escapeHtml(alert.message)}</div>
+          <div class="alert-window-meta">
+            Triggered: ${escapeHtml(formatDateTime(alert.triggeredAt))}<br />
+            Resolved: ${escapeHtml(formatDateTime(alert.resolvedAt))}<br />
+            Severity: ${escapeHtml(alert.severity)}
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+
+  alertCorrelationPanel.innerHTML = `
+    <div class="stack">
+      <section class="correlation-card">
+        <h4>Current Replay-Point Alert Context</h4>
+        <div class="kv">
+          <div class="k">Replay timestamp</div>
+          <div>${escapeHtml(formatDateTime(replayPoint.timestamp))}</div>
+          <div class="k">Active alerts</div>
+          <div>${escapeHtml(
+            currentAlerts.length === 0 ? "None at current replay position" : `${currentAlerts.length}`,
+          )}</div>
+          <div class="k">Window state</div>
+          <div>${escapeHtml(
+            currentAlerts[0]
+              ? `${currentAlerts[0].alertType} ${currentAlerts[0].status}`
+              : "No alert window intersects the current replay point",
+          )}</div>
+        </div>
+      </section>
+      <section class="correlation-card">
+        <h4>Alert Windows</h4>
+        <div class="alert-window-list">
+          ${
+            recentWindows ||
+            '<div class="empty-state">No alert windows are available for this mission.</div>'
+          }
+        </div>
+      </section>
+      <section class="correlation-card">
+        <h4>Nearby Operational Events</h4>
+        ${
+          nearbyEvents.length === 0
+            ? '<div class="empty-state">No nearby mission events were found around the current replay position.</div>'
+            : renderList(
+                nearbyEvents.map((item) => ({
+                  label: `${item.phase.replaceAll("_", " ")} · ${item.type}`,
+                  value: `${formatDateTime(item.occurredAt)} · ${item.summary}`,
+                })),
+                "nearby operational events",
+              )
+        }
+      </section>
+    </div>
+  `;
+};
+
 const renderTimeline = () => {
   const items = uiState.timeline?.items ?? [];
   const relevant = items.slice(-8).reverse();
@@ -747,6 +903,7 @@ const renderLiveOperations = () => {
   renderOverview();
   renderMap();
   renderStatus();
+  renderAlertCorrelation();
   renderTimeline();
 };
 
@@ -754,6 +911,7 @@ const clearPanels = (message) => {
   overviewPanel.innerHTML = "";
   mapPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   statusPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+  alertCorrelationPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   timelinePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   renderReplayControls();
 };

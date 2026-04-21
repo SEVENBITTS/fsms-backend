@@ -266,6 +266,11 @@
       align-items: center;
       margin-bottom: 14px;
     }
+    .replay-slider-stack {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
     .control-button {
       min-height: 40px;
       padding: 0 14px;
@@ -294,6 +299,26 @@
       width: 100%;
       accent-color: var(--info);
     }
+    .replay-markers {
+      position: relative;
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      overflow: hidden;
+    }
+    .replay-marker {
+      position: absolute;
+      top: 2px;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(9,17,27,0.92);
+      box-shadow: 0 0 0 2px rgba(9,17,27,0.38);
+    }
+    .replay-marker.info { background: var(--info); }
+    .replay-marker.warning { background: var(--warn); }
+    .replay-marker.critical { background: var(--bad); }
     .replay-progress {
       min-width: 126px;
       text-align: right;
@@ -421,6 +446,39 @@
       border: 1px solid var(--border);
       background: var(--bg-band);
     }
+    .correlation-card {
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+    }
+    .correlation-card h4 {
+      margin: 0 0 10px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .alert-window-list {
+      display: grid;
+      gap: 10px;
+    }
+    .alert-window {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    .alert-window strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .alert-window-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
     .timeline-time { color: var(--muted); font-size: 13px; }
     .timeline-phase {
       font-size: 12px;
@@ -506,7 +564,10 @@
             <div class="replay-controls">
               <button id="live-ops-replay-play-btn" class="control-button" type="button">Play</button>
               <button id="live-ops-replay-pause-btn" class="control-button" type="button" disabled>Pause</button>
-              <input id="live-ops-replay-slider" class="replay-slider" type="range" min="0" max="0" step="1" value="0" />
+              <div class="replay-slider-stack">
+                <input id="live-ops-replay-slider" class="replay-slider" type="range" min="0" max="0" step="1" value="0" />
+                <div id="live-ops-replay-markers" class="replay-markers"></div>
+              </div>
               <div id="live-ops-replay-time" class="replay-readout">Replay time: not loaded</div>
               <div id="live-ops-replay-progress" class="replay-progress">0 / 0</div>
             </div>
@@ -520,6 +581,13 @@
               <p>Current telemetry context, readiness posture, and operator-relevant launch risk signals.</p>
             </div>
             <div id="live-ops-status" class="panel-body"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Alert Timeline Correlation</h3>
+              <p>Current replay-point alert state, alert windows, and nearby mission events.</p>
+            </div>
+            <div id="live-ops-alert-correlation" class="panel-body"></div>
           </div>
           <div class="panel">
             <div class="panel-header">
