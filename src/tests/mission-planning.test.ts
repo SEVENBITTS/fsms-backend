@@ -1930,6 +1930,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Telemetry and Risk Status");
     expect(response.text).toContain("Alert Timeline Correlation");
     expect(response.text).toContain("Conflict Assessment");
+    expect(response.text).toContain("Conflict Advisory Guidance");
     expect(response.text).toContain("live-ops-replay-play-btn");
     expect(response.text).toContain("live-ops-replay-slider");
     expect(response.text).toContain("live-ops-replay-markers");
@@ -2013,6 +2014,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("activeDroneTrafficOverlays");
     expect(response.text).toContain("droneTrafficSummary");
     expect(response.text).toContain("conflictAssessmentSummary");
+    expect(response.text).toContain("conflictAdvisorySummary");
     expect(response.text).toContain("renderConflictAssessment");
+    expect(response.text).toContain("renderConflictAdvisory");
   });
 });

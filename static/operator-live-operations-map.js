@@ -10,6 +10,7 @@ const statusPanel = document.getElementById("live-ops-status");
 const timelinePanel = document.getElementById("live-ops-timeline");
 const alertCorrelationPanel = document.getElementById("live-ops-alert-correlation");
 const conflictAssessmentPanel = document.getElementById("live-ops-conflict-assessment");
+const conflictAdvisoryPanel = document.getElementById("live-ops-conflict-advisory");
 const jumpControlsPanel = document.getElementById("live-ops-jump-controls");
 const replayPlayButton = document.getElementById("live-ops-replay-play-btn");
 const replayPauseButton = document.getElementById("live-ops-replay-pause-btn");
@@ -415,6 +416,54 @@ const conflictAssessmentSummary = () => {
   };
 };
 
+const deriveConflictAdvisories = () =>
+  activeConflictAssessmentItems().slice(0, 5).map((conflict) => {
+    let headline = "Monitor traffic proximity";
+    let recommendation = "Monitor";
+
+    if (conflict.severity === "critical") {
+      headline = "Immediate deconfliction review";
+      recommendation = "Review immediately";
+    } else if (conflict.severity === "caution") {
+      headline = "Deconfliction review recommended";
+      recommendation = "Deconflict";
+    }
+
+    const replayRelevance = conflict.replayRelevant
+      ? "Current replay window"
+      : `${conflict.replayTimeDeltaSeconds} s from replay cursor`;
+
+    return {
+      id: conflict.id,
+      tone: conflict.severity,
+      headline,
+      recommendation,
+      relatedObject: conflict.overlayLabel,
+      relatedSource: `${conflict.relatedSource.provider} / ${conflict.relatedSource.sourceType}`,
+      reasoning: conflict.explanation,
+      relevance: replayRelevance,
+      summary: `${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+    };
+  });
+
+const conflictAdvisorySummary = () => {
+  const advisories = deriveConflictAdvisories();
+  if (advisories.length === 0) {
+    return {
+      label: "Advisory layer clear",
+      tone: "pass",
+      detail: "No conflict advisory presentation is currently required.",
+    };
+  }
+
+  const primary = advisories[0];
+  return {
+    label: `${advisories.length} advisory item${advisories.length === 1 ? "" : "s"}`,
+    tone: primary.tone,
+    detail: `${primary.recommendation} · ${primary.relatedObject} · ${primary.summary}`,
+  };
+};
+
 const replayTrack = () =>
   (uiState.replay?.replay ?? []).filter(
     (point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng),
@@ -721,6 +770,7 @@ const buildOverlayCards = () => {
     droneTrafficSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
     conflictAssessmentSummary(),
+    conflictAdvisorySummary(),
   ];
 
   return cards
@@ -811,6 +861,8 @@ const renderOverview = () => {
   const primaryDroneMeta = primaryDroneTraffic?.metadata ?? null;
   const conflicts = activeConflictAssessmentItems();
   const primaryConflict = conflicts[0];
+  const advisories = deriveConflictAdvisories();
+  const primaryAdvisory = advisories[0];
 
   overviewPanel.innerHTML = `
     <article class="metric">
@@ -903,6 +955,19 @@ const renderOverview = () => {
         primaryConflict
           ? `${primaryConflict.overlayLabel} at ${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m lateral / ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`
           : "No current interpreted traffic conflict candidates.",
+      )}</div>
+    </article>
+    <article class="metric">
+      <div class="label">Conflict advisory</div>
+      <div class="value ${toneClass(primaryAdvisory?.tone ?? "clear")}">${escapeHtml(
+        advisories.length === 0
+          ? "Clear"
+          : primaryAdvisory.recommendation,
+      )}</div>
+      <div class="meta">${escapeHtml(
+        primaryAdvisory
+          ? `${primaryAdvisory.relatedObject} · ${primaryAdvisory.summary}`
+          : "No advisory-grade conflict presentation is currently required.",
       )}</div>
     </article>
   `;
@@ -1201,6 +1266,7 @@ const renderStatus = () => {
   const trafficState = crewedTrafficSummary();
   const droneState = droneTrafficSummary();
   const conflictState = conflictAssessmentSummary();
+  const advisoryState = conflictAdvisorySummary();
   const alertSignals = (uiState.alerts ?? []).map((alert) => ({
     label: `${alert.alertType} - ${alert.severity}`,
     value: `${alert.status}: ${alert.message}`,
@@ -1365,6 +1431,16 @@ const renderStatus = () => {
             activeConflictAssessmentItems()[0]
               ? formatDateTime(activeConflictAssessmentItems()[0].assessedAt)
               : "Not recorded",
+          )}</div>
+          <div class="k">Advisory presentation</div>
+          <div>${renderBadge(advisoryState.label)}</div>
+          <div class="k">Recommended attention</div>
+          <div>${escapeHtml(
+            deriveConflictAdvisories()[0]?.recommendation ?? "Clear",
+          )}</div>
+          <div class="k">Advisory target</div>
+          <div>${escapeHtml(
+            deriveConflictAdvisories()[0]?.relatedObject ?? "None",
           )}</div>
         </div>
       </section>
@@ -1531,6 +1607,36 @@ const renderConflictAssessment = () => {
   `;
 };
 
+const renderConflictAdvisory = () => {
+  const advisories = deriveConflictAdvisories();
+
+  if (advisories.length === 0) {
+    conflictAdvisoryPanel.innerHTML =
+      '<div class="empty-state">No advisory presentation is currently required. The live operations view remains read-only and no automated action is available here.</div>';
+    return;
+  }
+
+  conflictAdvisoryPanel.innerHTML = `
+    <div class="stack">
+      ${advisories.map(
+        (advisory) => `
+          <article class="alert-window ${toneClass(advisory.tone)}">
+            <strong>${escapeHtml(advisory.headline)}</strong>
+            <div>${escapeHtml(advisory.reasoning)}</div>
+            <div class="alert-window-meta">
+              Recommended attention: ${escapeHtml(advisory.recommendation)}<br />
+              Related object: ${escapeHtml(advisory.relatedObject)}<br />
+              Related source: ${escapeHtml(advisory.relatedSource)}<br />
+              Relevance: ${escapeHtml(advisory.relevance)}<br />
+              Separation: ${escapeHtml(advisory.summary)}
+            </div>
+          </article>
+        `,
+      ).join("")}
+    </div>
+  `;
+};
+
 const renderTimeline = () => {
   const items = uiState.timeline?.items ?? [];
   const relevant = items.slice(-8).reverse();
@@ -1574,6 +1680,7 @@ const renderLiveOperations = () => {
   renderStatus();
   renderAlertCorrelation();
   renderConflictAssessment();
+  renderConflictAdvisory();
   renderTimeline();
 };
 
@@ -1584,6 +1691,7 @@ const clearPanels = (message) => {
   statusPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   alertCorrelationPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   conflictAssessmentPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+  conflictAdvisoryPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   timelinePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   renderReplayControls();
 };
