@@ -21,6 +21,7 @@ const replayTimeReadout = document.getElementById("live-ops-replay-time");
 const replayProgress = document.getElementById("live-ops-replay-progress");
 const replayMarkers = document.getElementById("live-ops-replay-markers");
 const replaySpeedSelect = document.getElementById("live-ops-replay-speed");
+const missionRoutePattern = /^\/operator\/missions\/([^/]+)\/live-operations$/;
 
 const uiState = {
   missionId: "",
@@ -145,6 +146,34 @@ const setConnectionState = (message, tone = "tone-muted") => {
 
 const setLoadedMission = (missionId) => {
   loadedMissionPill.textContent = missionId || "None";
+};
+
+const normalizeMissionId = (value) => String(value ?? "").trim();
+
+const isPlaceholderMissionId = (missionId) => {
+  const value = normalizeMissionId(missionId);
+  return (
+    !value ||
+    /^<[^>]+>$/.test(value) ||
+    /^(mission[-_\s]?id|enter mission uuid|uuid)$/i.test(value)
+  );
+};
+
+const hasSelectedMissionId = (missionId) => !isPlaceholderMissionId(missionId);
+
+const isMissionSpecificRoute = () => missionRoutePattern.test(window.location.pathname);
+
+const resetLiveOperationsState = () => {
+  uiState.missionId = "";
+  uiState.planningWorkspace = null;
+  uiState.dispatchWorkspace = null;
+  uiState.timeline = null;
+  uiState.replay = null;
+  uiState.latestTelemetry = null;
+  uiState.alerts = [];
+  uiState.externalOverlays = [];
+  uiState.conflictAssessment = null;
+  uiState.replayPlayback.index = 0;
 };
 
 const replayPlaybackIntervalMs = () =>
@@ -816,7 +845,7 @@ const updateUrl = (missionId) => {
 };
 
 const getMissionIdFromLocation = () => {
-  const pathMatch = window.location.pathname.match(/^\/operator\/missions\/([^/]+)\/live-operations$/);
+  const pathMatch = window.location.pathname.match(missionRoutePattern);
   if (pathMatch?.[1]) {
     return decodeURIComponent(pathMatch[1]);
   }
@@ -2136,30 +2165,69 @@ const clearPanels = (message) => {
   renderReplayControls();
 };
 
+const renderEntryState = ({
+  statusMessage = "No mission selected",
+  statusTone = "tone-muted",
+  guidance = "Enter a mission UUID or open the mission workspace to choose a mission before loading live operations.",
+} = {}) => {
+  setConnectionState(statusMessage, statusTone);
+  setLoadedMission("");
+  overviewPanel.innerHTML = `
+    <article class="metric">
+      <div class="label">Mission selection</div>
+      <div class="value ${toneClass("pending")}">Required</div>
+      <div class="meta">${escapeHtml(guidance)}</div>
+    </article>
+    <article class="metric">
+      <div class="label">Generic route</div>
+      <div class="value ${toneClass("clear")}">Idle</div>
+      <div class="meta">No mission-specific fetch is attempted until a valid mission ID is provided.</div>
+    </article>
+    <article class="metric">
+      <div class="label">Next step</div>
+      <div class="value ${toneClass("info")}">Choose mission</div>
+      <div class="meta">Use the mission ID field above or open the mission workspace to select a mission.</div>
+    </article>
+  `;
+  mapPanel.innerHTML = `<div class="empty-state">${escapeHtml(guidance)}</div>`;
+  jumpControlsPanel.innerHTML =
+    '<div class="empty-state">Replay milestones will appear after a mission with replay data is loaded.</div>';
+  statusPanel.innerHTML =
+    '<div class="empty-state">Telemetry, readiness posture, and overlay status will appear after mission selection.</div>';
+  alertCorrelationPanel.innerHTML =
+    '<div class="empty-state">Alert timeline correlation becomes available after a mission replay is loaded.</div>';
+  conflictAssessmentPanel.innerHTML =
+    '<div class="empty-state">Conflict assessment is shown only after a mission with telemetry and overlays is loaded.</div>';
+  conflictAdvisoryPanel.innerHTML =
+    '<div class="empty-state">Conflict advisory guidance is derived only after a mission is loaded.</div>';
+  timelinePanel.innerHTML =
+    '<div class="empty-state">Mission event context will appear after mission selection.</div>';
+  renderReplayControls();
+};
+
 const loadLiveOperationsView = async (missionId) => {
   stopReplayPlayback();
+  const normalizedMissionId = normalizeMissionId(missionId);
 
-  if (!missionId) {
-    uiState.missionId = "";
-    uiState.planningWorkspace = null;
-    uiState.dispatchWorkspace = null;
-    uiState.timeline = null;
-    uiState.replay = null;
-    uiState.latestTelemetry = null;
-    uiState.alerts = [];
-    uiState.externalOverlays = [];
-    uiState.conflictAssessment = null;
-    uiState.replayPlayback.index = 0;
-    setLoadedMission("");
-    setConnectionState("Enter a mission UUID", "tone-warn");
-    clearPanels("Enter a mission UUID to load the live operations view.");
+  if (!hasSelectedMissionId(normalizedMissionId)) {
+    resetLiveOperationsState();
+    if (!isMissionSpecificRoute()) {
+      updateUrl("");
+    }
+    renderEntryState({
+      statusMessage: normalizedMissionId ? "Enter a valid mission UUID" : "No mission selected",
+      statusTone: normalizedMissionId ? "tone-warn" : "tone-muted",
+      guidance: normalizedMissionId
+        ? "The generic live operations route ignores placeholder or invalid mission IDs until a real mission UUID is provided."
+        : "Enter a mission UUID or open the mission workspace to choose a mission before loading live operations.",
+    });
     return;
   }
 
-  uiState.missionId = missionId;
-  setLoadedMission(missionId);
+  uiState.missionId = normalizedMissionId;
+  setLoadedMission(normalizedMissionId);
   setConnectionState("Loading live operations view...", "tone-info");
-  updateUrl(missionId);
+  updateUrl(normalizedMissionId);
 
   try {
     const [
@@ -2172,14 +2240,14 @@ const loadLiveOperationsView = async (missionId) => {
       externalOverlayResponse,
       conflictAssessmentResponse,
     ] = await Promise.all([
-      fetchJson(`/missions/${missionId}/planning-workspace`),
-      fetchJson(`/missions/${missionId}/dispatch-workspace`),
-      fetchJson(`/missions/${missionId}/operations-timeline`),
-      fetchJson(`/missions/${missionId}/replay`),
-      fetchJson(`/missions/${missionId}/telemetry/latest`),
-      fetchJson(`/missions/${missionId}/alerts`),
-      fetchJson(`/missions/${missionId}/external-overlays`),
-      fetchJson(`/missions/${missionId}/conflict-assessment`),
+      fetchJson(`/missions/${normalizedMissionId}/planning-workspace`),
+      fetchJson(`/missions/${normalizedMissionId}/dispatch-workspace`),
+      fetchJson(`/missions/${normalizedMissionId}/operations-timeline`),
+      fetchJson(`/missions/${normalizedMissionId}/replay`),
+      fetchJson(`/missions/${normalizedMissionId}/telemetry/latest`),
+      fetchJson(`/missions/${normalizedMissionId}/alerts`),
+      fetchJson(`/missions/${normalizedMissionId}/external-overlays`),
+      fetchJson(`/missions/${normalizedMissionId}/conflict-assessment`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -2211,12 +2279,12 @@ const loadLiveOperationsView = async (missionId) => {
 };
 
 loadButton.addEventListener("click", () => {
-  loadLiveOperationsView(missionIdInput.value.trim());
+  loadLiveOperationsView(normalizeMissionId(missionIdInput.value));
 });
 
 missionIdInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
-    loadLiveOperationsView(missionIdInput.value.trim());
+    loadLiveOperationsView(normalizeMissionId(missionIdInput.value));
   }
 });
 
@@ -2281,17 +2349,17 @@ jumpControlsPanel.addEventListener("click", (event) => {
 });
 
 openWorkspaceButton.addEventListener("click", () => {
-  const missionId = missionIdInput.value.trim();
-  const target = missionId
+  const missionId = normalizeMissionId(missionIdInput.value);
+  const target = hasSelectedMissionId(missionId)
     ? `/operator/missions/${encodeURIComponent(missionId)}`
     : "/operator/mission-workspace";
   window.location.assign(target);
 });
 
 openReplayApiButton.addEventListener("click", () => {
-  const missionId = missionIdInput.value.trim();
-  if (!missionId) {
-    setConnectionState("Enter a mission UUID before opening replay JSON", "tone-warn");
+  const missionId = normalizeMissionId(missionIdInput.value);
+  if (!hasSelectedMissionId(missionId)) {
+    setConnectionState("Enter a valid mission UUID before opening replay JSON", "tone-warn");
     return;
   }
 
@@ -2302,11 +2370,15 @@ window.addEventListener("beforeunload", () => {
   stopReplayPlayback();
 });
 
-const initialMissionId = getMissionIdFromLocation();
+const initialMissionId = normalizeMissionId(getMissionIdFromLocation());
 if (initialMissionId) {
   missionIdInput.value = initialMissionId;
 }
 
-loadLiveOperationsView(initialMissionId);
+if (hasSelectedMissionId(initialMissionId)) {
+  loadLiveOperationsView(initialMissionId);
+} else {
+  renderEntryState();
+}
 
 
