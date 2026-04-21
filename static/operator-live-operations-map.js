@@ -544,6 +544,50 @@ const correlatedConflictTimelineItems = () => {
     .slice(0, 8);
 };
 
+const currentConflictWindowSummary = () => {
+  const replayRelation = currentConflictReplayRelation();
+  const conflicts = activeConflictAssessmentItems();
+  const primary = conflicts[0] ?? null;
+
+  if (!primary) {
+    return {
+      headline: "No current conflict window",
+      tone: "pass",
+      detail: "No assessed conflict candidate currently overlaps the replay review context.",
+      meta: "Window summary clear.",
+    };
+  }
+
+  return {
+    headline: replayRelation.label,
+    tone: primary.severity,
+    detail: `${primary.overlayLabel} · ${primary.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primary.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+    meta: replayRelation.detail,
+  };
+};
+
+const conflictTrackWindowPoints = () => {
+  const points = replayTrack();
+  const activeConflicts = activeConflictAssessmentItems();
+
+  if (points.length === 0 || activeConflicts.length === 0) {
+    return [];
+  }
+
+  const targetTimes = activeConflicts
+    .map((conflict) => Date.parse(conflict.referenceTimestamp ?? ""))
+    .filter((value) => Number.isFinite(value));
+
+  return points.filter((point) => {
+    const pointTime = Date.parse(point.timestamp ?? "");
+    if (!Number.isFinite(pointTime)) {
+      return false;
+    }
+
+    return targetTimes.some((targetTime) => Math.abs(pointTime - targetTime) <= 600000);
+  });
+};
+
 const replayTrack = () =>
   (uiState.replay?.replay ?? []).filter(
     (point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng),
@@ -1148,6 +1192,7 @@ const buildMapMarkup = () => {
     "Cyan track replay",
     "Red marker latest telemetry",
     `Open alerts ${openAlerts.length}`,
+    `Conflict windows ${activeConflictAssessmentItems().length}`,
   ];
 
   const highestAlertSeverity = openAlerts.reduce((highest, alert) => {
@@ -1166,8 +1211,28 @@ const buildMapMarkup = () => {
   const weatherState = weatherSummary();
   const trafficState = crewedTrafficSummary();
   const droneState = droneTrafficSummary();
+  const conflictWindowSummary = currentConflictWindowSummary();
+  const conflictTrackWindow = conflictTrackWindowPoints();
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
+  const conflictTrackHighlight = conflictTrackWindow.length >= 2
+    ? `
+      <polyline
+        points="${conflictTrackWindow
+          .map((point) => {
+            const projected = toPoint(Number(point.lat), Number(point.lng));
+            return `${projected.x},${projected.y}`;
+          })
+          .join(" ")}"
+        fill="none"
+        stroke="${severityStroke(conflictWindowSummary.tone)}"
+        stroke-width="14"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        opacity="0.26"
+      />
+    `
+    : "";
   const weatherOverlay = activeWeatherOverlay();
   const weatherPoint =
     weatherOverlay &&
@@ -1312,6 +1377,7 @@ const buildMapMarkup = () => {
       ${riskCorridor}
       ${replayPath ? `<polyline points="${replayPath}" fill="none" stroke="#224665" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.72" />` : ""}
       ${completedReplayPath ? `<polyline points="${completedReplayPath}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />` : ""}
+      ${conflictTrackHighlight}
       ${alertTrackHighlight}
       ${replayDots}
       ${weatherMarker}
@@ -1328,6 +1394,11 @@ const buildMapMarkup = () => {
           : ""
       }
     </svg>
+    <div class="map-window-summary ${toneClass(conflictWindowSummary.tone)}">
+      <strong>${escapeHtml(conflictWindowSummary.headline)}</strong>
+      <div>${escapeHtml(conflictWindowSummary.detail)}</div>
+      <div class="meta">${escapeHtml(conflictWindowSummary.meta)}</div>
+    </div>
     <div class="map-overlay">
       ${overlays.map((item) => `<div class="overlay-pill">${escapeHtml(item)}</div>`).join("")}
     </div>
