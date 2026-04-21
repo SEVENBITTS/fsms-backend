@@ -88,6 +88,11 @@ const renderBadge = (value) =>
 const weatherOverlays = () =>
   (uiState.externalOverlays ?? []).filter((overlay) => overlay.kind === "weather");
 
+const crewedTrafficOverlays = () =>
+  (uiState.externalOverlays ?? []).filter(
+    (overlay) => overlay.kind === "crewed_traffic",
+  );
+
 const formatDateTime = (value) => {
   if (!value) {
     return "Not recorded";
@@ -241,6 +246,60 @@ const weatherSummary = () => {
     label: `Weather ${metadata.precipitation ?? "unknown"}`,
     tone: overlay.severity ?? "info",
     detail: `${metadata.windSpeedKnots ?? "?"} kt @ ${metadata.windDirectionDegrees ?? "?"}° · ${metadata.temperatureC ?? "?"}°C · observed ${formatDateTime(overlay.observedAt)}`,
+  };
+};
+
+const activeCrewedTrafficOverlays = () => {
+  const replayPoint = activeReplayPoint();
+  const replayTime = replayPoint?.timestamp ? Date.parse(replayPoint.timestamp) : null;
+
+  return crewedTrafficOverlays()
+    .map((overlay) => {
+      const observedAt = Date.parse(overlay.observedAt ?? "");
+      const validFrom = overlay.validFrom ? Date.parse(overlay.validFrom) : observedAt;
+      const validTo = overlay.validTo ? Date.parse(overlay.validTo) : null;
+      const activeAtReplay =
+        replayTime != null &&
+        Number.isFinite(validFrom) &&
+        replayTime >= validFrom &&
+        (validTo == null || replayTime <= validTo);
+      const relativeMs =
+        replayTime == null || !Number.isFinite(observedAt)
+          ? Number.POSITIVE_INFINITY
+          : Math.abs(replayTime - observedAt);
+
+      return {
+        ...overlay,
+        activeAtReplay,
+        relativeMs,
+      };
+    })
+    .sort((left, right) => {
+      if (left.activeAtReplay !== right.activeAtReplay) {
+        return left.activeAtReplay ? -1 : 1;
+      }
+
+      return left.relativeMs - right.relativeMs;
+    })
+    .slice(0, 5);
+};
+
+const crewedTrafficSummary = () => {
+  const traffic = activeCrewedTrafficOverlays();
+  if (traffic.length === 0) {
+    return {
+      label: "Crewed traffic missing",
+      tone: "warning",
+      detail: "No mission-linked crewed traffic overlays are available for the current replay position.",
+    };
+  }
+
+  const primary = traffic[0];
+  const metadata = primary.metadata ?? {};
+  return {
+    label: `${traffic.length} crewed traffic contact${traffic.length === 1 ? "" : "s"}`,
+    tone: primary.severity ?? "info",
+    detail: `${metadata.callsign ?? metadata.trafficId ?? "Unknown"} · ${primary.speedKnots ?? "?"} kt · ${primary.geometry?.altitudeMslFt ?? "?"} ft · observed ${formatDateTime(primary.observedAt)}`,
   };
 };
 
@@ -546,6 +605,7 @@ const buildOverlayCards = () => {
     summarizeReadinessState(planningWorkspace, dispatchWorkspace),
     summarizeDispatchState(dispatchWorkspace),
     weatherSummary(),
+    crewedTrafficSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
   ];
 
@@ -629,6 +689,9 @@ const renderOverview = () => {
   const openAlertCount = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved").length;
   const activeWeather = activeWeatherOverlay();
   const weatherMeta = activeWeather?.metadata ?? null;
+  const activeTraffic = activeCrewedTrafficOverlays();
+  const primaryTraffic = activeTraffic[0];
+  const primaryTrafficMeta = primaryTraffic?.metadata ?? null;
 
   overviewPanel.innerHTML = `
     <article class="metric">
@@ -682,6 +745,19 @@ const renderOverview = () => {
         weatherMeta
           ? `${weatherMeta.temperatureC}°C at ${formatDateTime(activeWeather.observedAt)}`
           : "No weather overlay loaded for this mission.",
+      )}</div>
+    </article>
+    <article class="metric">
+      <div class="label">Crewed traffic</div>
+      <div class="value ${toneClass(primaryTraffic?.severity ?? "missing")}">${escapeHtml(
+        activeTraffic.length === 0
+          ? "Missing"
+          : `${activeTraffic.length} contact${activeTraffic.length === 1 ? "" : "s"}`,
+      )}</div>
+      <div class="meta">${escapeHtml(
+        primaryTrafficMeta
+          ? `${primaryTrafficMeta.callsign ?? primaryTrafficMeta.trafficId ?? "Unknown"} at ${formatDateTime(primaryTraffic.observedAt)}`
+          : "No crewed traffic overlay loaded for this mission.",
       )}</div>
     </article>
   `;
@@ -765,6 +841,7 @@ const buildMapMarkup = () => {
     summarizeRiskState(uiState.planningWorkspace).label,
     summarizeAirspaceState(uiState.planningWorkspace).label,
     weatherOverlays().length > 0 ? `Weather overlays ${weatherOverlays().length}` : "Weather overlays 0",
+    crewedTrafficOverlays().length > 0 ? `Crewed traffic ${crewedTrafficOverlays().length}` : "Crewed traffic 0",
   ];
 
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
@@ -788,6 +865,7 @@ const buildMapMarkup = () => {
   const riskState = summarizeRiskState(uiState.planningWorkspace);
   const airspaceState = summarizeAirspaceState(uiState.planningWorkspace);
   const weatherState = weatherSummary();
+  const trafficState = crewedTrafficSummary();
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
   const weatherOverlay = activeWeatherOverlay();
@@ -864,6 +942,33 @@ const buildMapMarkup = () => {
       )}</text>
     `
     : "";
+  const crewedTrafficMarkers = activeCrewedTrafficOverlays()
+    .map((overlay) => {
+      const trafficPoint =
+        Number.isFinite(overlay.geometry?.lat) &&
+        Number.isFinite(overlay.geometry?.lng)
+          ? toPoint(Number(overlay.geometry.lat), Number(overlay.geometry.lng))
+          : null;
+
+      if (!trafficPoint) {
+        return "";
+      }
+
+      const metadata = overlay.metadata ?? {};
+      return `
+        <g>
+          <circle cx="${trafficPoint.x}" cy="${trafficPoint.y}" r="11" fill="rgba(251,191,36,0.18)" stroke="#fbbf24" stroke-width="2" />
+          <path d="M ${trafficPoint.x} ${trafficPoint.y - 10} L ${trafficPoint.x + 7} ${trafficPoint.y + 9} L ${trafficPoint.x} ${trafficPoint.y + 4} L ${trafficPoint.x - 7} ${trafficPoint.y + 9} Z" fill="#fbbf24" opacity="0.92" />
+          <text x="${trafficPoint.x + 14}" y="${trafficPoint.y - 3}" fill="#f8fafc" font-size="11" font-weight="700">${escapeHtml(
+            metadata.callsign ?? metadata.trafficId ?? "Traffic",
+          )}</text>
+          <text x="${trafficPoint.x + 14}" y="${trafficPoint.y + 11}" fill="#d8ecff" font-size="10">${escapeHtml(
+            `${overlay.geometry?.altitudeMslFt ?? "?"}ft · ${overlay.speedKnots ?? "?"}kt`,
+          )}</text>
+        </g>
+      `;
+    })
+    .join("");
 
   return `
     <div class="map-grid"></div>
@@ -883,6 +988,7 @@ const buildMapMarkup = () => {
       ${alertTrackHighlight}
       ${replayDots}
       ${weatherMarker}
+      ${crewedTrafficMarkers}
       ${
         currentMapPoint
           ? `
@@ -1004,6 +1110,32 @@ const renderStatus = () => {
           <div>${escapeHtml(
             activeWeatherOverlay()
               ? formatDateTime(activeWeatherOverlay().observedAt)
+              : "Not recorded",
+          )}</div>
+          <div class="k">Crewed traffic</div>
+          <div>${renderBadge(trafficState.label)}</div>
+          <div class="k">Primary contact</div>
+          <div>${escapeHtml(
+            activeCrewedTrafficOverlays()[0]
+              ? `${activeCrewedTrafficOverlays()[0].metadata?.callsign ?? activeCrewedTrafficOverlays()[0].metadata?.trafficId ?? "Unknown"}`
+              : "Missing",
+          )}</div>
+          <div class="k">Heading / speed</div>
+          <div>${escapeHtml(
+            activeCrewedTrafficOverlays()[0]
+              ? `${activeCrewedTrafficOverlays()[0].headingDegrees ?? "?"}° · ${activeCrewedTrafficOverlays()[0].speedKnots ?? "?"} kt`
+              : "Missing",
+          )}</div>
+          <div class="k">Altitude</div>
+          <div>${escapeHtml(
+            activeCrewedTrafficOverlays()[0]
+              ? `${activeCrewedTrafficOverlays()[0].geometry?.altitudeMslFt ?? "?"} ft`
+              : "Missing",
+          )}</div>
+          <div class="k">Observed</div>
+          <div>${escapeHtml(
+            activeCrewedTrafficOverlays()[0]
+              ? formatDateTime(activeCrewedTrafficOverlays()[0].observedAt)
               : "Not recorded",
           )}</div>
         </div>
@@ -1212,7 +1344,7 @@ const loadLiveOperationsView = async (missionId) => {
       fetchJson(`/missions/${missionId}/replay`),
       fetchJson(`/missions/${missionId}/telemetry/latest`),
       fetchJson(`/missions/${missionId}/alerts`),
-      fetchJson(`/missions/${missionId}/external-overlays?kind=weather`),
+      fetchJson(`/missions/${missionId}/external-overlays`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;

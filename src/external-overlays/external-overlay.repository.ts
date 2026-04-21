@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
+  CreateCrewedTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
   ExternalOverlay,
   ExternalOverlayKind,
@@ -121,6 +122,63 @@ export class ExternalOverlayRepository {
         input.geometry.lat,
         input.geometry.lng,
         input.geometry.altitudeMslFt,
+        input.severity,
+        input.confidence,
+        input.freshnessSeconds,
+        JSON.stringify(input.metadata),
+      ],
+    );
+
+    return toExternalOverlay(result.rows[0]);
+  }
+
+  async insertCrewedTrafficOverlay(
+    tx: PoolClient,
+    missionId: string,
+    input: CreateCrewedTrafficExternalOverlayInput,
+  ): Promise<ExternalOverlay> {
+    const result = await tx.query<ExternalOverlayRow>(
+      `
+      insert into mission_external_overlays (
+        id,
+        mission_id,
+        overlay_kind,
+        source_provider,
+        source_type,
+        source_record_id,
+        observed_at,
+        valid_from,
+        valid_to,
+        geometry_type,
+        latitude,
+        longitude,
+        altitude_msl_ft,
+        heading_degrees,
+        speed_knots,
+        severity,
+        confidence,
+        freshness_seconds,
+        metadata
+      )
+      values (
+        $1, $2, 'crewed_traffic', $3, $4, $5, $6, $7, $8, 'point', $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb
+      )
+      returning *
+      `,
+      [
+        randomUUID(),
+        missionId,
+        input.source.provider,
+        input.source.sourceType,
+        input.source.sourceRecordId,
+        input.observedAt,
+        input.validFrom,
+        input.validTo,
+        input.geometry.lat,
+        input.geometry.lng,
+        input.geometry.altitudeMslFt,
+        input.headingDegrees,
+        input.speedKnots,
         input.severity,
         input.confidence,
         input.freshnessSeconds,

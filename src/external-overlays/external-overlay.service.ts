@@ -2,11 +2,15 @@ import type { Pool } from "pg";
 import { ExternalOverlayRepository } from "./external-overlay.repository";
 import { MissionExternalOverlayMissionNotFoundError } from "./external-overlay.errors";
 import type {
+  CreateCrewedTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
   ExternalOverlay,
   ExternalOverlayKind,
 } from "./external-overlay.types";
-import { validateCreateWeatherExternalOverlayInput } from "./external-overlay.validators";
+import {
+  validateCreateCrewedTrafficExternalOverlayInput,
+  validateCreateWeatherExternalOverlayInput,
+} from "./external-overlay.validators";
 
 export class ExternalOverlayService {
   constructor(
@@ -32,6 +36,33 @@ export class ExternalOverlayService {
       }
 
       return await this.externalOverlayRepository.insertWeatherOverlay(
+        client,
+        missionId,
+        validated,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async createCrewedTrafficOverlay(
+    missionId: string,
+    input: unknown,
+  ): Promise<ExternalOverlay> {
+    const validated = validateCreateCrewedTrafficExternalOverlayInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
+      }
+
+      return await this.externalOverlayRepository.insertCrewedTrafficOverlay(
         client,
         missionId,
         validated,

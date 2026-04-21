@@ -1,4 +1,5 @@
 import type {
+  CreateCrewedTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
   ExternalOverlaySeverity,
 } from "./external-overlay.types";
@@ -161,6 +162,77 @@ export const validateCreateWeatherExternalOverlayInput = (
         "metadata.temperatureC",
       ),
       precipitation: precipitation as CreateWeatherExternalOverlayInput["metadata"]["precipitation"],
+    },
+  };
+};
+
+export const validateCreateCrewedTrafficExternalOverlayInput = (
+  input: unknown,
+): CreateCrewedTrafficExternalOverlayInput => {
+  if (!input || typeof input !== "object") {
+    throw new Error("request body is required");
+  }
+
+  const candidate = input as Record<string, any>;
+  if (candidate.kind !== "crewed_traffic") {
+    throw new Error("kind must be 'crewed_traffic'");
+  }
+
+  if (!candidate.source || typeof candidate.source !== "object") {
+    throw new Error("source is required");
+  }
+
+  if (!candidate.geometry || typeof candidate.geometry !== "object") {
+    throw new Error("geometry is required");
+  }
+
+  if (!candidate.metadata || typeof candidate.metadata !== "object") {
+    throw new Error("metadata is required");
+  }
+
+  if (candidate.geometry.type !== "point") {
+    throw new Error("geometry.type must be 'point'");
+  }
+
+  return {
+    kind: "crewed_traffic",
+    source: {
+      provider: requiredString(candidate.source.provider, "source.provider"),
+      sourceType: requiredString(candidate.source.sourceType, "source.sourceType"),
+      sourceRecordId: optionalString(candidate.source.sourceRecordId),
+    },
+    observedAt: requiredTimestamp(candidate.observedAt, "observedAt"),
+    validFrom: optionalTimestamp(candidate.validFrom, "validFrom"),
+    validTo: optionalTimestamp(candidate.validTo, "validTo"),
+    geometry: {
+      type: "point",
+      lat: requiredNumber(candidate.geometry.lat, "geometry.lat"),
+      lng: requiredNumber(candidate.geometry.lng, "geometry.lng"),
+      altitudeMslFt: optionalNumber(
+        candidate.geometry.altitudeMslFt,
+        "geometry.altitudeMslFt",
+      ),
+    },
+    headingDegrees: optionalNumber(candidate.headingDegrees, "headingDegrees"),
+    speedKnots: optionalNumber(candidate.speedKnots, "speedKnots"),
+    severity: optionalSeverity(candidate.severity),
+    confidence: optionalNumber(candidate.confidence, "confidence"),
+    freshnessSeconds:
+      candidate.freshnessSeconds == null
+        ? null
+        : requiredNumber(candidate.freshnessSeconds, "freshnessSeconds"),
+    metadata: {
+      trafficId: requiredString(candidate.metadata.trafficId, "metadata.trafficId"),
+      callsign: optionalString(candidate.metadata.callsign),
+      trackSource: requiredString(
+        candidate.metadata.trackSource,
+        "metadata.trackSource",
+      ),
+      aircraftCategory: optionalString(candidate.metadata.aircraftCategory),
+      verticalRateFpm: optionalNumber(
+        candidate.metadata.verticalRateFpm,
+        "metadata.verticalRateFpm",
+      ),
     },
   };
 };

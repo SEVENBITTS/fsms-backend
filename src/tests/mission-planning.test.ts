@@ -1976,7 +1976,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/missions/${missionId}/replay");
     expect(response.text).toContain("/missions/${missionId}/telemetry/latest");
     expect(response.text).toContain("/missions/${missionId}/alerts");
-    expect(response.text).toContain("/missions/${missionId}/external-overlays?kind=weather");
+    expect(response.text).toContain("/missions/${missionId}/external-overlays");
     expect(response.text).toContain("/missions/${missionId}/planning-workspace");
     expect(response.text).toContain("/missions/${missionId}/dispatch-workspace");
     expect(response.text).toContain("/missions/${missionId}/operations-timeline");
@@ -2004,5 +2004,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("weatherOverlays");
     expect(response.text).toContain("activeWeatherOverlay");
     expect(response.text).toContain("weatherSummary");
+    expect(response.text).toContain("crewedTrafficOverlays");
+    expect(response.text).toContain("activeCrewedTrafficOverlays");
+    expect(response.text).toContain("crewedTrafficSummary");
   });
 });
