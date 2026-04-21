@@ -8,6 +8,11 @@ const overviewPanel = document.getElementById("live-ops-overview");
 const mapPanel = document.getElementById("live-ops-map");
 const statusPanel = document.getElementById("live-ops-status");
 const timelinePanel = document.getElementById("live-ops-timeline");
+const replayPlayButton = document.getElementById("live-ops-replay-play-btn");
+const replayPauseButton = document.getElementById("live-ops-replay-pause-btn");
+const replaySlider = document.getElementById("live-ops-replay-slider");
+const replayTimeReadout = document.getElementById("live-ops-replay-time");
+const replayProgress = document.getElementById("live-ops-replay-progress");
 
 const uiState = {
   missionId: "",
@@ -17,6 +22,11 @@ const uiState = {
   replay: null,
   latestTelemetry: null,
   alerts: [],
+  replayPlayback: {
+    index: 0,
+    playing: false,
+    timerId: null,
+  },
 };
 
 const toneClass = (value) => {
@@ -113,8 +123,61 @@ const setLoadedMission = (missionId) => {
   loadedMissionPill.textContent = missionId || "None";
 };
 
+const renderReplayControls = () => {
+  const points = replayTrack();
+  const pointCount = points.length;
+  const activePoint = activeReplayPoint();
+  const sliderMax = Math.max(pointCount - 1, 0);
+
+  replaySlider.max = String(sliderMax);
+  replaySlider.disabled = pointCount <= 1;
+  replayPlayButton.disabled = pointCount <= 1 || uiState.replayPlayback.playing;
+  replayPauseButton.disabled = !uiState.replayPlayback.playing;
+  replayTimeReadout.textContent = activePoint?.timestamp
+    ? `Replay time: ${formatDateTime(activePoint.timestamp)}`
+    : "Replay time: not loaded";
+  replayProgress.textContent =
+    pointCount === 0
+      ? "0 / 0"
+      : `${uiState.replayPlayback.index + 1} / ${pointCount}`;
+};
+
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
+
+const replayTrack = () =>
+  (uiState.replay?.replay ?? []).filter(
+    (point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng),
+  );
+
+const activeReplayPoint = () => {
+  const points = replayTrack();
+  if (points.length === 0) {
+    return uiState.latestTelemetry?.telemetry ?? null;
+  }
+
+  const index = Math.max(
+    0,
+    Math.min(uiState.replayPlayback.index, points.length - 1),
+  );
+  return points[index];
+};
+
+const stopReplayPlayback = () => {
+  if (uiState.replayPlayback.timerId != null) {
+    window.clearInterval(uiState.replayPlayback.timerId);
+    uiState.replayPlayback.timerId = null;
+  }
+  uiState.replayPlayback.playing = false;
+};
+
+const setReplayIndex = (nextIndex) => {
+  const points = replayTrack();
+  const boundedIndex =
+    points.length === 0 ? 0 : Math.max(0, Math.min(nextIndex, points.length - 1));
+  uiState.replayPlayback.index = boundedIndex;
+  replaySlider.value = String(boundedIndex);
+};
 
 const updateUrl = (missionId) => {
   const next = new URL(window.location.href);
@@ -307,8 +370,8 @@ const renderOverview = () => {
   const planningWorkspace = uiState.planningWorkspace;
   const dispatchWorkspace = uiState.dispatchWorkspace;
   const mission = planningWorkspace?.mission ?? dispatchWorkspace?.mission;
-  const replayCount = uiState.replay?.replay?.length ?? 0;
-  const latestTelemetry = uiState.latestTelemetry?.telemetry;
+  const replayCount = replayTrack().length;
+  const currentReplayPoint = activeReplayPoint();
   const timelineCount = uiState.timeline?.items?.length ?? 0;
   const openAlertCount = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved").length;
 
@@ -326,18 +389,27 @@ const renderOverview = () => {
       <div class="meta">Replay points available for the selected mission.</div>
     </article>
     <article class="metric">
-      <div class="label">Latest telemetry</div>
-      <div class="value ${toneClass(latestTelemetry ? "present" : "missing")}">${escapeHtml(
-        latestTelemetry ? formatDateTime(latestTelemetry.timestamp) : "Missing",
+      <div class="label">Replay position</div>
+      <div class="value ${toneClass(currentReplayPoint ? "present" : "missing")}">${escapeHtml(
+        currentReplayPoint ? formatDateTime(currentReplayPoint.timestamp) : "Missing",
       )}</div>
       <div class="meta">Altitude: ${escapeHtml(
-        latestTelemetry?.altitudeM != null ? `${latestTelemetry.altitudeM} m` : "Not recorded",
+        currentReplayPoint?.altitudeM != null ? `${currentReplayPoint.altitudeM} m` : "Not recorded",
       )}</div>
     </article>
     <article class="metric">
       <div class="label">Timeline coverage</div>
       <div class="value">${escapeHtml(String(timelineCount))}</div>
       <div class="meta">Mission narrative items across planning, approval, dispatch, flight, and post-operation.</div>
+    </article>
+    <article class="metric">
+      <div class="label">Replay progress</div>
+      <div class="value">${escapeHtml(
+        replayCount === 0
+          ? "0 / 0"
+          : `${uiState.replayPlayback.index + 1} / ${replayCount}`,
+      )}</div>
+      <div class="meta">Current replay cursor across the mission track.</div>
     </article>
     <article class="metric">
       <div class="label">Active alerts</div>
@@ -348,17 +420,15 @@ const renderOverview = () => {
 };
 
 const buildMapMarkup = () => {
-  const replayPoints = uiState.replay?.replay ?? [];
+  const replayPoints = replayTrack();
   const latestTelemetry = uiState.latestTelemetry?.telemetry ?? null;
-  const points = replayPoints
-    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
-    .concat(
-      latestTelemetry &&
-        Number.isFinite(latestTelemetry.lat) &&
-        Number.isFinite(latestTelemetry.lng)
-        ? [latestTelemetry]
-        : [],
-    );
+  const points = replayPoints.concat(
+    latestTelemetry &&
+      Number.isFinite(latestTelemetry.lat) &&
+      Number.isFinite(latestTelemetry.lng)
+      ? [latestTelemetry]
+      : [],
+  );
 
   if (points.length === 0) {
     return `<div class="empty-state">No replay or telemetry coordinates are available for this mission yet.</div>`;
@@ -382,41 +452,47 @@ const buildMapMarkup = () => {
     return { x, y };
   };
 
-  const replayPath = replayPoints
-    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
-    .map((point) => {
+  const replayPath = replayPoints.map((point) => {
       const projected = toPoint(Number(point.lat), Number(point.lng));
       return `${projected.x},${projected.y}`;
-    })
-    .join(" ");
+    }).join(" ");
 
-  const projectedReplayPoints = replayPoints
-    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
-    .map((point) => ({
+  const projectedReplayPoints = replayPoints.map((point) => ({
       ...point,
       ...toPoint(Number(point.lat), Number(point.lng)),
     }));
 
+  const selectedReplayIndex = Math.max(
+    0,
+    Math.min(uiState.replayPlayback.index, Math.max(projectedReplayPoints.length - 1, 0)),
+  );
+  const completedReplayPath = projectedReplayPoints
+    .slice(0, selectedReplayIndex + 1)
+    .map((point) => `${point.x},${point.y}`)
+    .join(" ");
+
   const replayDots = projectedReplayPoints
     .map((point, index) => {
       return `
-        <circle cx="${point.x}" cy="${point.y}" r="${index === 0 ? 6 : 4}" fill="${
-          index === 0 ? "#22c55e" : "#38bdf8"
-        }" opacity="${index === 0 ? "1" : "0.82"}" />
+        <circle cx="${point.x}" cy="${point.y}" r="${index === selectedReplayIndex ? 6 : 3.5}" fill="${
+          index <= selectedReplayIndex ? "#38bdf8" : "#47627f"
+        }" opacity="${index === selectedReplayIndex ? "1" : "0.68"}" />
       `;
     })
     .join("");
 
-  const latestPoint =
-    latestTelemetry &&
-    Number.isFinite(latestTelemetry.lat) &&
-    Number.isFinite(latestTelemetry.lng)
-      ? toPoint(Number(latestTelemetry.lat), Number(latestTelemetry.lng))
+  const currentReplayPoint = activeReplayPoint();
+  const currentMapPoint =
+    currentReplayPoint &&
+    Number.isFinite(currentReplayPoint.lat) &&
+    Number.isFinite(currentReplayPoint.lng)
+      ? toPoint(Number(currentReplayPoint.lat), Number(currentReplayPoint.lng))
       : null;
 
   const overlays = [
     `Replay points ${replayPoints.length}`,
-    latestTelemetry ? `Latest telemetry ${formatDateTime(latestTelemetry.timestamp)}` : "Latest telemetry missing",
+    currentReplayPoint ? `Replay time ${formatDateTime(currentReplayPoint.timestamp)}` : "Replay time missing",
+    replayPoints.length > 0 ? `Replay progress ${selectedReplayIndex + 1}/${replayPoints.length}` : "Replay progress 0/0",
     uiState.dispatchWorkspace?.dispatch?.ready ? "Dispatch ready" : "Dispatch blocked",
     summarizeRiskState(uiState.planningWorkspace).label,
     summarizeAirspaceState(uiState.planningWorkspace).label,
@@ -444,12 +520,12 @@ const buildMapMarkup = () => {
   const airspaceState = summarizeAirspaceState(uiState.planningWorkspace);
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
-  const latestTelemetryHalo = latestPoint
+  const latestTelemetryHalo = currentMapPoint
     ? `
-      <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="34" fill="none" stroke="${severityStroke(
+      <circle cx="${currentMapPoint.x}" cy="${currentMapPoint.y}" r="34" fill="none" stroke="${severityStroke(
         highestAlertSeverity,
       )}" stroke-width="3" opacity="0.22" />
-      <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="54" fill="none" stroke="${severityStroke(
+      <circle cx="${currentMapPoint.x}" cy="${currentMapPoint.y}" r="54" fill="none" stroke="${severityStroke(
         mapRiskSeverity,
       )}" stroke-width="2" stroke-dasharray="8 10" opacity="0.18" />
     `
@@ -490,10 +566,10 @@ const buildMapMarkup = () => {
       />
     `
     : "";
-  const directionalCue = latestPoint
+  const directionalCue = currentMapPoint
     ? `
       <polygon
-        points="${latestPoint.x},${latestPoint.y - 42} ${latestPoint.x + 18},${latestPoint.y - 6} ${latestPoint.x - 18},${latestPoint.y - 6}"
+        points="${currentMapPoint.x},${currentMapPoint.y - 42} ${currentMapPoint.x + 18},${currentMapPoint.y - 6} ${currentMapPoint.x - 18},${currentMapPoint.y - 6}"
         fill="${severityStroke(dispatchState.tone)}"
         opacity="0.72"
       />
@@ -513,15 +589,16 @@ const buildMapMarkup = () => {
     <svg class="map-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Mission live operations map">
       ${airspaceRegion}
       ${riskCorridor}
-      ${replayPath ? `<polyline points="${replayPath}" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.92" />` : ""}
+      ${replayPath ? `<polyline points="${replayPath}" fill="none" stroke="#224665" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.72" />` : ""}
+      ${completedReplayPath ? `<polyline points="${completedReplayPath}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />` : ""}
       ${alertTrackHighlight}
       ${replayDots}
       ${
-        latestPoint
+        currentMapPoint
           ? `
             ${latestTelemetryHalo}
-            <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="14" fill="rgba(239,68,68,0.18)" />
-            <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="7" fill="#ef4444" stroke="#edf3fb" stroke-width="2" />
+            <circle cx="${currentMapPoint.x}" cy="${currentMapPoint.y}" r="14" fill="rgba(239,68,68,0.18)" />
+            <circle cx="${currentMapPoint.x}" cy="${currentMapPoint.y}" r="7" fill="#ef4444" stroke="#edf3fb" stroke-width="2" />
             ${directionalCue}
           `
           : ""
@@ -547,6 +624,7 @@ const renderStatus = () => {
 
   const planningWorkspace = uiState.planningWorkspace;
   const dispatchWorkspace = uiState.dispatchWorkspace;
+  const currentReplayPoint = activeReplayPoint();
   const latestTelemetry = uiState.latestTelemetry?.telemetry;
   const alertSignals = (uiState.alerts ?? []).map((alert) => ({
     label: `${alert.alertType} - ${alert.severity}`,
@@ -571,24 +649,32 @@ const renderStatus = () => {
   statusPanel.innerHTML = `
     <div class="summary-grid">
       <section class="summary-block">
-        <h4>Telemetry State</h4>
+        <h4>Replay State</h4>
         <div class="kv">
-          <div class="k">Timestamp</div>
-          <div>${escapeHtml(formatDateTime(latestTelemetry?.timestamp))}</div>
+          <div class="k">Replay timestamp</div>
+          <div>${escapeHtml(formatDateTime(currentReplayPoint?.timestamp))}</div>
           <div class="k">Position</div>
           <div>${escapeHtml(
-            latestTelemetry?.lat != null && latestTelemetry?.lng != null
-              ? `${latestTelemetry.lat}, ${latestTelemetry.lng}`
+            currentReplayPoint?.lat != null && currentReplayPoint?.lng != null
+              ? `${currentReplayPoint.lat}, ${currentReplayPoint.lng}`
               : "Not recorded",
           )}</div>
           <div class="k">Altitude</div>
           <div>${escapeHtml(
-            latestTelemetry?.altitudeM != null ? `${latestTelemetry.altitudeM} m` : "Not recorded",
+            currentReplayPoint?.altitudeM != null ? `${currentReplayPoint.altitudeM} m` : "Not recorded",
           )}</div>
           <div class="k">Speed</div>
           <div>${escapeHtml(
-            latestTelemetry?.speedMps != null ? `${latestTelemetry.speedMps} m/s` : "Not recorded",
+            currentReplayPoint?.speedMps != null ? `${currentReplayPoint.speedMps} m/s` : "Not recorded",
           )}</div>
+          <div class="k">Replay progress</div>
+          <div>${escapeHtml(
+            replayTrack().length === 0
+              ? "0 / 0"
+              : `${uiState.replayPlayback.index + 1} / ${replayTrack().length}`,
+          )}</div>
+          <div class="k">Latest live telemetry</div>
+          <div>${escapeHtml(formatDateTime(latestTelemetry?.timestamp))}</div>
         </div>
       </section>
       <section class="summary-block">
@@ -656,14 +742,25 @@ const renderTimeline = () => {
   `;
 };
 
+const renderLiveOperations = () => {
+  renderReplayControls();
+  renderOverview();
+  renderMap();
+  renderStatus();
+  renderTimeline();
+};
+
 const clearPanels = (message) => {
   overviewPanel.innerHTML = "";
   mapPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   statusPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   timelinePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+  renderReplayControls();
 };
 
 const loadLiveOperationsView = async (missionId) => {
+  stopReplayPlayback();
+
   if (!missionId) {
     uiState.missionId = "";
     uiState.planningWorkspace = null;
@@ -672,6 +769,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.replay = null;
     uiState.latestTelemetry = null;
     uiState.alerts = [];
+    uiState.replayPlayback.index = 0;
     setLoadedMission("");
     setConnectionState("Enter a mission UUID", "tone-warn");
     clearPanels("Enter a mission UUID to load the live operations view.");
@@ -706,11 +804,8 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.replay = replayResponse;
     uiState.latestTelemetry = latestTelemetryResponse;
     uiState.alerts = alertsResponse.alerts ?? [];
-
-    renderOverview();
-    renderMap();
-    renderStatus();
-    renderTimeline();
+    uiState.replayPlayback.index = 0;
+    renderLiveOperations();
     setConnectionState("Live operations view loaded", "tone-ok");
   } catch (error) {
     const message =
@@ -721,6 +816,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.replay = null;
     uiState.latestTelemetry = null;
     uiState.alerts = [];
+    uiState.replayPlayback.index = 0;
     clearPanels(message);
     setConnectionState(message, "tone-bad");
   }
@@ -734,6 +830,44 @@ missionIdInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     loadLiveOperationsView(missionIdInput.value.trim());
   }
+});
+
+replaySlider.addEventListener("input", () => {
+  stopReplayPlayback();
+  setReplayIndex(Number(replaySlider.value));
+  renderLiveOperations();
+});
+
+replayPlayButton.addEventListener("click", () => {
+  const points = replayTrack();
+  if (points.length <= 1) {
+    renderReplayControls();
+    return;
+  }
+
+  if (uiState.replayPlayback.index >= points.length - 1) {
+    setReplayIndex(0);
+  }
+
+  stopReplayPlayback();
+  uiState.replayPlayback.playing = true;
+  renderReplayControls();
+  uiState.replayPlayback.timerId = window.setInterval(() => {
+    const currentPoints = replayTrack();
+    if (uiState.replayPlayback.index >= currentPoints.length - 1) {
+      stopReplayPlayback();
+      renderLiveOperations();
+      return;
+    }
+
+    setReplayIndex(uiState.replayPlayback.index + 1);
+    renderLiveOperations();
+  }, 900);
+});
+
+replayPauseButton.addEventListener("click", () => {
+  stopReplayPlayback();
+  renderReplayControls();
 });
 
 openWorkspaceButton.addEventListener("click", () => {
@@ -752,6 +886,10 @@ openReplayApiButton.addEventListener("click", () => {
   }
 
   window.open(`/missions/${missionId}/replay`, "_blank", "noopener");
+});
+
+window.addEventListener("beforeunload", () => {
+  stopReplayPlayback();
 });
 
 const initialMissionId = getMissionIdFromLocation();

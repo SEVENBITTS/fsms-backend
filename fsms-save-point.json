@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add operator live operations replay controls so map-native alert cues can be reviewed against mission time progression instead of a static track only.",
+ "nextBuildStep": "Add mission-linked alert timeline correlation so replay controls and map-native cues can be reviewed against explicit alert periods and operational events.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

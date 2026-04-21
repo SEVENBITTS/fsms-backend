@@ -259,6 +259,50 @@
       background: linear-gradient(180deg, rgba(18,32,50,0.94), rgba(10,18,28,0.98));
       overflow: hidden;
     }
+    .replay-controls {
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .control-button {
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .control-button:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+    .replay-readout {
+      min-width: 168px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .replay-slider {
+      width: 100%;
+      accent-color: var(--info);
+    }
+    .replay-progress {
+      min-width: 126px;
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
     .map-grid {
       position: absolute;
       inset: 0;
@@ -459,6 +503,13 @@
             <p>Mission replay track, latest telemetry position, and current live-ops overlays.</p>
           </div>
           <div class="panel-body">
+            <div class="replay-controls">
+              <button id="live-ops-replay-play-btn" class="control-button" type="button">Play</button>
+              <button id="live-ops-replay-pause-btn" class="control-button" type="button" disabled>Pause</button>
+              <input id="live-ops-replay-slider" class="replay-slider" type="range" min="0" max="0" step="1" value="0" />
+              <div id="live-ops-replay-time" class="replay-readout">Replay time: not loaded</div>
+              <div id="live-ops-replay-progress" class="replay-progress">0 / 0</div>
+            </div>
             <div id="live-ops-map" class="map-shell"></div>
           </div>
         </div>
