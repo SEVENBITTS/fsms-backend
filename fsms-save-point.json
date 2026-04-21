@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add live operations demo data seed path so operator replay, overlay, and conflict presentation can be reviewed against a mission with telemetry, alerts, and traffic context.",
+  "nextBuildStep": "Update the live operations entry flow so the generic live operations route shows mission selection or an empty state instead of fetching with placeholder mission IDs.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

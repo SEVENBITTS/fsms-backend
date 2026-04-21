@@ -417,6 +417,11 @@ const conflictAssessmentSummary = () => {
   };
 };
 
+const primaryConflictAssessmentItem = () => activeConflictAssessmentItems()[0] ?? null;
+
+const secondaryConflictAssessmentItems = () =>
+  activeConflictAssessmentItems().slice(1, 4);
+
 const deriveConflictAdvisories = () =>
   activeConflictAssessmentItems().slice(0, 5).map((conflict) => {
     let headline = "Monitor traffic proximity";
@@ -464,6 +469,20 @@ const conflictAdvisorySummary = () => {
     detail: `${primary.recommendation} · ${primary.relatedObject} · ${primary.summary}`,
   };
 };
+
+const primaryConflictAdvisory = () => deriveConflictAdvisories()[0] ?? null;
+
+const secondaryConflictAdvisories = () => deriveConflictAdvisories().slice(1, 4);
+
+const missionLifecycleStatus = () =>
+  uiState.planningWorkspace?.mission?.status ??
+  uiState.dispatchWorkspace?.mission?.status ??
+  "";
+
+const isPostLaunchMission = () =>
+  ["active", "completed", "aborted"].includes(
+    String(missionLifecycleStatus() ?? "").toLowerCase(),
+  );
 
 const currentConflictReplayRelation = () => {
   const conflicts = activeConflictAssessmentItems();
@@ -866,6 +885,15 @@ const summarizeAirspaceState = (planningWorkspace) => {
 };
 
 const summarizeReadinessState = (planningWorkspace, dispatchWorkspace) => {
+  if (isPostLaunchMission()) {
+    return {
+      label: "Readiness complete",
+      tone: "pass",
+      detail:
+        "Mission is already in post-launch state; readiness gates are historical for this live view.",
+    };
+  }
+
   const readinessGate = planningWorkspace?.readiness?.gate;
   const launchPreflight = dispatchWorkspace?.dispatch?.launchPreflight;
   const blocked =
@@ -885,6 +913,15 @@ const summarizeReadinessState = (planningWorkspace, dispatchWorkspace) => {
 };
 
 const summarizeDispatchState = (dispatchWorkspace) => {
+  if (isPostLaunchMission()) {
+    return {
+      label: "Dispatch complete",
+      tone: "pass",
+      detail:
+        "Mission is already in post-launch state; dispatch gating is no longer the active operator concern.",
+    };
+  }
+
   const blocked = dispatchWorkspace?.dispatch?.ready === false;
   return {
     label: blocked ? "Dispatch blocked" : "Dispatch ready",
@@ -953,6 +990,8 @@ const severityStroke = (value) => {
 const buildOverlayCards = () => {
   const planningWorkspace = uiState.planningWorkspace;
   const dispatchWorkspace = uiState.dispatchWorkspace;
+  const primaryConflict = primaryConflictAssessmentItem();
+  const primaryAdvisory = primaryConflictAdvisory();
   const cards = [
     summarizeRiskState(planningWorkspace),
     summarizeAirspaceState(planningWorkspace),
@@ -962,8 +1001,20 @@ const buildOverlayCards = () => {
     crewedTrafficSummary(),
     droneTrafficSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
-    conflictAssessmentSummary(),
-    conflictAdvisorySummary(),
+    primaryConflict
+      ? {
+          label: "Primary conflict",
+          tone: primaryConflict.severity,
+          detail: `${primaryConflict.overlayLabel} · ${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+        }
+      : conflictAssessmentSummary(),
+    primaryAdvisory
+      ? {
+          label: "Primary advisory",
+          tone: primaryAdvisory.tone,
+          detail: `${primaryAdvisory.recommendation} · ${primaryAdvisory.relatedObject}`,
+        }
+      : conflictAdvisorySummary(),
   ];
 
   return cards
@@ -1562,24 +1613,50 @@ const renderStatus = () => {
   const conflictState = conflictAssessmentSummary();
   const advisoryState = conflictAdvisorySummary();
   const replayConflictRelation = currentConflictReplayRelation();
+  const primaryConflict = primaryConflictAssessmentItem();
+  const primaryAdvisory = primaryConflictAdvisory();
+  const secondaryAdvisories = secondaryConflictAdvisories();
+  const approvalPosture = isPostLaunchMission()
+    ? "Completed"
+    : planningWorkspace.approval.ready
+      ? "Ready"
+      : "Blocked";
+  const dispatchPosture = isPostLaunchMission()
+    ? "Completed"
+    : dispatchWorkspace.dispatch.ready
+      ? "Ready"
+      : "Blocked";
+  const launchPreflightPosture = isPostLaunchMission()
+    ? "Not applicable"
+    : dispatchWorkspace.dispatch.launchPreflight.allowed
+      ? "Allowed"
+      : "Blocked";
   const alertSignals = (uiState.alerts ?? []).map((alert) => ({
     label: `${alert.alertType} - ${alert.severity}`,
     value: `${alert.status}: ${alert.message}`,
   }));
-  const conflictSignals = activeConflictAssessmentItems().map((conflict) => ({
-    label: `${conflict.overlayKind} ${conflict.severity}`,
-    value: `${conflict.summary}: ${conflict.explanation}`,
-  }));
+  const conflictSignals = primaryConflict
+    ? [
+        {
+          label: `${primaryConflict.overlayKind} ${primaryConflict.severity}`,
+          value: `${primaryConflict.summary}: ${primaryConflict.explanation}`,
+        },
+        ...secondaryConflictAssessmentItems().map((conflict) => ({
+          label: `Additional conflict ${conflict.overlayLabel}`,
+          value: `${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+        })),
+      ]
+    : [];
   const riskSignals = [
     ...((planningWorkspace.blockingReasons ?? []).map((reason) => ({
       label: "Planning blocker",
       value: reason,
     }))),
-    ...((dispatchWorkspace.dispatch?.blockingReasons ?? []).map((reason) => ({
+    ...((isPostLaunchMission() ? [] : dispatchWorkspace.dispatch?.blockingReasons ?? []).map((reason) => ({
       label: "Dispatch blocker",
       value: reason,
     }))),
-    ...((dispatchWorkspace.dispatch?.missingRequirements ?? []).map((reason) => ({
+    ...((isPostLaunchMission() ? [] : dispatchWorkspace.dispatch?.missingRequirements ?? []).map((reason) => ({
       label: "Dispatch requirement",
       value: reason,
     }))),
@@ -1622,11 +1699,11 @@ const renderStatus = () => {
         <h4>Operational Posture</h4>
         <div class="kv">
           <div class="k">Approval</div>
-          <div>${renderBadge(planningWorkspace.approval.ready ? "Ready" : "Blocked")}</div>
+          <div>${renderBadge(approvalPosture)}</div>
           <div class="k">Dispatch</div>
-          <div>${renderBadge(dispatchWorkspace.dispatch.ready ? "Ready" : "Blocked")}</div>
+          <div>${renderBadge(dispatchPosture)}</div>
           <div class="k">Launch preflight</div>
-          <div>${renderBadge(dispatchWorkspace.dispatch.launchPreflight.allowed ? "Allowed" : "Blocked")}</div>
+          <div>${renderBadge(launchPreflightPosture)}</div>
           <div class="k">Approval evidence</div>
           <div>${escapeHtml(planningWorkspace.evidence.latestApprovalEvidenceLink?.id ?? "Missing")}</div>
           <div class="k">Dispatch evidence</div>
@@ -1713,34 +1790,40 @@ const renderStatus = () => {
           <div>${renderBadge(conflictState.label)}</div>
           <div class="k">Primary conflict</div>
           <div>${escapeHtml(
-            activeConflictAssessmentItems()[0]?.overlayLabel ?? "Clear",
+            primaryConflict?.overlayLabel ?? "Clear",
           )}</div>
           <div class="k">Separation</div>
           <div>${escapeHtml(
-            activeConflictAssessmentItems()[0]
-              ? `${activeConflictAssessmentItems()[0].metrics?.lateralDistanceMeters ?? "?"} m · ${activeConflictAssessmentItems()[0].metrics?.altitudeDeltaFt ?? "?"} ft`
+            primaryConflict
+              ? `${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m · ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft`
               : "Not recorded",
           )}</div>
           <div class="k">Assessment time</div>
           <div>${escapeHtml(
-            activeConflictAssessmentItems()[0]
-              ? formatDateTime(activeConflictAssessmentItems()[0].assessedAt)
+            primaryConflict
+              ? formatDateTime(primaryConflict.assessedAt)
               : "Not recorded",
           )}</div>
           <div class="k">Advisory presentation</div>
           <div>${renderBadge(advisoryState.label)}</div>
           <div class="k">Recommended attention</div>
           <div>${escapeHtml(
-            deriveConflictAdvisories()[0]?.recommendation ?? "Clear",
+            primaryAdvisory?.recommendation ?? "Clear",
           )}</div>
           <div class="k">Advisory target</div>
           <div>${escapeHtml(
-            deriveConflictAdvisories()[0]?.relatedObject ?? "None",
+            primaryAdvisory?.relatedObject ?? "None",
           )}</div>
           <div class="k">Replay relation</div>
           <div>${renderBadge(replayConflictRelation.label)}</div>
           <div class="k">Replay relevance detail</div>
           <div>${escapeHtml(replayConflictRelation.detail)}</div>
+          <div class="k">Additional advisories</div>
+          <div>${escapeHtml(
+            secondaryAdvisories.length === 0
+              ? "None"
+              : `${secondaryAdvisories.length} secondary item(s)`,
+          )}</div>
         </div>
       </section>
     </div>
@@ -1855,6 +1938,8 @@ const renderAlertCorrelation = () => {
 const renderConflictAssessment = () => {
   const assessment = currentConflictAssessment();
   const conflicts = activeConflictAssessmentItems();
+  const primaryConflict = conflicts[0] ?? null;
+  const secondaryConflicts = conflicts.slice(1, 4);
 
   if (!assessment) {
     conflictAssessmentPanel.innerHTML =
@@ -1885,30 +1970,47 @@ const renderConflictAssessment = () => {
           <div>${escapeHtml(String(assessment.reference?.replayPointCount ?? 0))}</div>
         </div>
       </section>
-      ${conflicts
-        .slice(0, 6)
-        .map(
-          (conflict) => `
-            <article class="alert-window ${toneClass(conflict.severity)}">
-              <strong>${escapeHtml(conflict.summary)}</strong>
-              <div>${escapeHtml(conflict.explanation)}</div>
-              <div class="alert-window-meta">
-                Source: ${escapeHtml(conflict.relatedSource.provider)} / ${escapeHtml(conflict.relatedSource.sourceType)}<br />
-                Observed: ${escapeHtml(formatDateTime(conflict.overlayObservedAt))}<br />
-                Separation: ${escapeHtml(`${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`)}<br />
-                Replay relevance: ${escapeHtml(conflict.replayRelevant ? "Current replay window" : `${conflict.replayTimeDeltaSeconds} s from replay cursor`)}
-              </div>
-            </article>
-          `,
-        )
-        .join("")}
+      <section class="correlation-card">
+        <h4>Primary Conflict</h4>
+        ${
+          primaryConflict
+            ? `
+              <article class="alert-window ${toneClass(primaryConflict.severity)}">
+                <strong>${escapeHtml(primaryConflict.summary)}</strong>
+                <div>${escapeHtml(primaryConflict.explanation)}</div>
+                <div class="alert-window-meta">
+                  Source: ${escapeHtml(primaryConflict.relatedSource.provider)} / ${escapeHtml(primaryConflict.relatedSource.sourceType)}<br />
+                  Observed: ${escapeHtml(formatDateTime(primaryConflict.overlayObservedAt))}<br />
+                  Separation: ${escapeHtml(`${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`)}<br />
+                  Replay relevance: ${escapeHtml(primaryConflict.replayRelevant ? "Current replay window" : `${primaryConflict.replayTimeDeltaSeconds} s from replay cursor`)}
+                </div>
+              </article>
+            `
+            : '<div class="empty-state">No primary conflict is currently assessed.</div>'
+        }
+      </section>
+      <section class="correlation-card">
+        <h4>Additional Conflicts</h4>
+        ${
+          secondaryConflicts.length === 0
+            ? '<div class="empty-state">No additional conflict candidates are currently assessed.</div>'
+            : renderList(
+                secondaryConflicts.map((conflict) => ({
+                  label: `${conflict.overlayLabel} · ${conflict.severity}`,
+                  value: `${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+                })),
+                "additional conflicts",
+              )
+        }
+      </section>
     </div>
   `;
 };
-
 const renderConflictAdvisory = () => {
   const advisories = deriveConflictAdvisories();
   const replayConflictRelation = currentConflictReplayRelation();
+  const primary = advisories[0] ?? null;
+  const secondary = advisories.slice(1, 4);
 
   if (advisories.length === 0) {
     conflictAdvisoryPanel.innerHTML =
@@ -1927,25 +2029,43 @@ const renderConflictAdvisory = () => {
           <div>${escapeHtml(replayConflictRelation.detail)}</div>
         </div>
       </section>
-      ${advisories.map(
-        (advisory) => `
-          <article class="alert-window ${toneClass(advisory.tone)}">
-            <strong>${escapeHtml(advisory.headline)}</strong>
-            <div>${escapeHtml(advisory.reasoning)}</div>
-            <div class="alert-window-meta">
-              Recommended attention: ${escapeHtml(advisory.recommendation)}<br />
-              Related object: ${escapeHtml(advisory.relatedObject)}<br />
-              Related source: ${escapeHtml(advisory.relatedSource)}<br />
-              Relevance: ${escapeHtml(advisory.relevance)}<br />
-              Separation: ${escapeHtml(advisory.summary)}
-            </div>
-          </article>
-        `,
-      ).join("")}
+      <section class="correlation-card">
+        <h4>Primary Advisory</h4>
+        ${
+          primary
+            ? `
+              <article class="alert-window ${toneClass(primary.tone)}">
+                <strong>${escapeHtml(primary.headline)}</strong>
+                <div>${escapeHtml(primary.reasoning)}</div>
+                <div class="alert-window-meta">
+                  Recommended attention: ${escapeHtml(primary.recommendation)}<br />
+                  Related object: ${escapeHtml(primary.relatedObject)}<br />
+                  Related source: ${escapeHtml(primary.relatedSource)}<br />
+                  Relevance: ${escapeHtml(primary.relevance)}<br />
+                  Separation: ${escapeHtml(primary.summary)}
+                </div>
+              </article>
+            `
+            : '<div class="empty-state">No primary advisory is currently derived.</div>'
+        }
+      </section>
+      <section class="correlation-card">
+        <h4>Additional Advisories</h4>
+        ${
+          secondary.length === 0
+            ? '<div class="empty-state">No additional advisory items are currently derived.</div>'
+            : renderList(
+                secondary.map((advisory) => ({
+                  label: `${advisory.recommendation} · ${advisory.relatedObject}`,
+                  value: advisory.summary,
+                })),
+                "additional advisories",
+              )
+        }
+      </section>
     </div>
   `;
 };
-
 const renderTimeline = () => {
   const relevant = correlatedConflictTimelineItems();
 
@@ -1978,7 +2098,7 @@ const renderTimeline = () => {
                       : ""
                   }
                   ${
-                    item.nearestConflict
+                    item.conflictRelevant && item.nearestConflict
                       ? `<span class="badge ${toneClass(item.nearestConflict.severity)}">${escapeHtml(item.nearestConflict.overlayLabel)}</span>`
                       : ""
                   }
@@ -2188,3 +2308,5 @@ if (initialMissionId) {
 }
 
 loadLiveOperationsView(initialMissionId);
+
+
