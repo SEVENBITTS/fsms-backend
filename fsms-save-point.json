@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission-linked live operations alert overlay so replay and future live telemetry can surface airspace, readiness, and dispatch risk states on the operator map view.",
+ "nextBuildStep": "Document and harden local dev startup checks so operator UI routes remain renderable after runtime and environment changes.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
