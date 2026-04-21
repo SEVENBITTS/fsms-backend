@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add mission-linked conflict replay correlation and timeline emphasis in the live operations view without introducing operator command automation.",
+  "nextBuildStep": "Add mission-linked conflict map track emphasis and window summaries in the live operations view without introducing operator command automation.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
