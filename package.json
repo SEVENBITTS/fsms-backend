@@ -1,7 +1,8 @@
 {
   "scripts": {
-    "dev": "tsx src/server.ts",
+    "dev": "node scripts/dev-server.mjs",
     "build": "tsc",
+    "build:runtime": "tsc -p tsconfig.runtime.json",
     "start": "node dist/server.js",
     "test": "vitest run",
     "validate:savepoint": "node scripts/validate-save-point.mjs",

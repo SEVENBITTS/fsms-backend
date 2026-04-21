@@ -100,6 +100,22 @@ fsms-backend/
 
 # Running the Backend
 
+## Current TypeScript dev startup
+
+For the current Express/TypeScript operator UI work, use:
+
+```powershell
+npm run dev
+```
+
+This dev entrypoint now:
+
+- compiles runtime server output into `dist/`
+- starts the server with plain `node`
+- skips startup migrations in local dev by default so static operator routes can still be rendered when local PostgreSQL credentials are not configured
+
+This is intended for UI rendering and route verification. API-backed mission data still requires a working local database setup.
+
 Activate the virtual environment:
 
 
