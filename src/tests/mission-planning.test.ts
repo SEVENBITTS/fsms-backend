@@ -7,6 +7,7 @@ import { runMigrations } from "../migrations/runMigrations";
 const clearTables = async () => {
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
+  await pool.query("delete from mission_external_overlays");
   await pool.query("delete from audit_evidence_snapshots");
   await pool.query("delete from airspace_compliance_inputs");
   await pool.query("delete from mission_risk_inputs");
@@ -1975,6 +1976,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/missions/${missionId}/replay");
     expect(response.text).toContain("/missions/${missionId}/telemetry/latest");
     expect(response.text).toContain("/missions/${missionId}/alerts");
+    expect(response.text).toContain("/missions/${missionId}/external-overlays?kind=weather");
     expect(response.text).toContain("/missions/${missionId}/planning-workspace");
     expect(response.text).toContain("/missions/${missionId}/dispatch-workspace");
     expect(response.text).toContain("/missions/${missionId}/operations-timeline");
@@ -1999,5 +2001,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("data-jump-timestamp");
     expect(response.text).toContain("setInterval");
     expect(response.text).toContain("map-terrain");
+    expect(response.text).toContain("weatherOverlays");
+    expect(response.text).toContain("activeWeatherOverlay");
+    expect(response.text).toContain("weatherSummary");
   });
 });

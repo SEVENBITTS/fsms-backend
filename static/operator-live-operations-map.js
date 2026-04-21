@@ -28,6 +28,7 @@ const uiState = {
   replay: null,
   latestTelemetry: null,
   alerts: [],
+  externalOverlays: [],
   replayPlayback: {
     index: 0,
     playing: false,
@@ -83,6 +84,9 @@ const escapeHtml = (value) =>
 
 const renderBadge = (value) =>
   `<span class="badge ${toneClass(value)}">${escapeHtml(value ?? "Unknown")}</span>`;
+
+const weatherOverlays = () =>
+  (uiState.externalOverlays ?? []).filter((overlay) => overlay.kind === "weather");
 
 const formatDateTime = (value) => {
   if (!value) {
@@ -180,6 +184,65 @@ const renderReplayControls = () => {
 
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
+
+const activeWeatherOverlay = () => {
+  const replayPoint = activeReplayPoint();
+  const replayTime = replayPoint?.timestamp ? Date.parse(replayPoint.timestamp) : null;
+  const overlays = weatherOverlays();
+
+  if (overlays.length === 0) {
+    return null;
+  }
+
+  const relevant = overlays
+    .map((overlay) => {
+      const observedAt = Date.parse(overlay.observedAt ?? "");
+      const validFrom = overlay.validFrom ? Date.parse(overlay.validFrom) : observedAt;
+      const validTo = overlay.validTo ? Date.parse(overlay.validTo) : null;
+      const activeAtReplay =
+        replayTime != null &&
+        Number.isFinite(validFrom) &&
+        replayTime >= validFrom &&
+        (validTo == null || replayTime <= validTo);
+      const relativeMs =
+        replayTime == null || !Number.isFinite(observedAt)
+          ? Number.POSITIVE_INFINITY
+          : Math.abs(replayTime - observedAt);
+
+      return {
+        ...overlay,
+        activeAtReplay,
+        relativeMs,
+      };
+    })
+    .sort((left, right) => {
+      if (left.activeAtReplay !== right.activeAtReplay) {
+        return left.activeAtReplay ? -1 : 1;
+      }
+
+      return left.relativeMs - right.relativeMs;
+    });
+
+  return relevant[0] ?? null;
+};
+
+const weatherSummary = () => {
+  const overlay = activeWeatherOverlay();
+  if (!overlay) {
+    return {
+      label: "Weather overlay missing",
+      tone: "warning",
+      detail: "No mission-linked weather overlay is available for the current replay position.",
+    };
+  }
+
+  const metadata = overlay.metadata ?? {};
+  return {
+    label: `Weather ${metadata.precipitation ?? "unknown"}`,
+    tone: overlay.severity ?? "info",
+    detail: `${metadata.windSpeedKnots ?? "?"} kt @ ${metadata.windDirectionDegrees ?? "?"}° · ${metadata.temperatureC ?? "?"}°C · observed ${formatDateTime(overlay.observedAt)}`,
+  };
+};
 
 const replayTrack = () =>
   (uiState.replay?.replay ?? []).filter(
@@ -482,6 +545,7 @@ const buildOverlayCards = () => {
     summarizeAirspaceState(planningWorkspace),
     summarizeReadinessState(planningWorkspace, dispatchWorkspace),
     summarizeDispatchState(dispatchWorkspace),
+    weatherSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
   ];
 
@@ -563,6 +627,8 @@ const renderOverview = () => {
   const currentReplayPoint = activeReplayPoint();
   const timelineCount = uiState.timeline?.items?.length ?? 0;
   const openAlertCount = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved").length;
+  const activeWeather = activeWeatherOverlay();
+  const weatherMeta = activeWeather?.metadata ?? null;
 
   overviewPanel.innerHTML = `
     <article class="metric">
@@ -604,6 +670,19 @@ const renderOverview = () => {
       <div class="label">Active alerts</div>
       <div class="value ${toneClass(openAlertCount > 0 ? "warning" : "clear")}">${escapeHtml(String(openAlertCount))}</div>
       <div class="meta">Open telemetry-linked alerts currently associated with the selected mission.</div>
+    </article>
+    <article class="metric">
+      <div class="label">Weather</div>
+      <div class="value ${toneClass(activeWeather?.severity ?? "missing")}">${escapeHtml(
+        weatherMeta
+          ? `${weatherMeta.windSpeedKnots} kt ${weatherMeta.precipitation}`
+          : "Missing",
+      )}</div>
+      <div class="meta">${escapeHtml(
+        weatherMeta
+          ? `${weatherMeta.temperatureC}°C at ${formatDateTime(activeWeather.observedAt)}`
+          : "No weather overlay loaded for this mission.",
+      )}</div>
     </article>
   `;
 };
@@ -685,6 +764,7 @@ const buildMapMarkup = () => {
     uiState.dispatchWorkspace?.dispatch?.ready ? "Dispatch ready" : "Dispatch blocked",
     summarizeRiskState(uiState.planningWorkspace).label,
     summarizeAirspaceState(uiState.planningWorkspace).label,
+    weatherOverlays().length > 0 ? `Weather overlays ${weatherOverlays().length}` : "Weather overlays 0",
   ];
 
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
@@ -707,8 +787,19 @@ const buildMapMarkup = () => {
   const dispatchState = summarizeDispatchState(uiState.dispatchWorkspace);
   const riskState = summarizeRiskState(uiState.planningWorkspace);
   const airspaceState = summarizeAirspaceState(uiState.planningWorkspace);
+  const weatherState = weatherSummary();
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
+  const weatherOverlay = activeWeatherOverlay();
+  const weatherPoint =
+    weatherOverlay &&
+    Number.isFinite(weatherOverlay.geometry?.lat) &&
+    Number.isFinite(weatherOverlay.geometry?.lng)
+      ? toPoint(
+          Number(weatherOverlay.geometry.lat),
+          Number(weatherOverlay.geometry.lng),
+        )
+      : null;
   const latestTelemetryHalo = currentMapPoint
     ? `
       <circle cx="${currentMapPoint.x}" cy="${currentMapPoint.y}" r="34" fill="none" stroke="${severityStroke(
@@ -764,6 +855,15 @@ const buildMapMarkup = () => {
       />
     `
     : "";
+  const weatherMarker = weatherPoint
+    ? `
+      <circle cx="${weatherPoint.x}" cy="${weatherPoint.y}" r="18" fill="rgba(56,189,248,0.14)" stroke="#7dd3fc" stroke-width="2" />
+      <path d="M ${weatherPoint.x - 10} ${weatherPoint.y} L ${weatherPoint.x + 8} ${weatherPoint.y - 8} L ${weatherPoint.x + 8} ${weatherPoint.y + 8} Z" fill="#7dd3fc" opacity="0.88" />
+      <text x="${weatherPoint.x + 22}" y="${weatherPoint.y + 5}" fill="#d8ecff" font-size="12" font-weight="700">${escapeHtml(
+        `${weatherOverlay?.metadata?.windSpeedKnots ?? "?"}kt`,
+      )}</text>
+    `
+    : "";
 
   return `
     <div class="map-grid"></div>
@@ -782,6 +882,7 @@ const buildMapMarkup = () => {
       ${completedReplayPath ? `<polyline points="${completedReplayPath}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />` : ""}
       ${alertTrackHighlight}
       ${replayDots}
+      ${weatherMarker}
       ${
         currentMapPoint
           ? `
@@ -886,6 +987,24 @@ const renderStatus = () => {
           <div class="k">Open alerts</div>
           <div>${escapeHtml(
             String((uiState.alerts ?? []).filter((alert) => alert.status !== "resolved").length),
+          )}</div>
+          <div class="k">Weather overlay</div>
+          <div>${renderBadge(weatherState.label)}</div>
+          <div class="k">Wind / temp</div>
+          <div>${escapeHtml(
+            activeWeatherOverlay()
+              ? `${activeWeatherOverlay().metadata?.windSpeedKnots ?? "?"} kt @ ${activeWeatherOverlay().metadata?.windDirectionDegrees ?? "?"}° · ${activeWeatherOverlay().metadata?.temperatureC ?? "?"}°C`
+              : "Missing",
+          )}</div>
+          <div class="k">Precipitation</div>
+          <div>${escapeHtml(
+            activeWeatherOverlay()?.metadata?.precipitation ?? "Missing",
+          )}</div>
+          <div class="k">Observed</div>
+          <div>${escapeHtml(
+            activeWeatherOverlay()
+              ? formatDateTime(activeWeatherOverlay().observedAt)
+              : "Not recorded",
           )}</div>
         </div>
       </section>
@@ -1064,6 +1183,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.replay = null;
     uiState.latestTelemetry = null;
     uiState.alerts = [];
+    uiState.externalOverlays = [];
     uiState.replayPlayback.index = 0;
     setLoadedMission("");
     setConnectionState("Enter a mission UUID", "tone-warn");
@@ -1084,6 +1204,7 @@ const loadLiveOperationsView = async (missionId) => {
       replayResponse,
       latestTelemetryResponse,
       alertsResponse,
+      externalOverlayResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${missionId}/planning-workspace`),
       fetchJson(`/missions/${missionId}/dispatch-workspace`),
@@ -1091,6 +1212,7 @@ const loadLiveOperationsView = async (missionId) => {
       fetchJson(`/missions/${missionId}/replay`),
       fetchJson(`/missions/${missionId}/telemetry/latest`),
       fetchJson(`/missions/${missionId}/alerts`),
+      fetchJson(`/missions/${missionId}/external-overlays?kind=weather`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -1099,6 +1221,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.replay = replayResponse;
     uiState.latestTelemetry = latestTelemetryResponse;
     uiState.alerts = alertsResponse.alerts ?? [];
+    uiState.externalOverlays = externalOverlayResponse.overlays ?? [];
     uiState.replayPlayback.index = 0;
     renderLiveOperations();
     setConnectionState("Live operations view loaded", "tone-ok");
@@ -1111,6 +1234,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.replay = null;
     uiState.latestTelemetry = null;
     uiState.alerts = [];
+    uiState.externalOverlays = [];
     uiState.replayPlayback.index = 0;
     clearPanels(message);
     setConnectionState(message, "tone-bad");

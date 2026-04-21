@@ -62,6 +62,10 @@ import { SafetyEventRepository } from "./safety-events/safety-event.repository";
 import { SafetyEventService } from "./safety-events/safety-event.service";
 import { SafetyEventController } from "./safety-events/safety-event.controller";
 import { createSafetyEventRouter } from "./safety-events/safety-event.routes";
+import { ExternalOverlayRepository } from "./external-overlays/external-overlay.repository";
+import { ExternalOverlayService } from "./external-overlays/external-overlay.service";
+import { ExternalOverlayController } from "./external-overlays/external-overlay.controller";
+import { createExternalOverlayRouter } from "./external-overlays/external-overlay.routes";
 
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
@@ -194,6 +198,14 @@ const airSafetyMeetingController = new AirSafetyMeetingController(
 const safetyEventRepository = new SafetyEventRepository();
 const safetyEventService = new SafetyEventService(pool, safetyEventRepository);
 const safetyEventController = new SafetyEventController(safetyEventService);
+const externalOverlayRepository = new ExternalOverlayRepository();
+const externalOverlayService = new ExternalOverlayService(
+  pool,
+  externalOverlayRepository,
+);
+const externalOverlayController = new ExternalOverlayController(
+  externalOverlayService,
+);
 
 app.use("/mission-plans", createMissionPlanningRouter(missionPlanningController));
 app.use("/sms", createSmsFrameworkRouter(smsFrameworkController));
@@ -203,6 +215,7 @@ app.use(
 );
 app.use("/safety-events", createSafetyEventRouter(safetyEventController));
 app.use("/missions", createMissionRouter(missionController));
+app.use("/missions", createExternalOverlayRouter(externalOverlayController));
 app.use("/missions", createMissionRiskRouter(missionRiskController));
 app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
 app.use("/missions", createAuditEvidenceRouter(auditEvidenceController));
