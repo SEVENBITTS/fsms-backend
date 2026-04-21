@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add mission-linked spatial alert geometry and basemap refinement so live operations overlays can move from status cards to clearer map-native alert cues.",
+ "nextBuildStep": "Add operator live operations replay controls so map-native alert cues can be reviewed against mission time progression instead of a static track only.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

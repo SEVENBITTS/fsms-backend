@@ -1928,6 +1928,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Map and Replay Surface");
     expect(response.text).toContain("Telemetry and Risk Status");
     expect(response.text).toContain("map-alert-stack");
+    expect(response.text).toContain("map-terrain");
+    expect(response.text).toContain("map-compass");
     expect(response.text).toContain("/static/operator-live-operations-map.js");
   });
 
@@ -1969,5 +1971,8 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/operator/missions/${encodeURIComponent(missionId)}");
     expect(response.text).toContain("buildOverlayCards");
     expect(response.text).toContain("map-alert-card");
+    expect(response.text).toContain("severityStroke");
+    expect(response.text).toContain("alertTrackHighlight");
+    expect(response.text).toContain("map-terrain");
   });
 });

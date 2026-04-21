@@ -248,6 +248,38 @@ const summarizeTelemetryAlerts = (alerts) => {
   };
 };
 
+const severityRank = (value) => {
+  const order = {
+    critical: 4,
+    fail: 4,
+    warning: 3,
+    blocked: 3,
+    info: 2,
+    pass: 1,
+    clear: 1,
+  };
+
+  return order[String(value ?? "").toLowerCase()] ?? 0;
+};
+
+const severityStroke = (value) => {
+  const text = String(value ?? "").toLowerCase();
+
+  if (text === "critical" || text === "fail") {
+    return "#ef4444";
+  }
+
+  if (text === "warning" || text === "blocked") {
+    return "#f59e0b";
+  }
+
+  if (text === "info") {
+    return "#38bdf8";
+  }
+
+  return "#22c55e";
+};
+
 const buildOverlayCards = () => {
   const planningWorkspace = uiState.planningWorkspace;
   const dispatchWorkspace = uiState.dispatchWorkspace;
@@ -358,12 +390,17 @@ const buildMapMarkup = () => {
     })
     .join(" ");
 
-  const replayDots = replayPoints
+  const projectedReplayPoints = replayPoints
     .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+    .map((point) => ({
+      ...point,
+      ...toPoint(Number(point.lat), Number(point.lng)),
+    }));
+
+  const replayDots = projectedReplayPoints
     .map((point, index) => {
-      const projected = toPoint(Number(point.lat), Number(point.lng));
       return `
-        <circle cx="${projected.x}" cy="${projected.y}" r="${index === 0 ? 6 : 4}" fill="${
+        <circle cx="${point.x}" cy="${point.y}" r="${index === 0 ? 6 : 4}" fill="${
           index === 0 ? "#22c55e" : "#38bdf8"
         }" opacity="${index === 0 ? "1" : "0.82"}" />
       `;
@@ -392,8 +429,81 @@ const buildMapMarkup = () => {
     `Open alerts ${openAlerts.length}`,
   ];
 
+  const highestAlertSeverity = openAlerts.reduce((highest, alert) => {
+    return severityRank(alert.severity) > severityRank(highest)
+      ? alert.severity
+      : highest;
+  }, "clear");
+  const highlightedSegments = projectedReplayPoints
+    .slice(Math.max(projectedReplayPoints.length - Math.max(openAlerts.length + 1, 2), 1))
+    .map((point) => `${point.x},${point.y}`)
+    .join(" ");
+  const readinessState = summarizeReadinessState(uiState.planningWorkspace, uiState.dispatchWorkspace);
+  const dispatchState = summarizeDispatchState(uiState.dispatchWorkspace);
+  const riskState = summarizeRiskState(uiState.planningWorkspace);
+  const airspaceState = summarizeAirspaceState(uiState.planningWorkspace);
+  const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
+    .sort((left, right) => severityRank(right) - severityRank(left))[0];
+  const latestTelemetryHalo = latestPoint
+    ? `
+      <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="34" fill="none" stroke="${severityStroke(
+        highestAlertSeverity,
+      )}" stroke-width="3" opacity="0.22" />
+      <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="54" fill="none" stroke="${severityStroke(
+        mapRiskSeverity,
+      )}" stroke-width="2" stroke-dasharray="8 10" opacity="0.18" />
+    `
+    : "";
+  const airspaceRegion = `
+    <polygon
+      points="${width - 280},92 ${width - 92},128 ${width - 164},280 ${width - 332},224"
+      fill="${severityStroke(airspaceState.tone)}"
+      opacity="${severityRank(airspaceState.tone) >= 3 ? "0.16" : "0.08"}"
+      stroke="${severityStroke(airspaceState.tone)}"
+      stroke-width="2"
+      stroke-dasharray="8 6"
+    />
+  `;
+  const riskCorridor = projectedReplayPoints.length >= 2
+    ? `
+      <polyline
+        points="${projectedReplayPoints.map((point) => `${point.x},${point.y}`).join(" ")}"
+        fill="none"
+        stroke="${severityStroke(riskState.tone)}"
+        stroke-width="18"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        opacity="${severityRank(riskState.tone) >= 3 ? "0.12" : "0.06"}"
+      />
+    `
+    : "";
+  const alertTrackHighlight = highlightedSegments
+    ? `
+      <polyline
+        points="${highlightedSegments}"
+        fill="none"
+        stroke="${severityStroke(highestAlertSeverity)}"
+        stroke-width="10"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        opacity="${openAlerts.length > 0 ? "0.5" : "0"}"
+      />
+    `
+    : "";
+  const directionalCue = latestPoint
+    ? `
+      <polygon
+        points="${latestPoint.x},${latestPoint.y - 42} ${latestPoint.x + 18},${latestPoint.y - 6} ${latestPoint.x - 18},${latestPoint.y - 6}"
+        fill="${severityStroke(dispatchState.tone)}"
+        opacity="0.72"
+      />
+    `
+    : "";
+
   return `
     <div class="map-grid"></div>
+    <div class="map-terrain"></div>
+    <div class="map-contours"></div>
     <div class="map-legend">
       ${legendItems.map((item) => `<div class="overlay-pill">${escapeHtml(item)}</div>`).join("")}
     </div>
@@ -401,13 +511,18 @@ const buildMapMarkup = () => {
       ${buildOverlayCards()}
     </div>
     <svg class="map-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Mission live operations map">
+      ${airspaceRegion}
+      ${riskCorridor}
       ${replayPath ? `<polyline points="${replayPath}" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.92" />` : ""}
+      ${alertTrackHighlight}
       ${replayDots}
       ${
         latestPoint
           ? `
+            ${latestTelemetryHalo}
             <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="14" fill="rgba(239,68,68,0.18)" />
             <circle cx="${latestPoint.x}" cy="${latestPoint.y}" r="7" fill="#ef4444" stroke="#edf3fb" stroke-width="2" />
+            ${directionalCue}
           `
           : ""
       }
@@ -415,6 +530,7 @@ const buildMapMarkup = () => {
     <div class="map-overlay">
       ${overlays.map((item) => `<div class="overlay-pill">${escapeHtml(item)}</div>`).join("")}
     </div>
+    <div class="map-compass">N</div>
   `;
 };
 
