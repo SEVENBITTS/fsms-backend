@@ -1932,6 +1932,9 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("live-ops-replay-slider");
     expect(response.text).toContain("live-ops-replay-markers");
     expect(response.text).toContain("live-ops-replay-progress");
+    expect(response.text).toContain("live-ops-replay-step-back-btn");
+    expect(response.text).toContain("live-ops-replay-step-forward-btn");
+    expect(response.text).toContain("live-ops-replay-speed");
     expect(response.text).toContain("map-alert-stack");
     expect(response.text).toContain("map-terrain");
     expect(response.text).toContain("map-compass");
@@ -1984,6 +1987,11 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("replayMarkers");
     expect(response.text).toContain("correlatedAlertWindows");
     expect(response.text).toContain("renderAlertCorrelation");
+    expect(response.text).toContain("replaySpeedSelect");
+    expect(response.text).toContain("replayStepBackButton");
+    expect(response.text).toContain("replayStepForwardButton");
+    expect(response.text).toContain("startReplayPlayback");
+    expect(response.text).toContain("replayPlaybackIntervalMs");
     expect(response.text).toContain("setInterval");
     expect(response.text).toContain("map-terrain");
   });

@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add operator live operations replay speed controls and segment stepping so alert-correlated mission review can move faster than one fixed playback pace.",
+ "nextBuildStep": "Add operator live operations event jump controls so replay review can move directly to launch, completion, and alert-linked mission milestones.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

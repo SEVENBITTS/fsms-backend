@@ -261,7 +261,7 @@
     }
     .replay-controls {
       display: grid;
-      grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+      grid-template-columns: auto auto auto auto minmax(0, 1fr) auto auto auto;
       gap: 10px;
       align-items: center;
       margin-bottom: 14px;
@@ -281,6 +281,16 @@
       font: inherit;
       font-weight: 700;
       cursor: pointer;
+    }
+    .control-select {
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
     }
     .control-button:disabled {
       cursor: default;
@@ -564,12 +574,20 @@
             <div class="replay-controls">
               <button id="live-ops-replay-play-btn" class="control-button" type="button">Play</button>
               <button id="live-ops-replay-pause-btn" class="control-button" type="button" disabled>Pause</button>
+              <button id="live-ops-replay-step-back-btn" class="control-button" type="button">Back</button>
+              <button id="live-ops-replay-step-forward-btn" class="control-button" type="button">Forward</button>
               <div class="replay-slider-stack">
                 <input id="live-ops-replay-slider" class="replay-slider" type="range" min="0" max="0" step="1" value="0" />
                 <div id="live-ops-replay-markers" class="replay-markers"></div>
               </div>
               <div id="live-ops-replay-time" class="replay-readout">Replay time: not loaded</div>
               <div id="live-ops-replay-progress" class="replay-progress">0 / 0</div>
+              <select id="live-ops-replay-speed" class="control-select" aria-label="Replay speed">
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="2">2x</option>
+                <option value="4">4x</option>
+              </select>
             </div>
             <div id="live-ops-map" class="map-shell"></div>
           </div>
