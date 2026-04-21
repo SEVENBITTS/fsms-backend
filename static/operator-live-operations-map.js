@@ -16,6 +16,7 @@ const uiState = {
   timeline: null,
   replay: null,
   latestTelemetry: null,
+  alerts: [],
 };
 
 const toneClass = (value) => {
@@ -156,6 +157,120 @@ const renderList = (items, title) => {
   `;
 };
 
+const summarizeRiskState = (planningWorkspace) => {
+  const assessment = planningWorkspace?.missionRisk;
+  if (!assessment) {
+    return {
+      label: "Mission risk missing",
+      tone: "warning",
+      detail: "No mission risk assessment is available for the current mission.",
+    };
+  }
+
+  return {
+    label: `Mission risk ${assessment.result ?? "unknown"}`,
+    tone: assessment.result ?? "info",
+    detail:
+      assessment.reasons?.[0]?.message ??
+      `Risk band ${assessment.riskBand ?? "unknown"}`,
+  };
+};
+
+const summarizeAirspaceState = (planningWorkspace) => {
+  const assessment = planningWorkspace?.airspaceCompliance;
+  if (!assessment) {
+    return {
+      label: "Airspace state missing",
+      tone: "warning",
+      detail: "No airspace compliance assessment is available for the current mission.",
+    };
+  }
+
+  return {
+    label: `Airspace ${assessment.result ?? "unknown"}`,
+    tone: assessment.result ?? "info",
+    detail:
+      assessment.reasons?.[0]?.message ??
+      `Restriction ${assessment.input?.restrictionStatus ?? "unknown"}`,
+  };
+};
+
+const summarizeReadinessState = (planningWorkspace, dispatchWorkspace) => {
+  const readinessGate = planningWorkspace?.readiness?.gate;
+  const launchPreflight = dispatchWorkspace?.dispatch?.launchPreflight;
+  const blocked =
+    readinessGate?.blocksDispatch ||
+    dispatchWorkspace?.dispatch?.blockingReasons?.length > 0 ||
+    launchPreflight?.allowed === false;
+
+  return {
+    label: blocked ? "Readiness blocked" : "Readiness clear",
+    tone: blocked ? "fail" : "pass",
+    detail:
+      dispatchWorkspace?.dispatch?.blockingReasons?.[0] ??
+      planningWorkspace?.blockingReasons?.[0] ??
+      launchPreflight?.error?.message ??
+      "No current readiness blockers are reported.",
+  };
+};
+
+const summarizeDispatchState = (dispatchWorkspace) => {
+  const blocked = dispatchWorkspace?.dispatch?.ready === false;
+  return {
+    label: blocked ? "Dispatch blocked" : "Dispatch ready",
+    tone: blocked ? "fail" : "pass",
+    detail:
+      dispatchWorkspace?.dispatch?.missingRequirements?.[0] ??
+      dispatchWorkspace?.dispatch?.blockingReasons?.[0] ??
+      "Dispatch state is clear for the current mission.",
+  };
+};
+
+const summarizeTelemetryAlerts = (alerts) => {
+  const openAlerts = (alerts ?? []).filter((alert) => alert.status !== "resolved");
+  if (openAlerts.length === 0) {
+    return {
+      label: "Telemetry alerts clear",
+      tone: "pass",
+      detail: "No open telemetry alerts are currently reported.",
+    };
+  }
+
+  const highest = [...openAlerts].sort((left, right) => {
+    const order = { critical: 3, warning: 2, info: 1 };
+    return (order[right.severity] ?? 0) - (order[left.severity] ?? 0);
+  })[0];
+
+  return {
+    label: `${openAlerts.length} active alert${openAlerts.length === 1 ? "" : "s"}`,
+    tone: highest?.severity ?? "warning",
+    detail: highest?.message ?? "Telemetry alerts are present.",
+  };
+};
+
+const buildOverlayCards = () => {
+  const planningWorkspace = uiState.planningWorkspace;
+  const dispatchWorkspace = uiState.dispatchWorkspace;
+  const cards = [
+    summarizeRiskState(planningWorkspace),
+    summarizeAirspaceState(planningWorkspace),
+    summarizeReadinessState(planningWorkspace, dispatchWorkspace),
+    summarizeDispatchState(dispatchWorkspace),
+    summarizeTelemetryAlerts(uiState.alerts),
+  ];
+
+  return cards
+    .map(
+      (card) => `
+        <section class="map-alert-card ${toneClass(card.tone)}">
+          <strong>${escapeHtml(card.label)}</strong>
+          <div>${escapeHtml(card.detail)}</div>
+        </section>
+      `,
+    )
+    .join("");
+};
+
 const renderOverview = () => {
   const planningWorkspace = uiState.planningWorkspace;
   const dispatchWorkspace = uiState.dispatchWorkspace;
@@ -163,6 +278,7 @@ const renderOverview = () => {
   const replayCount = uiState.replay?.replay?.length ?? 0;
   const latestTelemetry = uiState.latestTelemetry?.telemetry;
   const timelineCount = uiState.timeline?.items?.length ?? 0;
+  const openAlertCount = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved").length;
 
   overviewPanel.innerHTML = `
     <article class="metric">
@@ -190,6 +306,11 @@ const renderOverview = () => {
       <div class="label">Timeline coverage</div>
       <div class="value">${escapeHtml(String(timelineCount))}</div>
       <div class="meta">Mission narrative items across planning, approval, dispatch, flight, and post-operation.</div>
+    </article>
+    <article class="metric">
+      <div class="label">Active alerts</div>
+      <div class="value ${toneClass(openAlertCount > 0 ? "warning" : "clear")}">${escapeHtml(String(openAlertCount))}</div>
+      <div class="meta">Open telemetry-linked alerts currently associated with the selected mission.</div>
     </article>
   `;
 };
@@ -260,10 +381,25 @@ const buildMapMarkup = () => {
     `Replay points ${replayPoints.length}`,
     latestTelemetry ? `Latest telemetry ${formatDateTime(latestTelemetry.timestamp)}` : "Latest telemetry missing",
     uiState.dispatchWorkspace?.dispatch?.ready ? "Dispatch ready" : "Dispatch blocked",
+    summarizeRiskState(uiState.planningWorkspace).label,
+    summarizeAirspaceState(uiState.planningWorkspace).label,
+  ];
+
+  const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
+  const legendItems = [
+    "Cyan track replay",
+    "Red marker latest telemetry",
+    `Open alerts ${openAlerts.length}`,
   ];
 
   return `
     <div class="map-grid"></div>
+    <div class="map-legend">
+      ${legendItems.map((item) => `<div class="overlay-pill">${escapeHtml(item)}</div>`).join("")}
+    </div>
+    <div class="map-alert-stack">
+      ${buildOverlayCards()}
+    </div>
     <svg class="map-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Mission live operations map">
       ${replayPath ? `<polyline points="${replayPath}" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.92" />` : ""}
       ${replayDots}
@@ -296,6 +432,10 @@ const renderStatus = () => {
   const planningWorkspace = uiState.planningWorkspace;
   const dispatchWorkspace = uiState.dispatchWorkspace;
   const latestTelemetry = uiState.latestTelemetry?.telemetry;
+  const alertSignals = (uiState.alerts ?? []).map((alert) => ({
+    label: `${alert.alertType} - ${alert.severity}`,
+    value: `${alert.status}: ${alert.message}`,
+  }));
   const riskSignals = [
     ...((planningWorkspace.blockingReasons ?? []).map((reason) => ({
       label: "Planning blocker",
@@ -309,6 +449,7 @@ const renderStatus = () => {
       label: "Dispatch requirement",
       value: reason,
     }))),
+    ...alertSignals,
   ];
 
   statusPanel.innerHTML = `
@@ -347,6 +488,14 @@ const renderStatus = () => {
           <div>${escapeHtml(planningWorkspace.evidence.latestApprovalEvidenceLink?.id ?? "Missing")}</div>
           <div class="k">Dispatch evidence</div>
           <div>${escapeHtml(dispatchWorkspace.dispatch.latestDispatchEvidenceLink?.id ?? "Missing")}</div>
+          <div class="k">Mission risk</div>
+          <div>${renderBadge(planningWorkspace.missionRisk?.result ?? "Missing")}</div>
+          <div class="k">Airspace state</div>
+          <div>${renderBadge(planningWorkspace.airspaceCompliance?.result ?? "Missing")}</div>
+          <div class="k">Open alerts</div>
+          <div>${escapeHtml(
+            String((uiState.alerts ?? []).filter((alert) => alert.status !== "resolved").length),
+          )}</div>
         </div>
       </section>
     </div>
@@ -406,6 +555,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.timeline = null;
     uiState.replay = null;
     uiState.latestTelemetry = null;
+    uiState.alerts = [];
     setLoadedMission("");
     setConnectionState("Enter a mission UUID", "tone-warn");
     clearPanels("Enter a mission UUID to load the live operations view.");
@@ -424,12 +574,14 @@ const loadLiveOperationsView = async (missionId) => {
       timelineResponse,
       replayResponse,
       latestTelemetryResponse,
+      alertsResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${missionId}/planning-workspace`),
       fetchJson(`/missions/${missionId}/dispatch-workspace`),
       fetchJson(`/missions/${missionId}/operations-timeline`),
       fetchJson(`/missions/${missionId}/replay`),
       fetchJson(`/missions/${missionId}/telemetry/latest`),
+      fetchJson(`/missions/${missionId}/alerts`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -437,6 +589,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.timeline = timelineResponse.timeline;
     uiState.replay = replayResponse;
     uiState.latestTelemetry = latestTelemetryResponse;
+    uiState.alerts = alertsResponse.alerts ?? [];
 
     renderOverview();
     renderMap();
@@ -451,6 +604,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.timeline = null;
     uiState.replay = null;
     uiState.latestTelemetry = null;
+    uiState.alerts = [];
     clearPanels(message);
     setConnectionState(message, "tone-bad");
   }

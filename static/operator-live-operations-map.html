@@ -295,6 +295,40 @@
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
+    .map-alert-stack {
+      position: absolute;
+      right: 16px;
+      top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: min(340px, calc(100% - 32px));
+      z-index: 2;
+    }
+    .map-alert-card {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: rgba(9,17,27,0.84);
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .map-alert-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .map-legend {
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      z-index: 2;
+    }
     .timeline-item {
       display: grid;
       grid-template-columns: 146px 110px 1fr;
