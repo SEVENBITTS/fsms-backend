@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add mission-linked conflict proximity envelopes and severity bands on the live operations map without introducing operator command automation.",
+  "nextBuildStep": "Add live operations demo data seed path so operator replay, overlay, and conflict presentation can be reviewed against a mission with telemetry, alerts, and traffic context.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
