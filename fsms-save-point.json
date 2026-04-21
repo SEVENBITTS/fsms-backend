@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add grouped live operations milestone navigation so replay review can jump by lifecycle phase and alert category rather than a flat milestone list.",
+ "nextBuildStep": "Add weather external overlay ingestion and live operations display using the mission-linked external overlay model.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
