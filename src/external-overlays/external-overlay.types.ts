@@ -99,6 +99,11 @@ export interface AreaConflictOverlayMetadata {
     replacedSourceType: string | null;
     replacedSourceRecordId: string | null;
   } | null;
+  retirement?: {
+    retired: boolean;
+    retiredAt: string | null;
+    reason: "missing_from_refresh" | null;
+  } | null;
 }
 
 export interface ExternalOverlay {
@@ -277,4 +282,5 @@ export interface NormalizeAreaOverlaySourcesInput {
 
 export interface ListExternalOverlaysFilters {
   kind?: ExternalOverlayKind;
+  includeRetired?: boolean;
 }
