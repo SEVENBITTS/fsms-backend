@@ -316,6 +316,30 @@ const buildAreaOverlayRefreshRunTransitionArtifactId = (
     toRefreshRunId,
   ].join(":");
 
+const parseAreaOverlayRefreshRunTransitionArtifactId = (
+  artifactId: string,
+): {
+  missionId: string;
+  fromRefreshRunId: string;
+  toRefreshRunId: string;
+} | null => {
+  const parts = artifactId.split(":");
+  if (parts.length !== 4 || parts[0] !== "refresh_run_transition") {
+    return null;
+  }
+
+  const [, missionId, fromRefreshRunId, toRefreshRunId] = parts;
+  if (!missionId || !fromRefreshRunId || !toRefreshRunId) {
+    return null;
+  }
+
+  return {
+    missionId,
+    fromRefreshRunId,
+    toRefreshRunId,
+  };
+};
+
 const areaOverlayRefreshSummaryItemFromOverlay = (
   overlay: ExternalOverlay,
 ): AreaOverlayRefreshRunSummaryItem => {
@@ -1183,25 +1207,9 @@ export class ExternalOverlayService {
       chronology?: boolean;
       transitionFromRefreshRunId?: string;
       transitionToRefreshRunId?: string;
+      transitionArtifactId?: string;
     },
   ): Promise<{ missionId: string; artifact: AreaOverlayRefreshRunTransitionArtifact }> {
-    if (
-      !filters.transitionFromRefreshRunId ||
-      !filters.transitionToRefreshRunId
-    ) {
-      throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
-        "Both transitionFromRefreshRunId and transitionToRefreshRunId are required for refresh-run transition artifact queries",
-      );
-    }
-
-    if (
-      filters.transitionFromRefreshRunId === filters.transitionToRefreshRunId
-    ) {
-      throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
-        "transitionFromRefreshRunId and transitionToRefreshRunId must be different",
-      );
-    }
-
     if (
       filters.refreshRunId ||
       filters.fromRefreshRunId ||
@@ -1213,11 +1221,52 @@ export class ExternalOverlayService {
       );
     }
 
+    let transitionFromRefreshRunId = filters.transitionFromRefreshRunId;
+    let transitionToRefreshRunId = filters.transitionToRefreshRunId;
+
+    if (filters.transitionArtifactId) {
+      if (transitionFromRefreshRunId || transitionToRefreshRunId) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+          "transitionArtifactId cannot be combined with transitionFromRefreshRunId or transitionToRefreshRunId",
+        );
+      }
+
+      const parsedArtifactId = parseAreaOverlayRefreshRunTransitionArtifactId(
+        filters.transitionArtifactId,
+      );
+      if (!parsedArtifactId) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+          "transitionArtifactId must use the refresh_run_transition:<missionId>:<fromRefreshRunId>:<toRefreshRunId> format",
+        );
+      }
+
+      if (parsedArtifactId.missionId !== missionId) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+          "transitionArtifactId mission id does not match the requested mission",
+        );
+      }
+
+      transitionFromRefreshRunId = parsedArtifactId.fromRefreshRunId;
+      transitionToRefreshRunId = parsedArtifactId.toRefreshRunId;
+    }
+
+    if (!transitionFromRefreshRunId || !transitionToRefreshRunId) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+        "Either transitionArtifactId or both transitionFromRefreshRunId and transitionToRefreshRunId are required for refresh-run transition artifact queries",
+      );
+    }
+
+    if (transitionFromRefreshRunId === transitionToRefreshRunId) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+        "transitionFromRefreshRunId and transitionToRefreshRunId must be different",
+      );
+    }
+
     const transitionResult = await this.getAreaOverlayRefreshRunTransition(
       missionId,
       {
-        transitionFromRefreshRunId: filters.transitionFromRefreshRunId,
-        transitionToRefreshRunId: filters.transitionToRefreshRunId,
+        transitionFromRefreshRunId,
+        transitionToRefreshRunId,
       },
     );
 
@@ -1226,13 +1275,13 @@ export class ExternalOverlayService {
       artifact: {
         artifactId: buildAreaOverlayRefreshRunTransitionArtifactId(
           missionId,
-          filters.transitionFromRefreshRunId,
-          filters.transitionToRefreshRunId,
+          transitionFromRefreshRunId,
+          transitionToRefreshRunId,
         ),
         missionId,
         artifactType: "refresh_run_transition",
-        fromRefreshRunId: filters.transitionFromRefreshRunId,
-        toRefreshRunId: filters.transitionToRefreshRunId,
+        fromRefreshRunId: transitionFromRefreshRunId,
+        toRefreshRunId: transitionToRefreshRunId,
         transition: transitionResult.transition,
       },
     };
