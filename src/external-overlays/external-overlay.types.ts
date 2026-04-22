@@ -104,6 +104,12 @@ export interface AreaConflictOverlayMetadata {
     retiredAt: string | null;
     reason: "missing_from_refresh" | null;
   } | null;
+  refreshProvenance?: {
+    createdByRunId: string;
+    lastUpdatedByRunId: string;
+    supersededByRunId: string | null;
+    retiredByRunId: string | null;
+  } | null;
 }
 
 export interface ExternalOverlay {
