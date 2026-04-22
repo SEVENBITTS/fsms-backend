@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Surface failed-refresh provenance in operator-facing review context so unsuccessful authoritative updates are distinguishable from stale carried-forward overlay state.",
+  "nextBuildStep": "Add failed-refresh provenance to operator-facing review context so unsuccessful authoritative updates are distinguishable from stale carried-forward overlay state.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
