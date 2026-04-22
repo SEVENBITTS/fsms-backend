@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
 import type { Pool } from "pg";
 import { ExternalOverlayRepository } from "./external-overlay.repository";
-import { MissionExternalOverlayMissionNotFoundError } from "./external-overlay.errors";
+import {
+  MissionExternalOverlayMissionNotFoundError,
+  MissionExternalOverlayRefreshRunNotFoundError,
+} from "./external-overlay.errors";
 import type {
   AreaConflictOverlayMetadata,
   CreateAreaConflictExternalOverlayInput,
@@ -242,6 +245,40 @@ const compareAreaNormalizationPriority = (
   const leftObserved = Date.parse(left.observedAt);
   const rightObserved = Date.parse(right.observedAt);
   return leftObserved - rightObserved;
+};
+
+type AreaOverlayRefreshRunSummaryItem = {
+  overlayId: string;
+  areaId: string;
+  label: string;
+  sourceType: string;
+  sourceRecordId: string | null;
+  retired: boolean;
+};
+
+type AreaOverlayRefreshRunSummary = {
+  refreshRunId: string;
+  missionId: string;
+  created: AreaOverlayRefreshRunSummaryItem[];
+  updated: AreaOverlayRefreshRunSummaryItem[];
+  superseded: AreaOverlayRefreshRunSummaryItem[];
+  retired: AreaOverlayRefreshRunSummaryItem[];
+  active: AreaOverlayRefreshRunSummaryItem[];
+};
+
+const areaOverlayRefreshSummaryItemFromOverlay = (
+  overlay: ExternalOverlay,
+): AreaOverlayRefreshRunSummaryItem => {
+  const metadata = areaMetadataFromOverlay(overlay);
+
+  return {
+    overlayId: overlay.id,
+    areaId: metadata.areaId,
+    label: metadata.label,
+    sourceType: overlay.source.sourceType,
+    sourceRecordId: overlay.source.sourceRecordId ?? null,
+    retired: isRetiredAreaOverlay(overlay),
+  };
 };
 
 export class ExternalOverlayService {
@@ -642,6 +679,107 @@ export class ExternalOverlayService {
       return {
         missionId,
         overlays,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAreaOverlayRefreshRuns(
+    missionId: string,
+    filters: { refreshRunId?: string } = {},
+  ): Promise<{ missionId: string; refreshRuns: AreaOverlayRefreshRunSummary[] }> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
+      }
+
+      const overlays = await this.externalOverlayRepository.listForMission(
+        client,
+        missionId,
+        { kind: "area_conflict", includeRetired: true },
+      );
+
+      const refreshRunMap = new Map<string, AreaOverlayRefreshRunSummary>();
+
+      const ensureSummary = (refreshRunId: string): AreaOverlayRefreshRunSummary => {
+        const existingSummary = refreshRunMap.get(refreshRunId);
+        if (existingSummary) {
+          return existingSummary;
+        }
+
+        const createdSummary: AreaOverlayRefreshRunSummary = {
+          refreshRunId,
+          missionId,
+          created: [],
+          updated: [],
+          superseded: [],
+          retired: [],
+          active: [],
+        };
+        refreshRunMap.set(refreshRunId, createdSummary);
+        return createdSummary;
+      };
+
+      for (const overlay of overlays) {
+        if (!isNormalizedAreaOverlay(overlay)) {
+          continue;
+        }
+
+        const provenance = areaMetadataFromOverlay(overlay).refreshProvenance;
+        if (!provenance) {
+          continue;
+        }
+
+        const summaryItem = areaOverlayRefreshSummaryItemFromOverlay(overlay);
+        ensureSummary(provenance.createdByRunId).created.push(summaryItem);
+        ensureSummary(provenance.lastUpdatedByRunId).updated.push(summaryItem);
+
+        if (provenance.supersededByRunId) {
+          ensureSummary(provenance.supersededByRunId).superseded.push(summaryItem);
+        }
+
+        if (provenance.retiredByRunId) {
+          ensureSummary(provenance.retiredByRunId).retired.push(summaryItem);
+        }
+
+        if (!summaryItem.retired) {
+          ensureSummary(provenance.lastUpdatedByRunId).active.push(summaryItem);
+        }
+      }
+
+      const refreshRuns = [...refreshRunMap.values()].sort((left, right) =>
+        right.refreshRunId.localeCompare(left.refreshRunId),
+      );
+
+      if (filters.refreshRunId) {
+        const matchingRun = refreshRuns.find(
+          (refreshRun) => refreshRun.refreshRunId === filters.refreshRunId,
+        );
+
+        if (!matchingRun) {
+          throw new MissionExternalOverlayRefreshRunNotFoundError(
+            missionId,
+            filters.refreshRunId,
+          );
+        }
+
+        return {
+          missionId,
+          refreshRuns: [matchingRun],
+        };
+      }
+
+      return {
+        missionId,
+        refreshRuns,
       };
     } finally {
       client.release();

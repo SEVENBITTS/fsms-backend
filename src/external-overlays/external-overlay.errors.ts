@@ -6,3 +6,12 @@ export class MissionExternalOverlayMissionNotFoundError extends Error {
     super(`Mission ${missionId} not found`);
   }
 }
+
+export class MissionExternalOverlayRefreshRunNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly type = "refresh_run_not_found";
+
+  constructor(missionId: string, refreshRunId: string) {
+    super(`Refresh run ${refreshRunId} not found for mission ${missionId}`);
+  }
+}

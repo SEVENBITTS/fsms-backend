@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add refresh-run summary query support to normalized area overlay ingestion so authoritative snapshots can be reviewed across repeated normalization cycles.",
+  "nextBuildStep": "Add refresh-run detail filtering support to normalized area overlay summary queries so a single authoritative snapshot can be reviewed directly.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

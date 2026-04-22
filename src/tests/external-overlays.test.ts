@@ -996,6 +996,164 @@ describe("mission external overlays integration", () => {
     });
   });
 
+  it("returns refresh-run summaries and supports filtering a single authoritative snapshot", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-1200",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-1200",
+              label: "Danger Area EGD-1200",
+              areaType: "danger_area",
+              description: "First snapshot",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    const firstRunId = firstRun.body.refreshRunId as string;
+
+    const secondRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1200/26",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B1200-26",
+              label: "Danger Area EGD-1200 NOTAM",
+              areaType: "notam_restriction",
+              description: "Higher priority snapshot",
+              authorityName: "NATS",
+              notamNumber: "B1200/26",
+              sourceReference: "NOTAM B1200/26",
+            },
+          },
+        ],
+      });
+
+    expect(secondRun.status).toBe(201);
+    const secondRunId = secondRun.body.refreshRunId as string;
+
+    const summaryResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs`,
+    );
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.missionId).toBe(missionId);
+    expect(summaryResponse.body.refreshRuns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          refreshRunId: firstRunId,
+          missionId,
+          created: [
+            expect.objectContaining({
+              areaId: "NOTAM-B1200-26",
+              sourceType: "notam_restriction",
+              retired: false,
+            }),
+          ],
+          updated: [],
+          superseded: [],
+          retired: [],
+          active: [],
+        }),
+        expect.objectContaining({
+          refreshRunId: secondRunId,
+          missionId,
+          created: [],
+          updated: [
+            expect.objectContaining({
+              areaId: "NOTAM-B1200-26",
+              sourceType: "notam_restriction",
+              retired: false,
+            }),
+          ],
+          superseded: [
+            expect.objectContaining({
+              areaId: "NOTAM-B1200-26",
+              sourceType: "notam_restriction",
+              retired: false,
+            }),
+          ],
+          retired: [],
+          active: [
+            expect.objectContaining({
+              areaId: "NOTAM-B1200-26",
+              sourceType: "notam_restriction",
+              retired: false,
+            }),
+          ],
+        }),
+      ]),
+    );
+
+    const filteredSummaryResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?refreshRunId=${firstRunId}`,
+    );
+
+    expect(filteredSummaryResponse.status).toBe(200);
+    expect(filteredSummaryResponse.body).toMatchObject({
+      missionId,
+      refreshRuns: [
+        expect.objectContaining({
+          refreshRunId: firstRunId,
+        }),
+      ],
+    });
+    expect(filteredSummaryResponse.body.refreshRuns).toHaveLength(1);
+
+    const missingRunResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?refreshRunId=${randomUUID()}`,
+    );
+
+    expect(missingRunResponse.status).toBe(404);
+    expect(missingRunResponse.body).toMatchObject({
+      error: {
+        type: "refresh_run_not_found",
+      },
+    });
+  });
+
   it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 

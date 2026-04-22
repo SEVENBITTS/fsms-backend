@@ -10,6 +10,10 @@ export function createExternalOverlayRouter(
     "/:missionId/external-overlays/normalize-area-sources",
     controller.normalizeAreaOverlaySources,
   );
+  router.get(
+    "/:missionId/external-overlays/refresh-runs",
+    controller.listAreaOverlayRefreshRuns,
+  );
   router.post("/:missionId/external-overlays", controller.createExternalOverlay);
   router.get("/:missionId/external-overlays", controller.listExternalOverlays);
 
