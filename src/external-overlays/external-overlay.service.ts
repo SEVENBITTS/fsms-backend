@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import type { Pool } from "pg";
 import { ExternalOverlayRepository } from "./external-overlay.repository";
 import { MissionExternalOverlayMissionNotFoundError } from "./external-overlay.errors";
@@ -78,6 +79,7 @@ const areaSourcePriority = (sourceType: string): number =>
 
 const normalizedAreaMetadata = (
   record: NormalizeAreaOverlaySourcesInput["records"][number],
+  refreshRunId: string,
   extras: Partial<AreaConflictOverlayMetadata> = {},
 ): AreaConflictOverlayMetadata => ({
   areaId: record.area.areaId,
@@ -105,6 +107,12 @@ const normalizedAreaMetadata = (
     retired: false,
     retiredAt: null,
     reason: null,
+  },
+  refreshProvenance: {
+    createdByRunId: refreshRunId,
+    lastUpdatedByRunId: refreshRunId,
+    supersededByRunId: null,
+    retiredByRunId: null,
   },
   ...extras,
 });
@@ -353,8 +361,9 @@ export class ExternalOverlayService {
   async normalizeAreaOverlaySources(
     missionId: string,
     input: unknown,
-  ): Promise<{ missionId: string; overlays: ExternalOverlay[] }> {
+  ): Promise<{ missionId: string; refreshRunId: string; overlays: ExternalOverlay[] }> {
     const validated = validateNormalizeAreaOverlaySourcesInput(input);
+    const refreshRunId = randomUUID();
     const client = await this.pool.connect();
 
     try {
@@ -393,7 +402,7 @@ export class ExternalOverlayService {
 
       for (const record of validated.records) {
         const dedupeKey = buildAreaDedupeKey(record);
-        const traceEntry = normalizedAreaMetadata(record).sourceTrace ?? [];
+        const traceEntry = normalizedAreaMetadata(record, refreshRunId).sourceTrace ?? [];
         const existing = dedupedRecords.get(dedupeKey);
 
         if (!existing) {
@@ -440,7 +449,7 @@ export class ExternalOverlayService {
                 severity: winner.severity,
                 confidence: winner.confidence,
                 freshnessSeconds: winner.freshnessSeconds,
-                metadata: normalizedAreaMetadata(winner, {
+                metadata: normalizedAreaMetadata(winner, refreshRunId, {
                   dedupeKey,
                   sourceTrace,
                   supersession: {
@@ -479,13 +488,20 @@ export class ExternalOverlayService {
                 severity: winner.severity,
                 confidence: winner.confidence,
                 freshnessSeconds: winner.freshnessSeconds,
-                metadata: normalizedAreaMetadata(winner, {
+                metadata: normalizedAreaMetadata(winner, refreshRunId, {
                   dedupeKey,
                   sourceTrace: mergedTrace,
                   supersession: {
                     supersededExisting: true,
                     replacedSourceType: existing.source.sourceType,
                     replacedSourceRecordId: existing.source.sourceRecordId,
+                  },
+                  refreshProvenance: {
+                    createdByRunId:
+                      existingMetadata.refreshProvenance?.createdByRunId ?? refreshRunId,
+                    lastUpdatedByRunId: refreshRunId,
+                    supersededByRunId: refreshRunId,
+                    retiredByRunId: null,
                   },
                 }),
               },
@@ -533,6 +549,19 @@ export class ExternalOverlayService {
                   replacedSourceType: null,
                   replacedSourceRecordId: null,
                 },
+                retirement: {
+                  retired: false,
+                  retiredAt: null,
+                  reason: null,
+                },
+                refreshProvenance: {
+                  createdByRunId:
+                    existingMetadata.refreshProvenance?.createdByRunId ?? refreshRunId,
+                  lastUpdatedByRunId: refreshRunId,
+                  supersededByRunId:
+                    existingMetadata.refreshProvenance?.supersededByRunId ?? null,
+                  retiredByRunId: null,
+                },
               },
             },
           ),
@@ -566,12 +595,21 @@ export class ExternalOverlayService {
               retiredAt: retirementTimestamp,
               reason: "missing_from_refresh",
             },
+            refreshProvenance: {
+              createdByRunId:
+                metadata.refreshProvenance?.createdByRunId ?? refreshRunId,
+              lastUpdatedByRunId: refreshRunId,
+              supersededByRunId:
+                metadata.refreshProvenance?.supersededByRunId ?? null,
+              retiredByRunId: refreshRunId,
+            },
           },
         );
       }
 
       return {
         missionId,
+        refreshRunId,
         overlays,
       };
     } finally {

@@ -510,6 +510,7 @@ describe("mission external overlays integration", () => {
       });
 
     expect(normalizeResponse.status).toBe(201);
+    expect(normalizeResponse.body.refreshRunId).toEqual(expect.any(String));
     expect(normalizeResponse.body).toMatchObject({
       missionId,
       overlays: [
@@ -525,6 +526,12 @@ describe("mission external overlays integration", () => {
             areaType: "danger_area",
             authorityName: "CAA",
             sourceReference: "ENR 5.1",
+            refreshProvenance: expect.objectContaining({
+              createdByRunId: normalizeResponse.body.refreshRunId,
+              lastUpdatedByRunId: normalizeResponse.body.refreshRunId,
+              supersededByRunId: null,
+              retiredByRunId: null,
+            }),
           }),
         }),
         expect.objectContaining({
@@ -539,6 +546,12 @@ describe("mission external overlays integration", () => {
             areaType: "notam_restriction",
             notamNumber: "B1234/26",
             sourceReference: "NOTAM B1234/26",
+            refreshProvenance: expect.objectContaining({
+              createdByRunId: normalizeResponse.body.refreshRunId,
+              lastUpdatedByRunId: normalizeResponse.body.refreshRunId,
+              supersededByRunId: null,
+              retiredByRunId: null,
+            }),
           }),
         }),
       ],
@@ -701,6 +714,7 @@ describe("mission external overlays integration", () => {
     expect(firstRun.status).toBe(201);
     expect(firstRun.body.overlays).toHaveLength(1);
     const originalOverlayId = firstRun.body.overlays[0].id;
+    const firstRunId = firstRun.body.refreshRunId as string;
 
     const secondRun = await request(app)
       .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
@@ -739,6 +753,7 @@ describe("mission external overlays integration", () => {
 
     expect(secondRun.status).toBe(201);
     expect(secondRun.body.overlays).toHaveLength(1);
+    expect(secondRun.body.refreshRunId).toEqual(expect.any(String));
     expect(secondRun.body.overlays[0]).toMatchObject({
       id: originalOverlayId,
       source: {
@@ -762,6 +777,12 @@ describe("mission external overlays integration", () => {
             sourceRecordId: "B7000/26",
           }),
         ],
+        refreshProvenance: {
+          createdByRunId: firstRunId,
+          lastUpdatedByRunId: secondRun.body.refreshRunId,
+          supersededByRunId: secondRun.body.refreshRunId,
+          retiredByRunId: null,
+        },
       }),
     });
 
@@ -895,6 +916,7 @@ describe("mission external overlays integration", () => {
 
     expect(firstRun.status).toBe(201);
     expect(firstRun.body.overlays).toHaveLength(2);
+    const firstRunId = firstRun.body.refreshRunId as string;
 
     const secondRun = await request(app)
       .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
@@ -932,6 +954,7 @@ describe("mission external overlays integration", () => {
 
     expect(secondRun.status).toBe(201);
     expect(secondRun.body.overlays).toHaveLength(1);
+    expect(secondRun.body.refreshRunId).toEqual(expect.any(String));
 
     const listResponse = await request(app).get(
       `/missions/${missionId}/external-overlays?kind=area_conflict`,
@@ -965,6 +988,11 @@ describe("mission external overlays integration", () => {
       retired: true,
       retiredAt: expect.any(String),
       reason: "missing_from_refresh",
+    });
+    expect(retiredOverlay.rows[0].metadata.refreshProvenance).toMatchObject({
+      createdByRunId: firstRunId,
+      lastUpdatedByRunId: secondRun.body.refreshRunId,
+      retiredByRunId: secondRun.body.refreshRunId,
     });
   });
 
