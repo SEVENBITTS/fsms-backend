@@ -1910,7 +1910,7 @@ describe("mission planning drafts", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain("text/html");
-    expect(response.text).toContain("Operator Mission Workspace");
+    expect(response.text).toContain("VerityATLAS Mission Workspace");
     expect(response.text).toContain("Mission Lifecycle Actions");
     expect(response.text).toContain("Mission Search and Selection");
     expect(response.text).toContain("Evidence Helpers");
@@ -1925,7 +1925,7 @@ describe("mission planning drafts", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain("text/html");
-    expect(response.text).toContain("Operator Live Operations View");
+    expect(response.text).toContain("VerityATLAS Live Operations");
     expect(response.text).toContain("Map and Replay Surface");
     expect(response.text).toContain("Telemetry and Risk Status");
     expect(response.text).toContain("Alert Timeline Correlation");
