@@ -1312,6 +1312,7 @@ export class ExternalOverlayService {
       transitionFromRefreshRunId?: string;
       transitionToRefreshRunId?: string;
       transitionArtifactId?: string;
+      transitionArtifactIds?: string[];
     },
   ): Promise<{
     missionId: string;
@@ -1335,14 +1336,45 @@ export class ExternalOverlayService {
     const chronologyResult = await this.listAreaOverlayRefreshRunChronology(
       missionId,
     );
+    const artifacts = chronologyResult.chronology.transitions.map((transition) =>
+      buildAreaOverlayRefreshRunTransitionArtifact(missionId, transition),
+    );
+
+    if (filters.transitionArtifactIds && filters.transitionArtifactIds.length > 0) {
+      for (const artifactId of filters.transitionArtifactIds) {
+        const parsedArtifactId = parseAreaOverlayRefreshRunTransitionArtifactId(
+          artifactId,
+        );
+        if (!parsedArtifactId) {
+          throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError(
+            "transitionArtifactIds entries must use the refresh_run_transition:<missionId>:<fromRefreshRunId>:<toRefreshRunId> format",
+          );
+        }
+
+        if (parsedArtifactId.missionId !== missionId) {
+          throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError(
+            "transitionArtifactIds entries must match the requested mission",
+          );
+        }
+      }
+
+      const selectedArtifactIds = new Set(filters.transitionArtifactIds);
+      return {
+        missionId,
+        chronology: {
+          missionId,
+          artifacts: artifacts.filter((artifact) =>
+            selectedArtifactIds.has(artifact.artifactId),
+          ),
+        },
+      };
+    }
 
     return {
       missionId,
       chronology: {
         missionId,
-        artifacts: chronologyResult.chronology.transitions.map((transition) =>
-          buildAreaOverlayRefreshRunTransitionArtifact(missionId, transition),
-        ),
+        artifacts,
       },
     };
   }

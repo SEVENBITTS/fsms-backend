@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add transition artifact chronology filtering support to normalized area overlay chronology queries so specific ordered transition review payloads can be selected directly.",
+  "nextBuildStep": "Add transition artifact chronology pagination support to normalized area overlay chronology queries so ordered transition review payloads can be retrieved in bounded windows.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
