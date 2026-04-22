@@ -24,3 +24,12 @@ export class MissionExternalOverlayRefreshRunDiffQueryInvalidError extends Error
     super(message);
   }
 }
+
+export class MissionExternalOverlayRefreshRunChronologyQueryInvalidError extends Error {
+  readonly statusCode = 400;
+  readonly type = "refresh_run_chronology_query_invalid";
+
+  constructor(message: string) {
+    super(message);
+  }
+}

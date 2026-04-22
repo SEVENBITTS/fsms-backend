@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add refresh-run chronology query support to normalized area overlay summaries so authoritative snapshot changes can be reviewed in chronological order.",
+  "nextBuildStep": "Add refresh-run transition drilldown support to normalized area overlay chronology queries so individual snapshot transitions can be reviewed directly.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
