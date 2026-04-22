@@ -78,3 +78,12 @@ export class MissionExternalOverlayRefreshRunTransitionArtifactChronologyCursorQ
     super(message);
   }
 }
+
+export class MissionExternalOverlayRefreshRunTransitionArtifactChronologyBookmarkQueryInvalidError extends Error {
+  readonly statusCode = 400;
+  readonly type = "refresh_run_transition_artifact_chronology_bookmark_query_invalid";
+
+  constructor(message: string) {
+    super(message);
+  }
+}
