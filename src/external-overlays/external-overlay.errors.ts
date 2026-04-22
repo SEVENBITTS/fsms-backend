@@ -60,3 +60,12 @@ export class MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryIn
     super(message);
   }
 }
+
+export class MissionExternalOverlayRefreshRunTransitionArtifactChronologyPaginationQueryInvalidError extends Error {
+  readonly statusCode = 400;
+  readonly type = "refresh_run_transition_artifact_chronology_pagination_query_invalid";
+
+  constructor(message: string) {
+    super(message);
+  }
+}
