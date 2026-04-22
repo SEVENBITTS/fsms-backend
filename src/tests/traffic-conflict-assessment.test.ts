@@ -636,6 +636,95 @@ describe("traffic conflict assessment integration", () => {
     });
   });
 
+  it("uses the superseded higher-priority overlay on later normalization runs without creating parallel area conflicts", async () => {
+    const missionId = await createMission();
+    await recordTelemetry(missionId);
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-901",
+            },
+            observedAt: "2026-04-21T12:00:10.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5075,
+              centerLng: -0.1277,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            area: {
+              areaId: "EGD-901",
+              label: "Danger Area EGD-901",
+              areaType: "danger_area",
+              description: "Base area",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+        ],
+      });
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B9010/26",
+            },
+            observedAt: "2026-04-21T12:00:20.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5075,
+              centerLng: -0.1277,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B9010-26",
+              label: "Danger Area EGD-901 Active NOTAM",
+              areaType: "notam_restriction",
+              description: "Superseding NOTAM",
+              authorityName: "NATS",
+              notamNumber: "B9010/26",
+              sourceReference: "NOTAM B9010/26",
+            },
+          },
+        ],
+      });
+
+    const response = await request(app).get(
+      `/missions/${missionId}/conflict-assessment`,
+    );
+
+    expect(response.status).toBe(200);
+    const areaConflicts = response.body.assessment.conflicts.filter(
+      (item: { overlayKind: string }) => item.overlayKind === "area_conflict",
+    );
+    expect(areaConflicts).toHaveLength(1);
+    expect(areaConflicts[0]).toMatchObject({
+      overlayLabel: "Danger Area EGD-901 Active NOTAM",
+      relatedSource: {
+        sourceType: "notam_restriction",
+      },
+    });
+  });
+
   it("preserves mission isolation for conflict assessment reads", async () => {
     const firstMissionId = await createMission();
     const secondMissionId = await createMission();

@@ -312,6 +312,24 @@ export class ExternalOverlayRepository {
     missionId: string,
     input: CreateAreaConflictExternalOverlayInput,
   ): Promise<ExternalOverlay> {
+    return this.upsertAreaConflictOverlay(tx, null, missionId, input);
+  }
+
+  async updateAreaConflictOverlay(
+    tx: PoolClient,
+    overlayId: string,
+    missionId: string,
+    input: CreateAreaConflictExternalOverlayInput,
+  ): Promise<ExternalOverlay> {
+    return this.upsertAreaConflictOverlay(tx, overlayId, missionId, input);
+  }
+
+  private async upsertAreaConflictOverlay(
+    tx: PoolClient,
+    overlayId: string | null,
+    missionId: string,
+    input: CreateAreaConflictExternalOverlayInput,
+  ): Promise<ExternalOverlay> {
     const geometryType = input.geometry.type;
     const center =
       geometryType === "circle"
@@ -330,54 +348,80 @@ export class ExternalOverlayRepository {
             altitudeCeilingFt: input.geometry.altitudeCeilingFt ?? null,
           };
 
+    const parameters = [
+      overlayId ?? randomUUID(),
+      missionId,
+      input.source.provider,
+      input.source.sourceType,
+      input.source.sourceRecordId,
+      input.observedAt,
+      input.validFrom,
+      input.validTo,
+      geometryType,
+      center.lat,
+      center.lng,
+      input.severity,
+      input.confidence,
+      input.freshnessSeconds,
+      JSON.stringify({
+        ...input.metadata,
+        ...geometryMetadata,
+      }),
+    ];
+
     const result = await tx.query<ExternalOverlayRow>(
-      `
-      insert into mission_external_overlays (
-        id,
-        mission_id,
-        overlay_kind,
-        source_provider,
-        source_type,
-        source_record_id,
-        observed_at,
-        valid_from,
-        valid_to,
-        geometry_type,
-        latitude,
-        longitude,
-        altitude_msl_ft,
-        heading_degrees,
-        speed_knots,
-        severity,
-        confidence,
-        freshness_seconds,
-        metadata
-      )
-      values (
-        $1, $2, 'area_conflict', $3, $4, $5, $6, $7, $8, $9, $10, $11, null, null, null, $12, $13, $14, $15::jsonb
-      )
-      returning *
-      `,
-      [
-        randomUUID(),
-        missionId,
-        input.source.provider,
-        input.source.sourceType,
-        input.source.sourceRecordId,
-        input.observedAt,
-        input.validFrom,
-        input.validTo,
-        geometryType,
-        center.lat,
-        center.lng,
-        input.severity,
-        input.confidence,
-        input.freshnessSeconds,
-        JSON.stringify({
-          ...input.metadata,
-          ...geometryMetadata,
-        }),
-      ],
+      overlayId
+        ? `
+          update mission_external_overlays
+          set source_provider = $3,
+              source_type = $4,
+              source_record_id = $5,
+              observed_at = $6,
+              valid_from = $7,
+              valid_to = $8,
+              geometry_type = $9,
+              latitude = $10,
+              longitude = $11,
+              altitude_msl_ft = null,
+              heading_degrees = null,
+              speed_knots = null,
+              severity = $12,
+              confidence = $13,
+              freshness_seconds = $14,
+              metadata = $15::jsonb,
+              updated_at = now()
+          where id = $1
+            and mission_id = $2
+          returning *
+        `
+        : `
+          insert into mission_external_overlays (
+            id,
+            mission_id,
+            overlay_kind,
+            source_provider,
+            source_type,
+            source_record_id,
+            observed_at,
+            valid_from,
+            valid_to,
+            geometry_type,
+            latitude,
+            longitude,
+            altitude_msl_ft,
+            heading_degrees,
+            speed_knots,
+            severity,
+            confidence,
+            freshness_seconds,
+            metadata
+          )
+          values (
+            $1, $2, 'area_conflict', $3, $4, $5, $6, $7, $8, $9, $10, $11, null, null, null, $12, $13, $14, $15::jsonb
+          )
+          returning *
+        `,
+      parameters,
     );
 
     return toExternalOverlay(result.rows[0]);
