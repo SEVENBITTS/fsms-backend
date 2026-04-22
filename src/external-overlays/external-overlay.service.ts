@@ -8,11 +8,13 @@ import type {
   CreateWeatherExternalOverlayInput,
   ExternalOverlay,
   ExternalOverlayKind,
+  NormalizeAreaOverlaySourcesInput,
 } from "./external-overlay.types";
 import {
   validateCreateAreaConflictExternalOverlayInput,
   validateCreateCrewedTrafficExternalOverlayInput,
   validateCreateDroneTrafficExternalOverlayInput,
+  validateNormalizeAreaOverlaySourcesInput,
   validateCreateWeatherExternalOverlayInput,
 } from "./external-overlay.validators";
 
@@ -125,6 +127,62 @@ export class ExternalOverlayService {
         missionId,
         validated,
       );
+    } finally {
+      client.release();
+    }
+  }
+
+  async normalizeAreaOverlaySources(
+    missionId: string,
+    input: unknown,
+  ): Promise<{ missionId: string; overlays: ExternalOverlay[] }> {
+    const validated = validateNormalizeAreaOverlaySourcesInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
+      }
+
+      const overlays: ExternalOverlay[] = [];
+      for (const record of validated.records) {
+        overlays.push(
+          await this.externalOverlayRepository.insertAreaConflictOverlay(
+            client,
+            missionId,
+            {
+              kind: "area_conflict",
+              source: record.source,
+              observedAt: record.observedAt,
+              validFrom: record.validFrom,
+              validTo: record.validTo,
+              geometry: record.geometry,
+              severity: record.severity,
+              confidence: record.confidence,
+              freshnessSeconds: record.freshnessSeconds,
+              metadata: {
+                areaId: record.area.areaId,
+                label: record.area.label,
+                areaType: record.area.areaType,
+                description: record.area.description ?? null,
+                authorityName: record.area.authorityName ?? null,
+                notamNumber: record.area.notamNumber ?? null,
+                sourceReference: record.area.sourceReference ?? null,
+              },
+            },
+          ),
+        );
+      }
+
+      return {
+        missionId,
+        overlays,
+      };
     } finally {
       client.release();
     }

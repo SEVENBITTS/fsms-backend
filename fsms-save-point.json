@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add migration-backed normalized area overlay ingestion for danger areas, temporary danger areas, and NOTAM-derived restrictions so mission-linked area conflict assessment can operate on authoritative area geometry.",
+  "nextBuildStep": "Add altitude-band gating and vertical context refinement to mission-linked area conflict assessment so normalized danger areas and NOTAM-derived restrictions only trigger within relevant operating volumes.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

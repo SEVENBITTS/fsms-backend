@@ -316,6 +316,108 @@ describe("traffic conflict assessment integration", () => {
     );
   });
 
+  it("consumes normalized authoritative area overlays without source-specific conflict branching", async () => {
+    const missionId = await createMission();
+    await recordTelemetry(missionId);
+
+    const normalizeResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-33",
+            },
+            observedAt: "2026-04-21T12:00:10.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5075,
+              centerLng: -0.1277,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            area: {
+              areaId: "TDA-33",
+              label: "Temporary Danger Area 33",
+              areaType: "temporary_danger_area",
+              description: "Temporary activity area",
+              authorityName: "CAA",
+              sourceReference: "Temporary activation notice",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1234/26",
+            },
+            observedAt: "2026-04-21T12:00:20.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T15:00:00.000Z",
+            geometry: {
+              type: "polygon",
+              points: [
+                { lat: 51.5071, lng: -0.1281 },
+                { lat: 51.5071, lng: -0.1269 },
+                { lat: 51.5079, lng: -0.1269 },
+                { lat: 51.5079, lng: -0.1281 },
+              ],
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            area: {
+              areaId: "NOTAM-B1234-26",
+              label: "NOTAM Restricted Zone",
+              areaType: "notam_restriction",
+              description: "Event restriction",
+              authorityName: "NATS",
+              notamNumber: "B1234/26",
+              sourceReference: "NOTAM B1234/26",
+            },
+          },
+        ],
+      });
+
+    expect(normalizeResponse.status).toBe(201);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/conflict-assessment`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.assessment.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          overlayKind: "area_conflict",
+          overlayLabel: "Temporary Danger Area 33",
+          relatedSource: expect.objectContaining({
+            provider: "uk-ais",
+            sourceType: "temporary_danger_area",
+          }),
+          measurementBasis: expect.objectContaining({
+            rangeRule: "nearest_boundary",
+          }),
+        }),
+        expect.objectContaining({
+          overlayKind: "area_conflict",
+          overlayLabel: "NOTAM Restricted Zone",
+          relatedSource: expect.objectContaining({
+            provider: "uk-ais",
+            sourceType: "notam_restriction",
+          }),
+          measurementBasis: expect.objectContaining({
+            rangeRule: "nearest_boundary",
+          }),
+        }),
+      ]),
+    );
+  });
+
   it("preserves mission isolation for conflict assessment reads", async () => {
     const firstMissionId = await createMission();
     const secondMissionId = await createMission();

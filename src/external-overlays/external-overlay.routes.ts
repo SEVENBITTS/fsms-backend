@@ -6,6 +6,10 @@ export function createExternalOverlayRouter(
 ): Router {
   const router = Router();
 
+  router.post(
+    "/:missionId/external-overlays/normalize-area-sources",
+    controller.normalizeAreaOverlaySources,
+  );
   router.post("/:missionId/external-overlays", controller.createExternalOverlay);
   router.get("/:missionId/external-overlays", controller.listExternalOverlays);
 

@@ -441,6 +441,126 @@ describe("mission external overlays integration", () => {
     });
   });
 
+  it("normalizes authoritative danger area and NOTAM records into area conflict overlays", async () => {
+    const missionId = await createMission();
+
+    const normalizeResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-101",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-101",
+              label: "Danger Area EGD-101",
+              areaType: "danger_area",
+              description: "Permanent danger area",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1234/26",
+            },
+            observedAt: "2026-04-21T10:09:00.000Z",
+            validFrom: "2026-04-21T10:15:00.000Z",
+            validTo: "2026-04-21T16:00:00.000Z",
+            geometry: {
+              type: "polygon",
+              points: [
+                { lat: 51.5072, lng: -0.1285 },
+                { lat: 51.5089, lng: -0.1285 },
+                { lat: 51.5089, lng: -0.126 },
+                { lat: 51.5072, lng: -0.126 },
+              ],
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B1234-26",
+              label: "Stadium TFR",
+              areaType: "notam_restriction",
+              description: "Event restriction from NOTAM",
+              authorityName: "NATS",
+              notamNumber: "B1234/26",
+              sourceReference: "NOTAM B1234/26",
+            },
+          },
+        ],
+      });
+
+    expect(normalizeResponse.status).toBe(201);
+    expect(normalizeResponse.body).toMatchObject({
+      missionId,
+      overlays: [
+        expect.objectContaining({
+          kind: "area_conflict",
+          source: expect.objectContaining({
+            provider: "uk-ais",
+            sourceType: "danger_area",
+            sourceRecordId: "EGD-101",
+          }),
+          metadata: expect.objectContaining({
+            areaId: "EGD-101",
+            areaType: "danger_area",
+            authorityName: "CAA",
+            sourceReference: "ENR 5.1",
+          }),
+        }),
+        expect.objectContaining({
+          kind: "area_conflict",
+          source: expect.objectContaining({
+            provider: "uk-ais",
+            sourceType: "notam_restriction",
+            sourceRecordId: "B1234/26",
+          }),
+          metadata: expect.objectContaining({
+            areaId: "NOTAM-B1234-26",
+            areaType: "notam_restriction",
+            notamNumber: "B1234/26",
+            sourceReference: "NOTAM B1234/26",
+          }),
+        }),
+      ],
+    });
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: expect.objectContaining({ sourceType: "danger_area" }),
+        }),
+        expect.objectContaining({
+          source: expect.objectContaining({ sourceType: "notam_restriction" }),
+        }),
+      ]),
+    );
+  });
+
   it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 
