@@ -536,6 +536,8 @@ describe("mission external overlays integration", () => {
               status: "fresh",
               evaluatedByRunId: normalizeResponse.body.refreshRunId,
               lastSuccessfulRefreshRunId: normalizeResponse.body.refreshRunId,
+              lastPartialRefreshRunId: null,
+              carriedForwardFromPartialRefresh: false,
               lastFailedRefreshRunId: null,
               carriedForwardFromFailedRefresh: false,
             },
@@ -563,6 +565,8 @@ describe("mission external overlays integration", () => {
               status: "fresh",
               evaluatedByRunId: normalizeResponse.body.refreshRunId,
               lastSuccessfulRefreshRunId: normalizeResponse.body.refreshRunId,
+              lastPartialRefreshRunId: null,
+              carriedForwardFromPartialRefresh: false,
               lastFailedRefreshRunId: null,
               carriedForwardFromFailedRefresh: false,
             },
@@ -766,6 +770,8 @@ describe("mission external overlays integration", () => {
         status: "stale",
         evaluatedByRunId: staleRun.body.refreshRunId,
         lastSuccessfulRefreshRunId: freshRun.body.refreshRunId,
+        lastPartialRefreshRunId: null,
+        carriedForwardFromPartialRefresh: false,
         lastFailedRefreshRunId: null,
         carriedForwardFromFailedRefresh: false,
       },
@@ -1209,10 +1215,251 @@ describe("mission external overlays integration", () => {
               status: "partial",
               evaluatedByRunId: partialRun.body.refreshRunId,
               lastSuccessfulRefreshRunId: firstRun.body.refreshRunId,
+              lastPartialRefreshRunId: partialRun.body.refreshRunId,
+              carriedForwardFromPartialRefresh: true,
               lastFailedRefreshRunId: null,
               carriedForwardFromFailedRefresh: false,
             },
           }),
+        }),
+      ]),
+    );
+  });
+
+  it("records partial refresh provenance in refresh-run summaries and preserves it after a later fresh recovery", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-PARTIAL-2200-A",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            area: {
+              areaId: "EGD-PARTIAL-2200-A",
+              label: "Danger Area Partial 2200 A",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-PARTIAL-2200-B",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            area: {
+              areaId: "TDA-PARTIAL-2200-B",
+              label: "Temporary Danger Area Partial 2200 B",
+              areaType: "temporary_danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const partialRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        refresh: {
+          status: "partial",
+        },
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-PARTIAL-2200-B",
+            },
+            observedAt: "2026-04-21T10:18:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            area: {
+              areaId: "TDA-PARTIAL-2200-B",
+              label: "Temporary Danger Area Partial 2200 B",
+              areaType: "temporary_danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const recoveryRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-PARTIAL-2200-A",
+            },
+            observedAt: "2026-04-21T10:27:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            area: {
+              areaId: "EGD-PARTIAL-2200-A",
+              label: "Danger Area Partial 2200 A",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-PARTIAL-2200-B",
+            },
+            observedAt: "2026-04-21T10:28:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            area: {
+              areaId: "TDA-PARTIAL-2200-B",
+              label: "Temporary Danger Area Partial 2200 B",
+              areaType: "temporary_danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(partialRun.status).toBe(201);
+    expect(recoveryRun.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(2);
+    expect(listResponse.body.overlays).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            areaId: "EGD-PARTIAL-2200-A",
+            sourceRefresh: {
+              status: "fresh",
+              evaluatedByRunId: recoveryRun.body.refreshRunId,
+              lastSuccessfulRefreshRunId: recoveryRun.body.refreshRunId,
+              lastPartialRefreshRunId: partialRun.body.refreshRunId,
+              carriedForwardFromPartialRefresh: false,
+              lastFailedRefreshRunId: null,
+              carriedForwardFromFailedRefresh: false,
+            },
+          }),
+        }),
+      ]),
+    );
+
+    const summaryResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs`,
+    );
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.refreshRuns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          refreshRunId: partialRun.body.refreshRunId,
+          missionId,
+          created: [],
+          updated: [],
+          partial: expect.arrayContaining([
+            expect.objectContaining({
+              areaId: "EGD-PARTIAL-2200-A",
+              sourceType: "danger_area",
+              retired: false,
+            }),
+            expect.objectContaining({
+              areaId: "TDA-PARTIAL-2200-B",
+              sourceType: "temporary_danger_area",
+              retired: false,
+            }),
+          ]),
+          failed: [],
+          superseded: [],
+          retired: [],
+          active: [],
+        }),
+        expect.objectContaining({
+          refreshRunId: recoveryRun.body.refreshRunId,
+          missionId,
+          partial: [],
+          failed: [],
+          updated: expect.arrayContaining([
+            expect.objectContaining({
+              areaId: "EGD-PARTIAL-2200-A",
+              sourceType: "danger_area",
+              retired: false,
+            }),
+            expect.objectContaining({
+              areaId: "TDA-PARTIAL-2200-B",
+              sourceType: "temporary_danger_area",
+              retired: false,
+            }),
+          ]),
+          active: expect.arrayContaining([
+            expect.objectContaining({
+              areaId: "EGD-PARTIAL-2200-A",
+              sourceType: "danger_area",
+              retired: false,
+            }),
+            expect.objectContaining({
+              areaId: "TDA-PARTIAL-2200-B",
+              sourceType: "temporary_danger_area",
+              retired: false,
+            }),
+          ]),
         }),
       ]),
     );
@@ -1276,6 +1523,8 @@ describe("mission external overlays integration", () => {
         status: "failed",
         evaluatedByRunId: failedRun.body.refreshRunId,
         lastSuccessfulRefreshRunId: firstRun.body.refreshRunId,
+        lastPartialRefreshRunId: null,
+        carriedForwardFromPartialRefresh: false,
         lastFailedRefreshRunId: failedRun.body.refreshRunId,
         carriedForwardFromFailedRefresh: true,
       },
@@ -1371,6 +1620,8 @@ describe("mission external overlays integration", () => {
         status: "fresh",
         evaluatedByRunId: recoveryRun.body.refreshRunId,
         lastSuccessfulRefreshRunId: recoveryRun.body.refreshRunId,
+        lastPartialRefreshRunId: null,
+        carriedForwardFromPartialRefresh: false,
         lastFailedRefreshRunId: failedRun.body.refreshRunId,
         carriedForwardFromFailedRefresh: false,
       },

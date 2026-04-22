@@ -130,6 +130,8 @@ const normalizedAreaMetadata = (
     status: "fresh",
     evaluatedByRunId: refreshRunId,
     lastSuccessfulRefreshRunId: refreshRunId,
+    lastPartialRefreshRunId: null,
+    carriedForwardFromPartialRefresh: false,
     lastFailedRefreshRunId: null,
     carriedForwardFromFailedRefresh: false,
   },
@@ -158,10 +160,19 @@ const priorFailedRefreshRunId = (
   metadata: AreaConflictOverlayMetadata,
 ): string | null => areaRefreshStateFromMetadata(metadata)?.lastFailedRefreshRunId ?? null;
 
+const priorPartialRefreshRunId = (
+  metadata: AreaConflictOverlayMetadata,
+): string | null =>
+  areaRefreshStateFromMetadata(metadata)?.lastPartialRefreshRunId ?? null;
+
 const buildAreaSourceRefreshState = (
   refreshRunId: string,
   refreshStatus: NormalizeAreaOverlayRefreshStatus,
   metadata?: AreaConflictOverlayMetadata,
+  options: {
+    carriedForwardFromPartialRefresh?: boolean;
+    carriedForwardFromFailedRefresh?: boolean;
+  } = {},
 ): NonNullable<AreaConflictOverlayMetadata["sourceRefresh"]> => ({
   status: refreshStatus,
   evaluatedByRunId: refreshRunId,
@@ -170,13 +181,22 @@ const buildAreaSourceRefreshState = (
     : metadata
       ? priorSuccessfulRefreshRunId(metadata)
       : null,
+  lastPartialRefreshRunId:
+    refreshStatus === "partial"
+      ? refreshRunId
+      : metadata
+        ? priorPartialRefreshRunId(metadata)
+        : null,
+  carriedForwardFromPartialRefresh:
+    options.carriedForwardFromPartialRefresh ?? false,
   lastFailedRefreshRunId:
     refreshStatus === "failed"
       ? refreshRunId
       : metadata
         ? priorFailedRefreshRunId(metadata)
         : null,
-  carriedForwardFromFailedRefresh: refreshStatus === "failed",
+  carriedForwardFromFailedRefresh:
+    options.carriedForwardFromFailedRefresh ?? refreshStatus === "failed",
 });
 
 const sourceTraceEntryKey = (
@@ -320,6 +340,7 @@ type AreaOverlayRefreshRunSummary = {
   missionId: string;
   created: AreaOverlayRefreshRunSummaryItem[];
   updated: AreaOverlayRefreshRunSummaryItem[];
+  partial: AreaOverlayRefreshRunSummaryItem[];
   failed: AreaOverlayRefreshRunSummaryItem[];
   superseded: AreaOverlayRefreshRunSummaryItem[];
   retired: AreaOverlayRefreshRunSummaryItem[];
@@ -576,6 +597,7 @@ const buildAreaOverlayRefreshRunSummaries = (
       missionId,
       created: [],
       updated: [],
+      partial: [],
       failed: [],
       superseded: [],
       retired: [],
@@ -599,6 +621,10 @@ const buildAreaOverlayRefreshRunSummaries = (
     const sourceRefresh = areaMetadataFromOverlay(overlay).sourceRefresh;
     ensureSummary(provenance.createdByRunId).created.push(summaryItem);
     ensureSummary(provenance.lastUpdatedByRunId).updated.push(summaryItem);
+
+    if (sourceRefresh?.lastPartialRefreshRunId) {
+      ensureSummary(sourceRefresh.lastPartialRefreshRunId).partial.push(summaryItem);
+    }
 
     if (sourceRefresh?.lastFailedRefreshRunId) {
       ensureSummary(sourceRefresh.lastFailedRefreshRunId).failed.push(summaryItem);
@@ -701,6 +727,24 @@ const buildRefreshRunOrder = (overlays: ExternalOverlay[]): Map<string, number> 
 
       if (sourceRefresh.evaluatedByRunId !== sourceRefresh.lastFailedRefreshRunId) {
         addEdge(sourceRefresh.lastFailedRefreshRunId, sourceRefresh.evaluatedByRunId);
+      }
+    }
+
+    if (sourceRefresh?.lastPartialRefreshRunId) {
+      ensureNode(sourceRefresh.lastPartialRefreshRunId);
+
+      if (
+        sourceRefresh.lastSuccessfulRefreshRunId &&
+        sourceRefresh.lastSuccessfulRefreshRunId !== sourceRefresh.lastPartialRefreshRunId
+      ) {
+        addEdge(
+          sourceRefresh.lastSuccessfulRefreshRunId,
+          sourceRefresh.lastPartialRefreshRunId,
+        );
+      }
+
+      if (sourceRefresh.evaluatedByRunId !== sourceRefresh.lastPartialRefreshRunId) {
+        addEdge(sourceRefresh.lastPartialRefreshRunId, sourceRefresh.evaluatedByRunId);
       }
     }
   }
@@ -1214,6 +1258,9 @@ export class ExternalOverlayService {
                 refreshRunId,
                 refreshStatus,
                 metadata,
+                {
+                  carriedForwardFromPartialRefresh: refreshStatus === "partial",
+                },
               ),
               refreshProvenance: {
                 createdByRunId:
@@ -1248,6 +1295,9 @@ export class ExternalOverlayService {
                 refreshRunId,
                 refreshStatus,
                 metadata,
+                {
+                  carriedForwardFromPartialRefresh: refreshStatus === "partial",
+                },
               ),
             },
           );
