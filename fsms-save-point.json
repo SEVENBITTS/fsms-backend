@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add failed-refresh review context to operator-facing conflict summary cards so degraded authoritative area state is visible at a glance.",
+  "nextBuildStep": "Add operator-facing partial-refresh review visibility so incomplete authoritative area state is visible in live operations review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
