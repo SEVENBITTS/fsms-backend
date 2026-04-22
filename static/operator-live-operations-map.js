@@ -65,6 +65,8 @@ const toneClass = (value) => {
   if (
     text.includes("review") ||
     text.includes("pending") ||
+    text.includes("stale") ||
+    text.includes("partial") ||
     text.includes("missing") ||
     text.includes("draft") ||
     text.includes("submitted")
@@ -75,6 +77,7 @@ const toneClass = (value) => {
   if (
     text.includes("blocked") ||
     text.includes("rejected") ||
+    text.includes("failed") ||
     text.includes("fail") ||
     text.includes("abort")
   ) {
@@ -127,6 +130,65 @@ const droneTrafficOverlays = () =>
   (uiState.externalOverlays ?? []).filter(
     (overlay) => overlay.kind === "drone_traffic",
   );
+
+const areaConflictOverlays = () =>
+  (uiState.externalOverlays ?? []).filter(
+    (overlay) => overlay.kind === "area_conflict",
+  );
+
+const areaOverlaySourceRefreshState = (overlay) =>
+  overlay?.metadata?.sourceRefresh ?? null;
+
+const areaOverlaySourceRefreshDetail = (overlay) => {
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  if (!refreshState) {
+    return "Not recorded";
+  }
+
+  return `${refreshState.status} | last successful ${formatDateTime(refreshState.lastSuccessfulRefreshRunId)}`;
+};
+
+const areaSourceRefreshSummary = () => {
+  const overlays = areaConflictOverlays();
+  if (overlays.length === 0) {
+    return {
+      label: "Area source refresh missing",
+      detail: "No normalized area overlays are currently available.",
+    };
+  }
+
+  const statuses = overlays
+    .map((overlay) => areaOverlaySourceRefreshState(overlay)?.status)
+    .filter(Boolean);
+  const highestPriorityStatus =
+    statuses.find((status) => status === "failed") ??
+    statuses.find((status) => status === "partial") ??
+    statuses.find((status) => status === "stale") ??
+    statuses.find((status) => status === "fresh") ??
+    "missing";
+  const degradedCount = overlays.filter((overlay) => {
+    const status = areaOverlaySourceRefreshState(overlay)?.status;
+    return status && status !== "fresh";
+  }).length;
+  const latestSuccessfulRefresh = overlays
+    .map((overlay) => areaOverlaySourceRefreshState(overlay)?.lastSuccessfulRefreshRunId)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+
+  return {
+    label:
+      highestPriorityStatus === "fresh"
+        ? "Fresh"
+        : highestPriorityStatus === "missing"
+          ? "Missing"
+          : `${highestPriorityStatus} (${degradedCount})`,
+    detail:
+      latestSuccessfulRefresh != null
+        ? `Last successful refresh ${formatDateTime(latestSuccessfulRefresh)}`
+        : "No successful refresh recorded",
+  };
+};
 
 const formatDateTime = (value) => {
   if (!value) {
@@ -1889,6 +1951,7 @@ const renderStatus = () => {
   const weatherState = weatherSummary();
   const trafficState = crewedTrafficSummary();
   const droneState = droneTrafficSummary();
+  const areaSourceState = areaSourceRefreshSummary();
   const conflictState = conflictAssessmentSummary();
   const advisoryState = conflictAdvisorySummary();
   const replayConflictRelation = currentConflictReplayRelation();
@@ -2065,6 +2128,10 @@ const renderStatus = () => {
               ? formatDateTime(activeDroneTrafficOverlays()[0].observedAt)
               : "Not recorded",
           )}</div>
+          <div class="k">Area source refresh</div>
+          <div>${renderBadge(areaSourceState.label)}</div>
+          <div class="k">Area refresh detail</div>
+          <div>${escapeHtml(areaSourceState.detail)}</div>
           <div class="k">Conflict assessment</div>
           <div>${renderBadge(conflictState.label)}</div>
           <div class="k">Primary conflict</div>
@@ -2276,6 +2343,12 @@ const renderConflictAssessment = () => {
                 <div class="alert-window-meta">
                   Source: ${escapeHtml(primaryConflict.relatedSource.provider)} / ${escapeHtml(primaryConflict.relatedSource.sourceType)}<br />
                   Observed: ${escapeHtml(formatDateTime(primaryConflict.overlayObservedAt))}<br />
+                  ${
+                    primaryConflict.overlayKind === "area_conflict"
+                      ? `Area source refresh: ${escapeHtml(areaOverlaySourceRefreshDetail(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)))}
+                  <br />`
+                      : ""
+                  }
                   Range / bearing: ${escapeHtml(formatRangeBearing(primaryConflict.metrics))}<br />
                   Time relevance: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatTemporalContext(primaryConflict) : "Not applicable")}<br />
                   Vertical context: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatVerticalContext(primaryConflict) : formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt))}<br />
@@ -2294,7 +2367,7 @@ const renderConflictAssessment = () => {
             : renderList(
                 secondaryConflicts.map((conflict) => ({
                   label: `${conflict.overlayLabel} | ${conflict.severity}`,
-                  value: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? formatVerticalContext(conflict) : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
+                  value: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? `${formatVerticalContext(conflict)} | ${areaOverlaySourceRefreshDetail(areaConflictOverlays().find((overlay) => overlay.id === conflict.overlayId))}` : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
                 })),
                 "additional conflicts",
               )
