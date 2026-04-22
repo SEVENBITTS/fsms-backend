@@ -829,6 +829,145 @@ describe("mission external overlays integration", () => {
     expect(listResponse.body.overlays[0].metadata.sourceTrace).toHaveLength(1);
   });
 
+  it("retires previously-normalized area overlays when later authoritative refreshes omit them", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-990",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-990",
+              label: "Danger Area EGD-990",
+              areaType: "danger_area",
+              description: "First refresh only",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-991",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "critical",
+            area: {
+              areaId: "TDA-991",
+              label: "Temporary Danger Area 991",
+              areaType: "temporary_danger_area",
+              description: "Survives later refresh",
+              authorityName: "CAA",
+              sourceReference: "Temporary activation notice",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(firstRun.body.overlays).toHaveLength(2);
+
+    const secondRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-991",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "critical",
+            area: {
+              areaId: "TDA-991",
+              label: "Temporary Danger Area 991",
+              areaType: "temporary_danger_area",
+              description: "Survives later refresh",
+              authorityName: "CAA",
+              sourceReference: "Temporary activation notice",
+            },
+          },
+        ],
+      });
+
+    expect(secondRun.status).toBe(201);
+    expect(secondRun.body.overlays).toHaveLength(1);
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(1);
+    expect(listResponse.body.overlays[0].metadata.areaId).toBe("TDA-991");
+
+    const retiredOverlay = await pool.query<{
+      metadata: {
+        areaId: string;
+        retirement: {
+          retired: boolean;
+          retiredAt: string | null;
+          reason: string | null;
+        } | null;
+      };
+    }>(
+      `
+      select metadata
+      from mission_external_overlays
+      where mission_id = $1
+        and metadata->>'areaId' = 'EGD-990'
+      `,
+      [missionId],
+    );
+
+    expect(retiredOverlay.rowCount).toBe(1);
+    expect(retiredOverlay.rows[0].metadata.retirement).toMatchObject({
+      retired: true,
+      retiredAt: expect.any(String),
+      reason: "missing_from_refresh",
+    });
+  });
+
   it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 

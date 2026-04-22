@@ -324,6 +324,28 @@ export class ExternalOverlayRepository {
     return this.upsertAreaConflictOverlay(tx, overlayId, missionId, input);
   }
 
+  async retireAreaConflictOverlay(
+    tx: PoolClient,
+    overlayId: string,
+    missionId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<ExternalOverlay> {
+    const result = await tx.query<ExternalOverlayRow>(
+      `
+      update mission_external_overlays
+      set metadata = $3::jsonb,
+          updated_at = now()
+      where id = $1
+        and mission_id = $2
+        and overlay_kind = 'area_conflict'
+      returning *
+      `,
+      [overlayId, missionId, JSON.stringify(metadata)],
+    );
+
+    return toExternalOverlay(result.rows[0]);
+  }
+
   private async upsertAreaConflictOverlay(
     tx: PoolClient,
     overlayId: string | null,
@@ -438,9 +460,14 @@ export class ExternalOverlayRepository {
       from mission_external_overlays
       where mission_id = $1
         and ($2::text is null or overlay_kind = $2)
+        and (
+          $3::boolean = true
+          or overlay_kind <> 'area_conflict'
+          or coalesce(metadata->'retirement'->>'retired', 'false') <> 'true'
+        )
       order by observed_at desc, id desc
       `,
-      [missionId, filters.kind ?? null],
+      [missionId, filters.kind ?? null, filters.includeRetired ?? false],
     );
 
     return result.rows.map(toExternalOverlay);

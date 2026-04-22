@@ -101,6 +101,11 @@ const normalizedAreaMetadata = (
       label: record.area.label,
     },
   ],
+  retirement: {
+    retired: false,
+    retiredAt: null,
+    reason: null,
+  },
   ...extras,
 });
 
@@ -176,6 +181,16 @@ const dedupeKeyFromOverlay = (overlay: ExternalOverlay): string | null => {
     dedupeGeometryKey(overlay.geometry),
     dedupeWindowKey(overlay.validFrom, overlay.validTo),
   ].join("|");
+};
+
+const isRetiredAreaOverlay = (overlay: ExternalOverlay): boolean => {
+  const metadata = areaMetadataFromOverlay(overlay);
+  return metadata.retirement?.retired === true;
+};
+
+const isNormalizedAreaOverlay = (overlay: ExternalOverlay): boolean => {
+  const metadata = areaMetadataFromOverlay(overlay);
+  return typeof metadata.dedupeKey === "string" && metadata.dedupeKey.length > 0;
 };
 
 const compareIncomingToExistingAreaPriority = (
@@ -355,10 +370,13 @@ export class ExternalOverlayService {
       const existingAreaOverlays = await this.externalOverlayRepository.listForMission(
         client,
         missionId,
-        { kind: "area_conflict" },
+        { kind: "area_conflict", includeRetired: true },
       );
       const existingByDedupeKey = new Map<string, ExternalOverlay>();
       for (const overlay of existingAreaOverlays) {
+        if (isRetiredAreaOverlay(overlay)) {
+          continue;
+        }
         const dedupeKey = dedupeKeyFromOverlay(overlay);
         if (dedupeKey) {
           existingByDedupeKey.set(dedupeKey, overlay);
@@ -402,7 +420,9 @@ export class ExternalOverlayService {
       }
 
       const overlays: ExternalOverlay[] = [];
+      const processedDedupeKeys = new Set<string>();
       for (const [dedupeKey, { winner, sourceTrace }] of dedupedRecords.entries()) {
+        processedDedupeKeys.add(dedupeKey);
         const existing = existingByDedupeKey.get(dedupeKey);
 
         if (!existing) {
@@ -516,6 +536,37 @@ export class ExternalOverlayService {
               },
             },
           ),
+        );
+      }
+
+      const retirementTimestamp = new Date().toISOString();
+      for (const overlay of existingAreaOverlays) {
+        if (isRetiredAreaOverlay(overlay)) {
+          continue;
+        }
+
+        const dedupeKey = dedupeKeyFromOverlay(overlay);
+        if (
+          !dedupeKey ||
+          processedDedupeKeys.has(dedupeKey) ||
+          !isNormalizedAreaOverlay(overlay)
+        ) {
+          continue;
+        }
+
+        const metadata = areaMetadataFromOverlay(overlay);
+        await this.externalOverlayRepository.retireAreaConflictOverlay(
+          client,
+          overlay.id,
+          missionId,
+          {
+            ...metadata,
+            retirement: {
+              retired: true,
+              retiredAt: retirementTimestamp,
+              reason: "missing_from_refresh",
+            },
+          },
         );
       }
 

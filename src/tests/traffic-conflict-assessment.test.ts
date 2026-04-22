@@ -725,6 +725,124 @@ describe("traffic conflict assessment integration", () => {
     });
   });
 
+  it("does not assess retired normalized area overlays after a later authoritative refresh omits them", async () => {
+    const missionId = await createMission();
+    await recordTelemetry(missionId);
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-902",
+            },
+            observedAt: "2026-04-21T12:00:10.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5075,
+              centerLng: -0.1277,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            area: {
+              areaId: "EGD-902",
+              label: "Danger Area EGD-902",
+              areaType: "danger_area",
+              description: "Should retire on later refresh",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-902",
+            },
+            observedAt: "2026-04-21T12:00:20.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5095,
+              centerLng: -0.1267,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            area: {
+              areaId: "TDA-902",
+              label: "Temporary Danger Area 902",
+              areaType: "temporary_danger_area",
+              description: "Remains active",
+              authorityName: "CAA",
+              sourceReference: "Temporary activation notice",
+            },
+          },
+        ],
+      });
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-902",
+            },
+            observedAt: "2026-04-21T12:00:20.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5095,
+              centerLng: -0.1267,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            area: {
+              areaId: "TDA-902",
+              label: "Temporary Danger Area 902",
+              areaType: "temporary_danger_area",
+              description: "Remains active",
+              authorityName: "CAA",
+              sourceReference: "Temporary activation notice",
+            },
+          },
+        ],
+      });
+
+    const response = await request(app).get(
+      `/missions/${missionId}/conflict-assessment`,
+    );
+
+    expect(response.status).toBe(200);
+    const areaConflicts = response.body.assessment.conflicts.filter(
+      (item: { overlayKind: string }) => item.overlayKind === "area_conflict",
+    );
+    expect(areaConflicts).toHaveLength(1);
+    expect(areaConflicts[0]).toMatchObject({
+      overlayLabel: "Temporary Danger Area 902",
+      relatedSource: {
+        sourceType: "temporary_danger_area",
+      },
+    });
+    expect(
+      areaConflicts.some(
+        (item: { overlayLabel: string }) => item.overlayLabel === "Danger Area EGD-902",
+      ),
+    ).toBe(false);
+  });
+
   it("preserves mission isolation for conflict assessment reads", async () => {
     const firstMissionId = await createMission();
     const secondMissionId = await createMission();
