@@ -110,7 +110,18 @@ export interface AreaConflictOverlayMetadata {
     supersededByRunId: string | null;
     retiredByRunId: string | null;
   } | null;
+  sourceRefresh?: {
+    status: "fresh" | "stale" | "partial" | "failed";
+    evaluatedByRunId: string;
+    lastSuccessfulRefreshRunId: string | null;
+  } | null;
 }
+
+export type NormalizeAreaOverlayRefreshStatus =
+  | "fresh"
+  | "stale"
+  | "partial"
+  | "failed";
 
 export interface ExternalOverlay {
   id: string;
@@ -284,6 +295,9 @@ export interface NormalizeAreaOverlaySourceRecordInput {
 
 export interface NormalizeAreaOverlaySourcesInput {
   records: NormalizeAreaOverlaySourceRecordInput[];
+  refresh?: {
+    status: NormalizeAreaOverlayRefreshStatus;
+  };
 }
 
 export interface ListExternalOverlaysFilters {

@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add transition artifact chronology export manifest support to normalized area overlay chronology queries so exported audit snapshots include a stable manifest envelope.",
+  "nextBuildStep": "Add operator-facing area-source freshness review context so stale and partial refresh states are visible without changing conflict-engine branching.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

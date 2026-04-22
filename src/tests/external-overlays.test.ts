@@ -532,6 +532,11 @@ describe("mission external overlays integration", () => {
               supersededByRunId: null,
               retiredByRunId: null,
             }),
+            sourceRefresh: {
+              status: "fresh",
+              evaluatedByRunId: normalizeResponse.body.refreshRunId,
+              lastSuccessfulRefreshRunId: normalizeResponse.body.refreshRunId,
+            },
           }),
         }),
         expect.objectContaining({
@@ -552,6 +557,11 @@ describe("mission external overlays integration", () => {
               supersededByRunId: null,
               retiredByRunId: null,
             }),
+            sourceRefresh: {
+              status: "fresh",
+              evaluatedByRunId: normalizeResponse.body.refreshRunId,
+              lastSuccessfulRefreshRunId: normalizeResponse.body.refreshRunId,
+            },
           }),
         }),
       ],
@@ -672,6 +682,88 @@ describe("mission external overlays integration", () => {
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.overlays).toHaveLength(1);
+  });
+
+  it("marks normalized area overlays stale without losing the last successful refresh provenance", async () => {
+    const missionId = await createMission();
+
+    const freshRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-FRESH-1",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-FRESH-1",
+              label: "Danger Area Fresh 1",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const staleRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        refresh: {
+          status: "stale",
+        },
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-FRESH-1",
+            },
+            observedAt: "2026-04-21T10:17:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-FRESH-1",
+              label: "Danger Area Fresh 1",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    expect(freshRun.status).toBe(201);
+    expect(staleRun.status).toBe(201);
+    expect(staleRun.body.overlays).toHaveLength(1);
+    expect(staleRun.body.overlays[0].metadata).toMatchObject({
+      sourceRefresh: {
+        status: "stale",
+        evaluatedByRunId: staleRun.body.refreshRunId,
+        lastSuccessfulRefreshRunId: freshRun.body.refreshRunId,
+      },
+    });
   });
 
   it("supersedes an existing lower-priority normalized area overlay on a later normalization run", async () => {
@@ -993,6 +1085,190 @@ describe("mission external overlays integration", () => {
       createdByRunId: firstRunId,
       lastUpdatedByRunId: secondRun.body.refreshRunId,
       retiredByRunId: secondRun.body.refreshRunId,
+    });
+  });
+
+  it("does not retire missing normalized area overlays during degraded partial refreshes", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-PARTIAL-1",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            area: {
+              areaId: "EGD-PARTIAL-1",
+              label: "Danger Area Partial 1",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-PARTIAL-1",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            area: {
+              areaId: "TDA-PARTIAL-1",
+              label: "Temporary Danger Area Partial 1",
+              areaType: "temporary_danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const partialRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        refresh: {
+          status: "partial",
+        },
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-PARTIAL-1",
+            },
+            observedAt: "2026-04-21T10:18:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            area: {
+              areaId: "TDA-PARTIAL-1",
+              label: "Temporary Danger Area Partial 1",
+              areaType: "temporary_danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(partialRun.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(2);
+    expect(listResponse.body.overlays).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            areaId: "EGD-PARTIAL-1",
+            retirement: {
+              retired: false,
+              retiredAt: null,
+              reason: null,
+            },
+            sourceRefresh: {
+              status: "partial",
+              evaluatedByRunId: partialRun.body.refreshRunId,
+              lastSuccessfulRefreshRunId: firstRun.body.refreshRunId,
+            },
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("allows failed refresh runs with no records and preserves active overlays with failed freshness state", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-FAILED-1",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            area: {
+              areaId: "EGD-FAILED-1",
+              label: "Danger Area Failed 1",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const failedRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        refresh: {
+          status: "failed",
+        },
+        records: [],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(failedRun.status).toBe(201);
+    expect(failedRun.body.overlays).toEqual([]);
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(1);
+    expect(listResponse.body.overlays[0].metadata).toMatchObject({
+      sourceRefresh: {
+        status: "failed",
+        evaluatedByRunId: failedRun.body.refreshRunId,
+        lastSuccessfulRefreshRunId: firstRun.body.refreshRunId,
+      },
     });
   });
 
