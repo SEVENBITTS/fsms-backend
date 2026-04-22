@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Show normalized area-source freshness degradation in operator-facing review context so stale and partial refresh states are visible without changing conflict-engine branching.",
+  "nextBuildStep": "Add operator-facing area-source freshness review context so stale and partial refresh states are visible without changing conflict-engine branching.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
