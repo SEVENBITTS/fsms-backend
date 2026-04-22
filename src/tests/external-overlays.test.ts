@@ -536,6 +536,8 @@ describe("mission external overlays integration", () => {
               status: "fresh",
               evaluatedByRunId: normalizeResponse.body.refreshRunId,
               lastSuccessfulRefreshRunId: normalizeResponse.body.refreshRunId,
+              lastFailedRefreshRunId: null,
+              carriedForwardFromFailedRefresh: false,
             },
           }),
         }),
@@ -561,6 +563,8 @@ describe("mission external overlays integration", () => {
               status: "fresh",
               evaluatedByRunId: normalizeResponse.body.refreshRunId,
               lastSuccessfulRefreshRunId: normalizeResponse.body.refreshRunId,
+              lastFailedRefreshRunId: null,
+              carriedForwardFromFailedRefresh: false,
             },
           }),
         }),
@@ -762,6 +766,8 @@ describe("mission external overlays integration", () => {
         status: "stale",
         evaluatedByRunId: staleRun.body.refreshRunId,
         lastSuccessfulRefreshRunId: freshRun.body.refreshRunId,
+        lastFailedRefreshRunId: null,
+        carriedForwardFromFailedRefresh: false,
       },
     });
   });
@@ -1203,6 +1209,8 @@ describe("mission external overlays integration", () => {
               status: "partial",
               evaluatedByRunId: partialRun.body.refreshRunId,
               lastSuccessfulRefreshRunId: firstRun.body.refreshRunId,
+              lastFailedRefreshRunId: null,
+              carriedForwardFromFailedRefresh: false,
             },
           }),
         }),
@@ -1268,8 +1276,150 @@ describe("mission external overlays integration", () => {
         status: "failed",
         evaluatedByRunId: failedRun.body.refreshRunId,
         lastSuccessfulRefreshRunId: firstRun.body.refreshRunId,
+        lastFailedRefreshRunId: failedRun.body.refreshRunId,
+        carriedForwardFromFailedRefresh: true,
       },
     });
+  });
+
+  it("records failed refresh provenance in refresh-run summaries and preserves it after a later fresh recovery", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-FAILED-2200",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            area: {
+              areaId: "EGD-FAILED-2200",
+              label: "Danger Area Failed 2200",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const failedRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        refresh: {
+          status: "failed",
+        },
+        records: [],
+      });
+
+    const recoveryRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-FAILED-2200",
+            },
+            observedAt: "2026-04-21T10:27:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            area: {
+              areaId: "EGD-FAILED-2200",
+              label: "Danger Area Failed 2200",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(failedRun.status).toBe(201);
+    expect(recoveryRun.status).toBe(201);
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(1);
+    expect(listResponse.body.overlays[0].metadata).toMatchObject({
+      sourceRefresh: {
+        status: "fresh",
+        evaluatedByRunId: recoveryRun.body.refreshRunId,
+        lastSuccessfulRefreshRunId: recoveryRun.body.refreshRunId,
+        lastFailedRefreshRunId: failedRun.body.refreshRunId,
+        carriedForwardFromFailedRefresh: false,
+      },
+    });
+
+    const summaryResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs`,
+    );
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.refreshRuns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          refreshRunId: failedRun.body.refreshRunId,
+          missionId,
+          created: [],
+          updated: [],
+          failed: [
+            expect.objectContaining({
+              areaId: "EGD-FAILED-2200",
+              sourceType: "danger_area",
+              retired: false,
+            }),
+          ],
+          superseded: [],
+          retired: [],
+          active: [],
+        }),
+        expect.objectContaining({
+          refreshRunId: recoveryRun.body.refreshRunId,
+          missionId,
+          failed: [],
+          updated: [
+            expect.objectContaining({
+              areaId: "EGD-FAILED-2200",
+              sourceType: "danger_area",
+              retired: false,
+            }),
+          ],
+          active: [
+            expect.objectContaining({
+              areaId: "EGD-FAILED-2200",
+              sourceType: "danger_area",
+              retired: false,
+            }),
+          ],
+        }),
+      ]),
+    );
   });
 
   it("returns refresh-run summaries and supports filtering a single authoritative snapshot", async () => {
@@ -1369,6 +1519,7 @@ describe("mission external overlays integration", () => {
             }),
           ],
           updated: [],
+          failed: [],
           superseded: [],
           retired: [],
           active: [],
@@ -1384,6 +1535,7 @@ describe("mission external overlays integration", () => {
               retired: false,
             }),
           ],
+          failed: [],
           superseded: [
             expect.objectContaining({
               areaId: "NOTAM-B1200-26",

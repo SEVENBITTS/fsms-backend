@@ -114,6 +114,8 @@ export interface AreaConflictOverlayMetadata {
     status: "fresh" | "stale" | "partial" | "failed";
     evaluatedByRunId: string;
     lastSuccessfulRefreshRunId: string | null;
+    lastFailedRefreshRunId: string | null;
+    carriedForwardFromFailedRefresh: boolean;
   } | null;
 }
 
