@@ -116,6 +116,28 @@ This dev entrypoint now:
 
 This is intended for UI rendering and route verification. API-backed mission data still requires a working local database setup.
 
+## Database split
+
+Keep runtime and test data in separate PostgreSQL databases.
+
+- runtime dev database: `timeline_dev_db` via [\.env](C:\Users\rabbi\Documents\Codex\2026-04-20-fsms-issue-105-governance-rollup-signoff-render\.env)
+- test database: `timeline_test_db` via [\.env.test](C:\Users\rabbi\Documents\Codex\2026-04-20-fsms-issue-105-governance-rollup-signoff-render\.env.test)
+
+This matters because the Vitest suite clears and reseeds mission tables. If both files point at the same database, running tests will destroy the live dev dataset.
+
+Create and migrate the dev database:
+
+```powershell
+psql -U postgres -h localhost -p 5432 -d postgres -c "CREATE DATABASE timeline_dev_db"
+npm run migrate
+```
+
+Run test migrations against the test database:
+
+```powershell
+npm run migrate:test
+```
+
 ## Live ops demo seed
 
 To create a mission with replay, alerts, external overlays, and conflict-relevant context for operator UI review, run:

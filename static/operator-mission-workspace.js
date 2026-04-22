@@ -207,6 +207,23 @@ const renderBadge = (value) =>
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
 
+const missionPlatformLabel = (mission) =>
+  mission?.platform?.name ??
+  mission?.platform?.id ??
+  mission?.platformName ??
+  mission?.platformId ??
+  "Platform not assigned";
+
+const missionPilotLabel = (mission) =>
+  mission?.pilot?.displayName ??
+  mission?.pilot?.id ??
+  mission?.pilotDisplayName ??
+  mission?.pilotId ??
+  "Pilot not assigned";
+
+const missionLatestEventTime = (mission) =>
+  mission?.latestEventAt ?? mission?.latestEventTime ?? mission?.updatedAt ?? null;
+
 const setConnectionState = (message, tone = "tone-muted") => {
   connectionStatus.className = `status-pill ${tone}`;
   connectionStatus.textContent = message;
@@ -411,10 +428,8 @@ const renderMissionBrowser = () => {
     .map((mission) => {
       const loaded = mission.id === uiState.missionId;
       const lastEvent = mission.latestEventSummary ?? "No lifecycle events yet";
-      const platform =
-        mission.platform?.name ?? mission.platform?.id ?? "Platform not assigned";
-      const pilot =
-        mission.pilot?.displayName ?? mission.pilot?.id ?? "Pilot not assigned";
+      const platform = missionPlatformLabel(mission);
+      const pilot = missionPilotLabel(mission);
 
       return `
         <article class="mission-row" data-mission-id="${escapeHtml(mission.id)}">
@@ -429,7 +444,7 @@ const renderMissionBrowser = () => {
             Platform: ${escapeHtml(platform)}<br />
             Pilot: ${escapeHtml(pilot)}<br />
             Last event: ${escapeHtml(lastEvent)}<br />
-            Updated: ${escapeHtml(formatDateTime(mission.latestEventAt ?? mission.updatedAt))}
+            Updated: ${escapeHtml(formatDateTime(missionLatestEventTime(mission)))}
           </div>
           <div style="margin-top: 10px;">
             <button class="action-button" type="button" data-open-mission="${escapeHtml(
@@ -469,21 +484,13 @@ const renderMissionBrowser = () => {
         <div class="k">Status</div>
         <div>${renderBadge(selectedMission.status ?? "Unknown")}</div>
         <div class="k">Platform</div>
-        <div>${escapeHtml(
-          selectedMission.platform?.name ??
-            selectedMission.platform?.id ??
-            "Platform not assigned",
-        )}</div>
+        <div>${escapeHtml(missionPlatformLabel(selectedMission))}</div>
         <div class="k">Pilot</div>
-        <div>${escapeHtml(
-          selectedMission.pilot?.displayName ??
-            selectedMission.pilot?.id ??
-            "Pilot not assigned",
-        )}</div>
+        <div>${escapeHtml(missionPilotLabel(selectedMission))}</div>
         <div class="k">Last event</div>
         <div>${escapeHtml(selectedMission.latestEventSummary ?? "No lifecycle events yet")}</div>
         <div class="k">Updated</div>
-        <div>${escapeHtml(formatDateTime(selectedMission.latestEventAt ?? selectedMission.updatedAt))}</div>
+        <div>${escapeHtml(formatDateTime(missionLatestEventTime(selectedMission)))}</div>
       </div>
     </section>
   `;

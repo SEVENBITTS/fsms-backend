@@ -98,6 +98,23 @@ const renderBadge = (value) =>
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
 
+const missionPlatformLabel = (mission) =>
+  mission?.platform?.name ??
+  mission?.platform?.id ??
+  mission?.platformName ??
+  mission?.platformId ??
+  "Platform not assigned";
+
+const missionPilotLabel = (mission) =>
+  mission?.pilot?.displayName ??
+  mission?.pilot?.id ??
+  mission?.pilotDisplayName ??
+  mission?.pilotId ??
+  "Pilot not assigned";
+
+const missionLatestEventTime = (mission) =>
+  mission?.latestEventAt ?? mission?.latestEventTime ?? mission?.updatedAt ?? null;
+
 const weatherOverlays = () =>
   (uiState.externalOverlays ?? []).filter((overlay) => overlay.kind === "weather");
 
@@ -298,10 +315,8 @@ const renderMissionBrowser = () => {
         .map((mission) => {
           const loaded = mission.id === uiState.missionId;
           const lastEvent = mission.latestEventSummary ?? "No lifecycle events yet";
-          const platform =
-            mission.platform?.name ?? mission.platform?.id ?? "Platform not assigned";
-          const pilot =
-            mission.pilot?.displayName ?? mission.pilot?.id ?? "Pilot not assigned";
+          const platform = missionPlatformLabel(mission);
+          const pilot = missionPilotLabel(mission);
 
           return `
             <article class="mission-row" data-mission-id="${escapeHtml(mission.id)}">
@@ -316,7 +331,7 @@ const renderMissionBrowser = () => {
                 Platform: ${escapeHtml(platform)}<br />
                 Pilot: ${escapeHtml(pilot)}<br />
                 Last event: ${escapeHtml(lastEvent)}<br />
-                Updated: ${escapeHtml(formatDateTime(mission.latestEventAt ?? mission.updatedAt))}
+                Updated: ${escapeHtml(formatDateTime(missionLatestEventTime(mission)))}
               </div>
               <div style="margin-top: 10px;">
                 <button class="action-button" type="button" data-open-mission="${escapeHtml(
@@ -346,14 +361,8 @@ const renderMissionBrowser = () => {
 
   const selectedMission =
     missions.find((mission) => mission.id === uiState.missionId) ?? missions[0];
-  const selectedPlatform =
-    selectedMission.platform?.name ??
-    selectedMission.platform?.id ??
-    "Platform not assigned";
-  const selectedPilot =
-    selectedMission.pilot?.displayName ??
-    selectedMission.pilot?.id ??
-    "Pilot not assigned";
+  const selectedPlatform = missionPlatformLabel(selectedMission);
+  const selectedPilot = missionPilotLabel(selectedMission);
 
   missionBrowserDetail.innerHTML = `
     <section class="summary-block">
