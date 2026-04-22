@@ -172,11 +172,31 @@ describe("traffic conflict assessment integration", () => {
           missionId,
           overlayKind: "crewed_traffic",
           overlayLabel: "HELIMED21",
+          measurementBasis: {
+            referencePoint: "latest_telemetry",
+            targetGeometry: "overlay_point",
+            rangeRule: "point_to_point",
+            bearingReference: "true_north",
+          },
+          metrics: expect.objectContaining({
+            rangeMeters: expect.any(Number),
+            bearingDegrees: expect.any(Number),
+          }),
         }),
         expect.objectContaining({
           missionId,
           overlayKind: "drone_traffic",
           overlayLabel: "op-44",
+          measurementBasis: {
+            referencePoint: "latest_telemetry",
+            targetGeometry: "overlay_point",
+            rangeRule: "point_to_point",
+            bearingReference: "true_north",
+          },
+          metrics: expect.objectContaining({
+            rangeMeters: expect.any(Number),
+            bearingDegrees: expect.any(Number),
+          }),
         }),
       ]),
     );

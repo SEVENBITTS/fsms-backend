@@ -131,6 +131,40 @@ const formatDateTime = (value) => {
   });
 };
 
+const cardinalFromBearing = (value) => {
+  if (value == null || Number.isNaN(value)) {
+    return "";
+  }
+
+  const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return directions[Math.round(value / 45) % directions.length];
+};
+
+const formatBearingDegrees = (value) => {
+  if (value == null || Number.isNaN(value)) {
+    return "Not recorded";
+  }
+
+  return `${Math.round(value)}\u00B0 ${cardinalFromBearing(value)}`;
+};
+
+const formatVerticalSeparation = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : `${Math.round(value)} ft`;
+
+const formatRangeBearing = (metrics) => {
+  const rangeMeters = metrics?.rangeMeters ?? metrics?.lateralDistanceMeters;
+  if (rangeMeters == null && metrics?.bearingDegrees == null) {
+    return "Not recorded";
+  }
+
+  const rangeText =
+    rangeMeters == null || Number.isNaN(rangeMeters)
+      ? "Unknown range"
+      : `${Math.round(rangeMeters)} m`;
+  const bearingText = formatBearingDegrees(metrics?.bearingDegrees ?? null);
+  return `${rangeText} @ ${bearingText}`;
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
@@ -360,7 +394,7 @@ const renderReplayControls = () => {
   replayProgress.textContent =
     pointCount === 0
       ? "0 / 0"
-      : `${uiState.replayPlayback.index + 1} / ${pointCount} · ${uiState.replayPlayback.speed}x`;
+      : `${uiState.replayPlayback.index + 1} / ${pointCount} | ${uiState.replayPlayback.speed}x`;
   replayMarkers.innerHTML =
     pointCount === 0 || replayStart == null || replayEnd == null
       ? ""
@@ -435,7 +469,7 @@ const weatherSummary = () => {
   return {
     label: `Weather ${metadata.precipitation ?? "unknown"}`,
     tone: overlay.severity ?? "info",
-    detail: `${metadata.windSpeedKnots ?? "?"} kt @ ${metadata.windDirectionDegrees ?? "?"}° · ${metadata.temperatureC ?? "?"}°C · observed ${formatDateTime(overlay.observedAt)}`,
+    detail: `${metadata.windSpeedKnots ?? "?"} kt @ ${metadata.windDirectionDegrees ?? "?"}\u00B0 | ${metadata.temperatureC ?? "?"}\u00B0C | observed ${formatDateTime(overlay.observedAt)}`,
   };
 };
 
@@ -489,7 +523,7 @@ const crewedTrafficSummary = () => {
   return {
     label: `${traffic.length} crewed traffic contact${traffic.length === 1 ? "" : "s"}`,
     tone: primary.severity ?? "info",
-    detail: `${metadata.callsign ?? metadata.trafficId ?? "Unknown"} · ${primary.speedKnots ?? "?"} kt · ${primary.geometry?.altitudeMslFt ?? "?"} ft · observed ${formatDateTime(primary.observedAt)}`,
+    detail: `${metadata.callsign ?? metadata.trafficId ?? "Unknown"} | ${primary.speedKnots ?? "?"} kt | ${primary.geometry?.altitudeMslFt ?? "?"} ft | observed ${formatDateTime(primary.observedAt)}`,
   };
 };
 
@@ -543,7 +577,7 @@ const droneTrafficSummary = () => {
   return {
     label: `${traffic.length} drone traffic contact${traffic.length === 1 ? "" : "s"}`,
     tone: primary.severity ?? "info",
-    detail: `${metadata.operatorReference ?? metadata.trafficId ?? "Unknown"} · ${primary.speedKnots ?? "?"} kt · ${primary.geometry?.altitudeMslFt ?? "?"} ft · observed ${formatDateTime(primary.observedAt)}`,
+    detail: `${metadata.operatorReference ?? metadata.trafficId ?? "Unknown"} | ${primary.speedKnots ?? "?"} kt | ${primary.geometry?.altitudeMslFt ?? "?"} ft | observed ${formatDateTime(primary.observedAt)}`,
   };
 };
 
@@ -594,7 +628,7 @@ const conflictAssessmentSummary = () => {
   return {
     label: `${conflicts.length} conflict candidate${conflicts.length === 1 ? "" : "s"}`,
     tone: highest.severity,
-    detail: `${highest.overlayLabel} · ${highest.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${highest.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+    detail: `${highest.overlayLabel} | ${formatRangeBearing(highest.metrics)} | ${formatVerticalSeparation(highest.metrics?.altitudeDeltaFt)} vertical`,
   };
 };
 
@@ -629,7 +663,7 @@ const deriveConflictAdvisories = () =>
       relatedSource: `${conflict.relatedSource.provider} / ${conflict.relatedSource.sourceType}`,
       reasoning: conflict.explanation,
       relevance: replayRelevance,
-      summary: `${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+      summary: `${formatRangeBearing(conflict.metrics)} | ${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`,
     };
   });
 
@@ -647,7 +681,7 @@ const conflictAdvisorySummary = () => {
   return {
     label: `${advisories.length} advisory item${advisories.length === 1 ? "" : "s"}`,
     tone: primary.tone,
-    detail: `${primary.recommendation} · ${primary.relatedObject} · ${primary.summary}`,
+    detail: `${primary.recommendation} | ${primary.relatedObject} | ${primary.summary}`,
   };
 };
 
@@ -761,7 +795,7 @@ const currentConflictWindowSummary = () => {
   return {
     headline: replayRelation.label,
     tone: primary.severity,
-    detail: `${primary.overlayLabel} · ${primary.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primary.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+    detail: `${primary.overlayLabel} | ${primary.metrics?.lateralDistanceMeters ?? "?"} m lateral | ${primary.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
     meta: replayRelation.detail,
   };
 };
@@ -852,7 +886,7 @@ const conflictProximityEnvelopeSummary = () => {
   return {
     headline: `${primary.conflict.overlayLabel} proximity`,
     tone: primary.conflict.severity,
-    detail: `${primary.radii.length} severity band${primary.radii.length === 1 ? "" : "s"} · ${primary.conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primary.conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+    detail: `${primary.radii.length} severity band${primary.radii.length === 1 ? "" : "s"} | ${formatRangeBearing(primary.conflict.metrics)} | ${formatVerticalSeparation(primary.conflict.metrics?.altitudeDeltaFt)} vertical`,
     meta: primary.conflict.explanation,
   };
 };
@@ -1186,14 +1220,14 @@ const buildOverlayCards = () => {
       ? {
           label: "Primary conflict",
           tone: primaryConflict.severity,
-          detail: `${primaryConflict.overlayLabel} · ${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+          detail: `${primaryConflict.overlayLabel} | ${formatRangeBearing(primaryConflict.metrics)} | ${formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)} vertical`,
         }
       : conflictAssessmentSummary(),
     primaryAdvisory
       ? {
           label: "Primary advisory",
           tone: primaryAdvisory.tone,
-          detail: `${primaryAdvisory.recommendation} · ${primaryAdvisory.relatedObject}`,
+          detail: `${primaryAdvisory.recommendation} | ${primaryAdvisory.relatedObject}`,
         }
       : conflictAdvisorySummary(),
   ];
@@ -1340,7 +1374,7 @@ const renderOverview = () => {
       )}</div>
       <div class="meta">${escapeHtml(
         weatherMeta
-          ? `${weatherMeta.temperatureC}°C at ${formatDateTime(activeWeather.observedAt)}`
+          ? `${weatherMeta.temperatureC}\u00B0C at ${formatDateTime(activeWeather.observedAt)}`
           : "No weather overlay loaded for this mission.",
       )}</div>
     </article>
@@ -1392,7 +1426,7 @@ const renderOverview = () => {
       )}</div>
       <div class="meta">${escapeHtml(
         primaryAdvisory
-          ? `${primaryAdvisory.relatedObject} · ${primaryAdvisory.summary}`
+          ? `${primaryAdvisory.relatedObject} | ${primaryAdvisory.summary}`
           : "No advisory-grade conflict presentation is currently required.",
       )}</div>
     </article>
@@ -1631,7 +1665,7 @@ const buildMapMarkup = () => {
             metadata.callsign ?? metadata.trafficId ?? "Traffic",
           )}</text>
           <text x="${trafficPoint.x + 14}" y="${trafficPoint.y + 11}" fill="#d8ecff" font-size="10">${escapeHtml(
-            `${overlay.geometry?.altitudeMslFt ?? "?"}ft · ${overlay.speedKnots ?? "?"}kt`,
+            `${overlay.geometry?.altitudeMslFt ?? "?"}ft | ${overlay.speedKnots ?? "?"}kt`,
           )}</text>
         </g>
       `;
@@ -1658,7 +1692,7 @@ const buildMapMarkup = () => {
             metadata.operatorReference ?? metadata.trafficId ?? "Drone",
           )}</text>
           <text x="${trafficPoint.x + 12}" y="${trafficPoint.y + 12}" fill="#d8ecff" font-size="10">${escapeHtml(
-            `${overlay.geometry?.altitudeMslFt ?? "?"}ft · ${overlay.speedKnots ?? "?"}kt`,
+            `${overlay.geometry?.altitudeMslFt ?? "?"}ft | ${overlay.speedKnots ?? "?"}kt`,
           )}</text>
         </g>
       `;
@@ -1824,7 +1858,7 @@ const renderStatus = () => {
         },
         ...secondaryConflictAssessmentItems().map((conflict) => ({
           label: `Additional conflict ${conflict.overlayLabel}`,
-          value: `${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+          value: `${formatRangeBearing(conflict.metrics)} | ${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`,
         })),
       ]
     : [];
@@ -1902,7 +1936,7 @@ const renderStatus = () => {
           <div class="k">Wind / temp</div>
           <div>${escapeHtml(
             activeWeatherOverlay()
-              ? `${activeWeatherOverlay().metadata?.windSpeedKnots ?? "?"} kt @ ${activeWeatherOverlay().metadata?.windDirectionDegrees ?? "?"}° · ${activeWeatherOverlay().metadata?.temperatureC ?? "?"}°C`
+              ? `${activeWeatherOverlay().metadata?.windSpeedKnots ?? "?"} kt @ ${activeWeatherOverlay().metadata?.windDirectionDegrees ?? "?"}\u00B0 | ${activeWeatherOverlay().metadata?.temperatureC ?? "?"}\u00B0C`
               : "Missing",
           )}</div>
           <div class="k">Precipitation</div>
@@ -1926,7 +1960,7 @@ const renderStatus = () => {
           <div class="k">Heading / speed</div>
           <div>${escapeHtml(
             activeCrewedTrafficOverlays()[0]
-              ? `${activeCrewedTrafficOverlays()[0].headingDegrees ?? "?"}° · ${activeCrewedTrafficOverlays()[0].speedKnots ?? "?"} kt`
+              ? `${activeCrewedTrafficOverlays()[0].headingDegrees ?? "?"}\u00B0 | ${activeCrewedTrafficOverlays()[0].speedKnots ?? "?"} kt`
               : "Missing",
           )}</div>
           <div class="k">Altitude</div>
@@ -1952,7 +1986,7 @@ const renderStatus = () => {
           <div class="k">Vehicle / speed</div>
           <div>${escapeHtml(
             activeDroneTrafficOverlays()[0]
-              ? `${activeDroneTrafficOverlays()[0].metadata?.vehicleType ?? "Unknown"} · ${activeDroneTrafficOverlays()[0].speedKnots ?? "?"} kt`
+              ? `${activeDroneTrafficOverlays()[0].metadata?.vehicleType ?? "Unknown"} | ${activeDroneTrafficOverlays()[0].speedKnots ?? "?"} kt`
               : "Missing",
           )}</div>
           <div class="k">Altitude</div>
@@ -1973,10 +2007,16 @@ const renderStatus = () => {
           <div>${escapeHtml(
             primaryConflict?.overlayLabel ?? "Clear",
           )}</div>
-          <div class="k">Separation</div>
+          <div class="k">Range / bearing</div>
           <div>${escapeHtml(
             primaryConflict
-              ? `${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m · ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft`
+              ? formatRangeBearing(primaryConflict.metrics)
+              : "Not recorded",
+          )}</div>
+          <div class="k">Vertical separation</div>
+          <div>${escapeHtml(
+            primaryConflict
+              ? formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)
               : "Not recorded",
           )}</div>
           <div class="k">Assessment time</div>
@@ -2105,8 +2145,8 @@ const renderAlertCorrelation = () => {
             ? '<div class="empty-state">No nearby mission events were found around the current replay position.</div>'
             : renderList(
                 nearbyEvents.map((item) => ({
-                  label: `${item.phase.replaceAll("_", " ")} · ${item.type}`,
-                  value: `${formatDateTime(item.occurredAt)} · ${item.summary}`,
+                  label: `${item.phase.replaceAll("_", " ")} | ${item.type}`,
+                  value: `${formatDateTime(item.occurredAt)} | ${item.summary}`,
                 })),
                 "nearby operational events",
               )
@@ -2162,7 +2202,8 @@ const renderConflictAssessment = () => {
                 <div class="alert-window-meta">
                   Source: ${escapeHtml(primaryConflict.relatedSource.provider)} / ${escapeHtml(primaryConflict.relatedSource.sourceType)}<br />
                   Observed: ${escapeHtml(formatDateTime(primaryConflict.overlayObservedAt))}<br />
-                  Separation: ${escapeHtml(`${primaryConflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${primaryConflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`)}<br />
+                  Range / bearing: ${escapeHtml(formatRangeBearing(primaryConflict.metrics))}<br />
+                  Vertical separation: ${escapeHtml(formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt))}<br />
                   Replay relevance: ${escapeHtml(primaryConflict.replayRelevant ? "Current replay window" : `${primaryConflict.replayTimeDeltaSeconds} s from replay cursor`)}
                 </div>
               </article>
@@ -2177,8 +2218,8 @@ const renderConflictAssessment = () => {
             ? '<div class="empty-state">No additional conflict candidates are currently assessed.</div>'
             : renderList(
                 secondaryConflicts.map((conflict) => ({
-                  label: `${conflict.overlayLabel} · ${conflict.severity}`,
-                  value: `${conflict.metrics?.lateralDistanceMeters ?? "?"} m lateral · ${conflict.metrics?.altitudeDeltaFt ?? "?"} ft vertical`,
+                  label: `${conflict.overlayLabel} | ${conflict.severity}`,
+                  value: `${formatRangeBearing(conflict.metrics)} | ${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`,
                 })),
                 "additional conflicts",
               )
@@ -2237,7 +2278,7 @@ const renderConflictAdvisory = () => {
             ? '<div class="empty-state">No additional advisory items are currently derived.</div>'
             : renderList(
                 secondary.map((advisory) => ({
-                  label: `${advisory.recommendation} · ${advisory.relatedObject}`,
+                  label: `${advisory.recommendation} | ${advisory.relatedObject}`,
                   value: advisory.summary,
                 })),
                 "additional advisories",

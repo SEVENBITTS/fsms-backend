@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add mission-focused filters to the live operations entry browser so operators can narrow the live operations mission list by status and current activity without leaving the route.",
+  "nextBuildStep": "Add area conflict geometry support to mission-linked conflict assessment so bearing and range metadata can extend beyond traffic overlays.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

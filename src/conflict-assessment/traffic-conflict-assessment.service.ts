@@ -22,6 +22,7 @@ const FEET_PER_METER = 3.28084;
 const EARTH_RADIUS_M = 6371000;
 
 const toRadians = (degrees: number): number => (degrees * Math.PI) / 180;
+const toDegrees = (radians: number): number => (radians * 180) / Math.PI;
 
 const haversineMeters = (
   lat1: number,
@@ -38,6 +39,22 @@ const haversineMeters = (
       Math.sin(dLng / 2) ** 2;
 
   return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const bearingDegrees = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number => {
+  const startLat = toRadians(lat1);
+  const targetLat = toRadians(lat2);
+  const deltaLng = toRadians(lng2 - lng1);
+  const y = Math.sin(deltaLng) * Math.cos(targetLat);
+  const x =
+    Math.cos(startLat) * Math.sin(targetLat) -
+    Math.sin(startLat) * Math.cos(targetLat) * Math.cos(deltaLng);
+  return (toDegrees(Math.atan2(y, x)) + 360) % 360;
 };
 
 const round = (value: number | null): number | null =>
@@ -176,6 +193,7 @@ const buildExplanation = (
   overlay: ExternalOverlay,
   lateralDistanceMeters: number | null,
   altitudeDeltaFt: number | null,
+  bearingToOverlayDegrees: number | null,
   weatherReason: string | null,
 ): string => {
   const base =
@@ -186,10 +204,14 @@ const buildExplanation = (
     lateralDistanceMeters == null ? "unknown lateral distance" : `${round(lateralDistanceMeters)} m lateral separation`;
   const vertical =
     altitudeDeltaFt == null ? "unknown vertical separation" : `${round(altitudeDeltaFt)} ft vertical separation`;
+  const bearing =
+    bearingToOverlayDegrees == null
+      ? "unknown bearing"
+      : `${round(bearingToOverlayDegrees)}° bearing from mission reference`;
 
   return weatherReason
-    ? `${base}: ${lateral}, ${vertical}, ${weatherReason}.`
-    : `${base}: ${lateral}, ${vertical}.`;
+    ? `${base}: ${lateral}, ${vertical}, ${bearing}, ${weatherReason}.`
+    : `${base}: ${lateral}, ${vertical}, ${bearing}.`;
 };
 
 const toReferenceTelemetry = (
@@ -270,6 +292,18 @@ export class TrafficConflictAssessmentService {
                   overlay.geometry.lat,
                   overlay.geometry.lng,
                 );
+          const bearingToOverlayDegrees =
+            referenceLat == null ||
+            referenceLng == null ||
+            overlay.geometry?.lat == null ||
+            overlay.geometry?.lng == null
+              ? null
+              : bearingDegrees(
+                  referenceLat,
+                  referenceLng,
+                  overlay.geometry.lat,
+                  overlay.geometry.lng,
+                );
 
           const altitudeDeltaFt =
             referenceAltitudeFt == null || overlay.geometry.altitudeMslFt == null
@@ -315,11 +349,20 @@ export class TrafficConflictAssessmentService {
               overlay,
               lateralDistanceMeters,
               altitudeDeltaFt,
+              bearingToOverlayDegrees,
               weather.reason,
             ),
             overlayLabel,
             relatedSource: { ...overlay.source },
+            measurementBasis: {
+              referencePoint: "latest_telemetry",
+              targetGeometry: "overlay_point",
+              rangeRule: "point_to_point",
+              bearingReference: "true_north",
+            },
             metrics: {
+              rangeMeters: round(lateralDistanceMeters),
+              bearingDegrees: round(bearingToOverlayDegrees),
               lateralDistanceMeters: round(lateralDistanceMeters),
               altitudeDeltaFt: round(altitudeDeltaFt),
               timeDeltaSeconds: round(timeDeltaSeconds),

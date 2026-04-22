@@ -32,7 +32,15 @@ export interface TrafficConflictAssessmentItem {
     sourceType: string;
     sourceRecordId: string | null;
   };
+  measurementBasis: {
+    referencePoint: "latest_telemetry";
+    targetGeometry: "overlay_point";
+    rangeRule: "point_to_point";
+    bearingReference: "true_north";
+  };
   metrics: {
+    rangeMeters: number | null;
+    bearingDegrees: number | null;
     lateralDistanceMeters: number | null;
     altitudeDeltaFt: number | null;
     timeDeltaSeconds: number | null;
