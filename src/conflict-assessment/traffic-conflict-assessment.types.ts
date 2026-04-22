@@ -41,6 +41,17 @@ export interface TrafficConflictAssessmentItem {
     rangeRule: "point_to_point" | "nearest_boundary";
     bearingReference: "true_north";
   };
+  verticalContext: {
+    referenceAltitudeFt: number | null;
+    altitudeFloorFt: number | null;
+    altitudeCeilingFt: number | null;
+    relation:
+      | "not_applicable"
+      | "unknown"
+      | "below_band"
+      | "inside_band"
+      | "above_band";
+  };
   metrics: {
     rangeMeters: number | null;
     bearingDegrees: number | null;
