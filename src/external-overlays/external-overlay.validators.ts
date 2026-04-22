@@ -2,6 +2,7 @@ import type {
   CreateAreaConflictExternalOverlayInput,
   CreateCrewedTrafficExternalOverlayInput,
   CreateDroneTrafficExternalOverlayInput,
+  NormalizeAreaOverlayRefreshStatus,
   CreateWeatherExternalOverlayInput,
   ExternalOverlaySeverity,
   NormalizeAreaOverlaySourcesInput,
@@ -14,6 +15,12 @@ const AREA_SOURCE_TYPES = [
   "temporary_danger_area",
   "notam_restriction",
 ] as const;
+const AREA_REFRESH_STATUSES: NormalizeAreaOverlayRefreshStatus[] = [
+  "fresh",
+  "stale",
+  "partial",
+  "failed",
+];
 
 const requiredString = (value: unknown, fieldName: string): string => {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -435,8 +442,31 @@ export const validateNormalizeAreaOverlaySourcesInput = (
   }
 
   const candidate = input as Record<string, unknown>;
-  if (!Array.isArray(candidate.records) || candidate.records.length === 0) {
-    throw new Error("records must be a non-empty array");
+  const refresh =
+    candidate.refresh && typeof candidate.refresh === "object"
+      ? (candidate.refresh as Record<string, unknown>)
+      : null;
+  const refreshStatus =
+    refresh?.status == null
+      ? "fresh"
+      : requiredString(refresh.status, "refresh.status").toLowerCase();
+
+  if (
+    !AREA_REFRESH_STATUSES.includes(
+      refreshStatus as NormalizeAreaOverlayRefreshStatus,
+    )
+  ) {
+    throw new Error(
+      "refresh.status must be one of: fresh, stale, partial, failed",
+    );
+  }
+
+  if (!Array.isArray(candidate.records)) {
+    throw new Error("records must be an array");
+  }
+
+  if (candidate.records.length === 0 && refreshStatus !== "failed") {
+    throw new Error("records must be a non-empty array unless refresh.status is 'failed'");
   }
 
   return {
@@ -539,5 +569,8 @@ export const validateNormalizeAreaOverlaySourcesInput = (
         },
       };
     }),
+    refresh: {
+      status: refreshStatus as NormalizeAreaOverlayRefreshStatus,
+    },
   };
 };
