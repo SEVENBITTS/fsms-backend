@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add failed-refresh provenance to operator-facing review context so unsuccessful authoritative updates are distinguishable from stale carried-forward overlay state.",
+  "nextBuildStep": "Add failed-refresh review context to operator-facing conflict summary cards so degraded authoritative area state is visible at a glance.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -128,7 +128,27 @@ const areaOverlaySourceRefreshDetail = (overlay) => {
     return "Not recorded";
   }
 
-  return `${refreshState.status} | last successful ${formatDateTime(refreshState.lastSuccessfulRefreshRunId)}`;
+  const detailParts = [`${refreshState.status}`];
+
+  if (refreshState.lastSuccessfulRefreshRunId) {
+    detailParts.push(
+      `last successful ${formatDateTime(refreshState.lastSuccessfulRefreshRunId)}`,
+    );
+  } else {
+    detailParts.push("no successful refresh recorded");
+  }
+
+  if (refreshState.lastFailedRefreshRunId) {
+    detailParts.push(
+      `last failed ${formatDateTime(refreshState.lastFailedRefreshRunId)}`,
+    );
+  }
+
+  if (refreshState.carriedForwardFromFailedRefresh) {
+    detailParts.push("carried forward after failed refresh");
+  }
+
+  return detailParts.join(" | ");
 };
 
 const areaSourceRefreshSummary = () => {
@@ -158,18 +178,43 @@ const areaSourceRefreshSummary = () => {
     .filter(Boolean)
     .sort()
     .at(-1);
+  const latestFailedRefresh = overlays
+    .map((overlay) => areaOverlaySourceRefreshState(overlay)?.lastFailedRefreshRunId)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const carriedForwardFailedCount = overlays.filter(
+    (overlay) =>
+      areaOverlaySourceRefreshState(overlay)?.carriedForwardFromFailedRefresh === true,
+  ).length;
 
   return {
     label:
       highestPriorityStatus === "fresh"
         ? "Fresh"
+        : highestPriorityStatus === "failed"
+          ? `Failed refresh (${degradedCount})`
         : highestPriorityStatus === "missing"
           ? "Missing"
           : `${highestPriorityStatus} (${degradedCount})`,
     detail:
-      latestSuccessfulRefresh != null
-        ? `Last successful refresh ${formatDateTime(latestSuccessfulRefresh)}`
-        : "No successful refresh recorded",
+      highestPriorityStatus === "failed"
+        ? [
+            latestFailedRefresh != null
+              ? `Last failed refresh ${formatDateTime(latestFailedRefresh)}`
+              : "Failed refresh recorded",
+            latestSuccessfulRefresh != null
+              ? `last successful ${formatDateTime(latestSuccessfulRefresh)}`
+              : "no successful refresh recorded",
+            carriedForwardFailedCount > 0
+              ? `${carriedForwardFailedCount} carried-forward overlay${carriedForwardFailedCount === 1 ? "" : "s"}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" | ")
+        : latestSuccessfulRefresh != null
+          ? `Last successful refresh ${formatDateTime(latestSuccessfulRefresh)}`
+          : "No successful refresh recorded",
   };
 };
 
