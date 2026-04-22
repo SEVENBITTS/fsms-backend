@@ -151,6 +151,32 @@ const formatBearingDegrees = (value) => {
 const formatVerticalSeparation = (value) =>
   value == null || Number.isNaN(value) ? "Not recorded" : `${Math.round(value)} ft`;
 
+const formatVerticalContext = (conflict) => {
+  const relation = conflict?.verticalContext?.relation ?? "not_applicable";
+  const floor = conflict?.verticalContext?.altitudeFloorFt;
+  const ceiling = conflict?.verticalContext?.altitudeCeilingFt;
+  const reference = conflict?.verticalContext?.referenceAltitudeFt;
+  const bandText =
+    floor == null && ceiling == null
+      ? "No altitude band"
+      : `${floor ?? "surface"}-${ceiling ?? "open"} ft`;
+
+  if (relation === "inside_band") {
+    return `Inside altitude band | ${bandText} | ref ${reference == null ? "unknown" : `${Math.round(reference)} ft`}`;
+  }
+  if (relation === "below_band") {
+    return `Below altitude band | ${bandText} | ref ${reference == null ? "unknown" : `${Math.round(reference)} ft`}`;
+  }
+  if (relation === "above_band") {
+    return `Above altitude band | ${bandText} | ref ${reference == null ? "unknown" : `${Math.round(reference)} ft`}`;
+  }
+  if (relation === "unknown") {
+    return `Altitude band ${bandText} | reference altitude unknown`;
+  }
+
+  return "Not applicable";
+};
+
 const formatRangeBearing = (metrics) => {
   const rangeMeters = metrics?.rangeMeters ?? metrics?.lateralDistanceMeters;
   if (rangeMeters == null && metrics?.bearingDegrees == null) {
@@ -631,7 +657,7 @@ const conflictAssessmentSummary = () => {
   return {
     label: `${conflicts.length} conflict candidate${conflicts.length === 1 ? "" : "s"}`,
     tone: highest.severity,
-    detail: `${highest.overlayLabel} | ${formatRangeBearing(highest.metrics)} | ${formatVerticalSeparation(highest.metrics?.altitudeDeltaFt)} vertical`,
+    detail: `${highest.overlayLabel} | ${formatRangeBearing(highest.metrics)} | ${highest.overlayKind === "area_conflict" ? formatVerticalContext(highest) : `${formatVerticalSeparation(highest.metrics?.altitudeDeltaFt)} vertical`}`,
   };
 };
 
@@ -666,7 +692,7 @@ const deriveConflictAdvisories = () =>
       relatedSource: `${conflict.relatedSource.provider} / ${conflict.relatedSource.sourceType}`,
       reasoning: conflict.explanation,
       relevance: replayRelevance,
-      summary: `${formatRangeBearing(conflict.metrics)} | ${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`,
+      summary: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? formatVerticalContext(conflict) : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
     };
   });
 
@@ -889,7 +915,7 @@ const conflictProximityEnvelopeSummary = () => {
   return {
     headline: `${primary.conflict.overlayLabel} proximity`,
     tone: primary.conflict.severity,
-    detail: `${primary.radii.length} severity band${primary.radii.length === 1 ? "" : "s"} | ${formatRangeBearing(primary.conflict.metrics)} | ${formatVerticalSeparation(primary.conflict.metrics?.altitudeDeltaFt)} vertical`,
+    detail: `${primary.radii.length} severity band${primary.radii.length === 1 ? "" : "s"} | ${formatRangeBearing(primary.conflict.metrics)} | ${primary.conflict.overlayKind === "area_conflict" ? formatVerticalContext(primary.conflict) : `${formatVerticalSeparation(primary.conflict.metrics?.altitudeDeltaFt)} vertical`}`,
     meta: primary.conflict.explanation,
   };
 };
@@ -1223,7 +1249,7 @@ const buildOverlayCards = () => {
       ? {
           label: "Primary conflict",
           tone: primaryConflict.severity,
-          detail: `${primaryConflict.overlayLabel} | ${formatRangeBearing(primaryConflict.metrics)} | ${formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)} vertical`,
+          detail: `${primaryConflict.overlayLabel} | ${formatRangeBearing(primaryConflict.metrics)} | ${primaryConflict.overlayKind === "area_conflict" ? formatVerticalContext(primaryConflict) : `${formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)} vertical`}`,
         }
       : conflictAssessmentSummary(),
     primaryAdvisory
@@ -1861,7 +1887,7 @@ const renderStatus = () => {
         },
         ...secondaryConflictAssessmentItems().map((conflict) => ({
           label: `Additional conflict ${conflict.overlayLabel}`,
-          value: `${formatRangeBearing(conflict.metrics)} | ${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`,
+          value: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? formatVerticalContext(conflict) : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
         })),
       ]
     : [];
@@ -2016,10 +2042,12 @@ const renderStatus = () => {
               ? formatRangeBearing(primaryConflict.metrics)
               : "Not recorded",
           )}</div>
-          <div class="k">Vertical separation</div>
+          <div class="k">Vertical context</div>
           <div>${escapeHtml(
             primaryConflict
-              ? formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)
+              ? primaryConflict.overlayKind === "area_conflict"
+                ? formatVerticalContext(primaryConflict)
+                : formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)
               : "Not recorded",
           )}</div>
           <div class="k">Assessment time</div>
@@ -2206,7 +2234,7 @@ const renderConflictAssessment = () => {
                   Source: ${escapeHtml(primaryConflict.relatedSource.provider)} / ${escapeHtml(primaryConflict.relatedSource.sourceType)}<br />
                   Observed: ${escapeHtml(formatDateTime(primaryConflict.overlayObservedAt))}<br />
                   Range / bearing: ${escapeHtml(formatRangeBearing(primaryConflict.metrics))}<br />
-                  Vertical separation: ${escapeHtml(formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt))}<br />
+                  Vertical context: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatVerticalContext(primaryConflict) : formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt))}<br />
                   Replay relevance: ${escapeHtml(primaryConflict.replayRelevant ? "Current replay window" : `${primaryConflict.replayTimeDeltaSeconds} s from replay cursor`)}
                 </div>
               </article>
@@ -2222,7 +2250,7 @@ const renderConflictAssessment = () => {
             : renderList(
                 secondaryConflicts.map((conflict) => ({
                   label: `${conflict.overlayLabel} | ${conflict.severity}`,
-                  value: `${formatRangeBearing(conflict.metrics)} | ${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`,
+                  value: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? formatVerticalContext(conflict) : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
                 })),
                 "additional conflicts",
               )

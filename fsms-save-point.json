@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add altitude-band gating and vertical context refinement to mission-linked area conflict assessment so normalized danger areas and NOTAM-derived restrictions only trigger within relevant operating volumes.",
+  "nextBuildStep": "Add validity-window gating to mission-linked area conflict assessment so normalized danger areas and NOTAM-derived restrictions only trigger when the replay or telemetry reference time falls inside the active restriction window.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -291,6 +291,12 @@ describe("traffic conflict assessment integration", () => {
             rangeRule: "nearest_boundary",
             bearingReference: "true_north",
           },
+          verticalContext: {
+            referenceAltitudeFt: expect.any(Number),
+            altitudeFloorFt: 0,
+            altitudeCeilingFt: 1000,
+            relation: "inside_band",
+          },
           metrics: expect.objectContaining({
             rangeMeters: expect.any(Number),
             bearingDegrees: expect.any(Number),
@@ -307,6 +313,12 @@ describe("traffic conflict assessment integration", () => {
             rangeRule: "nearest_boundary",
             bearingReference: "true_north",
           },
+          verticalContext: {
+            referenceAltitudeFt: expect.any(Number),
+            altitudeFloorFt: 0,
+            altitudeCeilingFt: 900,
+            relation: "inside_band",
+          },
           metrics: expect.objectContaining({
             rangeMeters: expect.any(Number),
             insideArea: expect.any(Boolean),
@@ -314,6 +326,49 @@ describe("traffic conflict assessment integration", () => {
         }),
       ]),
     );
+  });
+
+  it("suppresses area conflicts when mission altitude is outside the restriction band", async () => {
+    const missionId = await createMission();
+    await recordTelemetry(missionId);
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "area_conflict",
+        source: {
+          provider: "airspace-hub",
+          sourceType: "zone_service",
+        },
+        observedAt: "2026-04-21T12:00:10.000Z",
+        geometry: {
+          type: "circle",
+          centerLat: 51.5075,
+          centerLng: -0.1277,
+          radiusMeters: 150,
+          altitudeFloorFt: 0,
+          altitudeCeilingFt: 300,
+        },
+        severity: "critical",
+        metadata: {
+          areaId: "zone-high",
+          label: "Low ceiling restriction",
+          areaType: "restricted_zone",
+          description: "Should not apply above the ceiling",
+        },
+      });
+
+    const response = await request(app).get(
+      `/missions/${missionId}/conflict-assessment`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      response.body.assessment.conflicts.some(
+        (item: { overlayLabel: string }) =>
+          item.overlayLabel === "Low ceiling restriction",
+      ),
+    ).toBe(false);
   });
 
   it("consumes normalized authoritative area overlays without source-specific conflict branching", async () => {
@@ -402,6 +457,9 @@ describe("traffic conflict assessment integration", () => {
           measurementBasis: expect.objectContaining({
             rangeRule: "nearest_boundary",
           }),
+          verticalContext: expect.objectContaining({
+            relation: "inside_band",
+          }),
         }),
         expect.objectContaining({
           overlayKind: "area_conflict",
@@ -412,6 +470,9 @@ describe("traffic conflict assessment integration", () => {
           }),
           measurementBasis: expect.objectContaining({
             rangeRule: "nearest_boundary",
+          }),
+          verticalContext: expect.objectContaining({
+            relation: "inside_band",
           }),
         }),
       ]),

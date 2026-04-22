@@ -372,22 +372,51 @@ const classifyTrafficConflict = (
   return null;
 };
 
-const areaAltitudeRelevant = (
+const deriveAreaVerticalContext = (
   referenceAltitudeFt: number | null,
   floorFt: number | null,
   ceilingFt: number | null,
-): boolean => {
-  if (referenceAltitudeFt == null) {
-    return true;
-  }
-  if (floorFt != null && referenceAltitudeFt < floorFt) {
-    return false;
-  }
-  if (ceilingFt != null && referenceAltitudeFt > ceilingFt) {
-    return false;
+): TrafficConflictAssessmentItem["verticalContext"] => {
+  if (floorFt == null && ceilingFt == null) {
+    return {
+      referenceAltitudeFt,
+      altitudeFloorFt: null,
+      altitudeCeilingFt: null,
+      relation: "not_applicable",
+    };
   }
 
-  return true;
+  if (referenceAltitudeFt == null) {
+    return {
+      referenceAltitudeFt: null,
+      altitudeFloorFt: floorFt,
+      altitudeCeilingFt: ceilingFt,
+      relation: "unknown",
+    };
+  }
+  if (floorFt != null && referenceAltitudeFt < floorFt) {
+    return {
+      referenceAltitudeFt,
+      altitudeFloorFt: floorFt,
+      altitudeCeilingFt: ceilingFt,
+      relation: "below_band",
+    };
+  }
+  if (ceilingFt != null && referenceAltitudeFt > ceilingFt) {
+    return {
+      referenceAltitudeFt,
+      altitudeFloorFt: floorFt,
+      altitudeCeilingFt: ceilingFt,
+      relation: "above_band",
+    };
+  }
+
+  return {
+    referenceAltitudeFt,
+    altitudeFloorFt: floorFt,
+    altitudeCeilingFt: ceilingFt,
+    relation: "inside_band",
+  };
 };
 
 const classifyAreaConflict = (
@@ -542,13 +571,15 @@ export class TrafficConflictAssessmentService {
               geometry.type === "circle"
                 ? geometry.altitudeCeilingFt
                 : geometry.altitudeCeilingFt;
+            const verticalContext = deriveAreaVerticalContext(
+              referenceAltitudeFt,
+              altitudeFloorFt,
+              altitudeCeilingFt,
+            );
 
             if (
-              !areaAltitudeRelevant(
-                referenceAltitudeFt,
-                altitudeFloorFt,
-                altitudeCeilingFt,
-              )
+              verticalContext.relation === "below_band" ||
+              verticalContext.relation === "above_band"
             ) {
               return null;
             }
@@ -566,8 +597,6 @@ export class TrafficConflictAssessmentService {
               return null;
             }
 
-            const areaMetadata =
-              overlay.metadata as unknown as AreaConflictOverlayMetadata;
             const severity = escalateSeverity(
               overlay.severity ?? classification.severity,
               weather.steps,
@@ -578,23 +607,29 @@ export class TrafficConflictAssessmentService {
               classification.status === "conflict_candidate"
                 ? `${overlayLabel} area conflict candidate`
                 : `${overlayLabel} area monitor candidate`;
-            const verticalContext =
+            const altitudeBandText =
               altitudeFloorFt != null || altitudeCeilingFt != null
                 ? ` altitude band ${altitudeFloorFt ?? "surface"}-${altitudeCeilingFt ?? "open"} ft`
                 : "";
+            const verticalRelationText =
+              verticalContext.relation === "inside_band"
+                ? "mission reference altitude is inside the active altitude band"
+                : verticalContext.relation === "unknown"
+                  ? "mission reference altitude is unknown for altitude-band gating"
+                  : "altitude band not applicable";
             const explanation = geometryAssessment.insideArea
               ? `Area conflict proximity candidate: mission reference is inside ${geometryLabel} ${overlayLabel}; nearest boundary ${round(geometryAssessment.rangeMeters)} m away, ${
                   geometryAssessment.bearingDegrees == null
                     ? "unknown bearing"
                     : `${round(geometryAssessment.bearingDegrees)}° bearing from mission reference`
-                },${verticalContext}${weather.reason ? ` ${weather.reason}` : ""}.`
+                }, ${verticalRelationText}.${altitudeBandText ? `${altitudeBandText}.` : ""}${weather.reason ? ` ${weather.reason}.` : ""}`
               : `Area conflict proximity candidate: ${overlayLabel} boundary is ${round(
                   geometryAssessment.rangeMeters,
                 )} m away at ${
                   geometryAssessment.bearingDegrees == null
                     ? "unknown bearing"
                     : `${round(geometryAssessment.bearingDegrees)}° bearing from mission reference`
-                },${verticalContext}${weather.reason ? ` ${weather.reason}` : ""}.`;
+                }, ${verticalRelationText}.${altitudeBandText ? `${altitudeBandText}.` : ""}${weather.reason ? ` ${weather.reason}.` : ""}`;
 
             return {
               id: randomUUID(),
@@ -617,6 +652,7 @@ export class TrafficConflictAssessmentService {
                 rangeRule: "nearest_boundary",
                 bearingReference: "true_north",
               },
+              verticalContext,
               metrics: {
                 rangeMeters: round(geometryAssessment.rangeMeters),
                 bearingDegrees: round(geometryAssessment.bearingDegrees),
@@ -707,6 +743,12 @@ export class TrafficConflictAssessmentService {
               rangeRule: "point_to_point",
               bearingReference: "true_north",
             },
+            verticalContext: {
+              referenceAltitudeFt,
+              altitudeFloorFt: null,
+              altitudeCeilingFt: null,
+              relation: "not_applicable",
+            },
             metrics: {
               rangeMeters: round(lateralDistanceMeters),
               bearingDegrees: round(bearingToOverlayDegrees),
@@ -749,3 +791,4 @@ export class TrafficConflictAssessmentService {
     }
   }
 }
+
