@@ -42,3 +42,12 @@ export class MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidErro
     super(message);
   }
 }
+
+export class MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError extends Error {
+  readonly statusCode = 400;
+  readonly type = "refresh_run_transition_artifact_query_invalid";
+
+  constructor(message: string) {
+    super(message);
+  }
+}
