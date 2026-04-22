@@ -3093,6 +3093,7 @@ describe("mission external overlays integration", () => {
           offset: 0,
           limit: 1,
           previousCursor: null,
+          bookmark: expect.any(String),
         },
       },
     });
@@ -3148,6 +3149,183 @@ describe("mission external overlays integration", () => {
     expect(mixedCursorResponse.body).toMatchObject({
       error: {
         type: "refresh_run_transition_artifact_chronology_cursor_query_invalid",
+      },
+    });
+  });
+
+  it("revisits bounded transition artifact chronology windows directly by bookmark", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "D-BOOKMARK-1",
+            },
+            observedAt: "2026-04-21T10:00:00.000Z",
+            validFrom: "2026-04-21T09:00:00.000Z",
+            validTo: "2026-04-21T13:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5074,
+              centerLng: -0.1278,
+              radiusMeters: 200,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "caution",
+            area: {
+              areaId: "D-BOOKMARK-1",
+              label: "Danger Area Bookmark 1",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const secondRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "NOTAM-BOOKMARK-2",
+            },
+            observedAt: "2026-04-21T10:30:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5074,
+              centerLng: -0.1278,
+              radiusMeters: 200,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "critical",
+            area: {
+              areaId: "D-BOOKMARK-1",
+              label: "Danger Area Bookmark 1",
+              areaType: "notam_restriction",
+              authorityName: "NATS",
+              notamNumber: "B3000/26",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-BOOKMARK-2",
+            },
+            observedAt: "2026-04-21T10:35:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5112,
+              centerLng: -0.1241,
+              radiusMeters: 220,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            severity: "info",
+            area: {
+              areaId: "TDA-BOOKMARK-2",
+              label: "Temporary Danger Area Bookmark 2",
+              areaType: "temporary_danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const thirdRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "NOTAM-BOOKMARK-3",
+            },
+            observedAt: "2026-04-21T11:00:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T15:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5112,
+              centerLng: -0.1241,
+              radiusMeters: 220,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            severity: "critical",
+            area: {
+              areaId: "TDA-BOOKMARK-2",
+              label: "Temporary Danger Area Bookmark 2",
+              areaType: "notam_restriction",
+              authorityName: "NATS",
+              notamNumber: "B3001/26",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(secondRun.status).toBe(201);
+    expect(thirdRun.status).toBe(201);
+
+    const fullChronologyResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true`,
+    );
+    const selectedArtifactId =
+      fullChronologyResponse.body.chronology.artifacts[1].artifactId;
+
+    const filteredWindowResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true&transitionArtifactIds=${selectedArtifactId}&transitionArtifactOffset=0&transitionArtifactLimit=1`,
+    );
+
+    expect(filteredWindowResponse.status).toBe(200);
+    expect(filteredWindowResponse.body.chronology.pagination.bookmark).toEqual(
+      expect.any(String),
+    );
+
+    const bookmarkedWindowResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true&transitionArtifactBookmark=${filteredWindowResponse.body.chronology.pagination.bookmark}`,
+    );
+
+    expect(bookmarkedWindowResponse.status).toBe(200);
+    expect(bookmarkedWindowResponse.body.chronology).toEqual(
+      filteredWindowResponse.body.chronology,
+    );
+
+    const invalidBookmarkResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true&transitionArtifactBookmark=bad-bookmark`,
+    );
+
+    expect(invalidBookmarkResponse.status).toBe(400);
+    expect(invalidBookmarkResponse.body).toMatchObject({
+      error: {
+        type: "refresh_run_transition_artifact_chronology_bookmark_query_invalid",
+      },
+    });
+
+    const mixedBookmarkResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true&transitionArtifactBookmark=${filteredWindowResponse.body.chronology.pagination.bookmark}&transitionArtifactOffset=1`,
+    );
+
+    expect(mixedBookmarkResponse.status).toBe(400);
+    expect(mixedBookmarkResponse.body).toMatchObject({
+      error: {
+        type: "refresh_run_transition_artifact_chronology_bookmark_query_invalid",
       },
     });
   });

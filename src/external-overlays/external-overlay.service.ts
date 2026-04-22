@@ -7,6 +7,7 @@ import {
   MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
   MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError,
+  MissionExternalOverlayRefreshRunTransitionArtifactChronologyBookmarkQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionArtifactChronologyCursorQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionArtifactChronologyPaginationQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError,
@@ -318,6 +319,7 @@ type AreaOverlayRefreshRunTransitionArtifactChronology = {
     previousOffset: number | null;
     nextCursor: string | null;
     previousCursor: string | null;
+    bookmark: string;
   };
 };
 
@@ -401,6 +403,71 @@ const parseAreaOverlayRefreshRunTransitionArtifactCursor = (
     return {
       offset: parsed.offset,
       limit: parsed.limit,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const buildAreaOverlayRefreshRunTransitionArtifactBookmark = (
+  missionId: string,
+  offset: number,
+  limit: number,
+  artifactIds?: string[],
+): string =>
+  Buffer.from(
+    JSON.stringify({
+      missionId,
+      offset,
+      limit,
+      artifactIds: artifactIds && artifactIds.length > 0 ? artifactIds : undefined,
+    }),
+    "utf8",
+  ).toString("base64url");
+
+const parseAreaOverlayRefreshRunTransitionArtifactBookmark = (
+  bookmark: string,
+): {
+  missionId: string;
+  offset: number;
+  limit: number;
+  artifactIds?: string[];
+} | null => {
+  try {
+    const decoded = Buffer.from(bookmark, "base64url").toString("utf8");
+    const parsed = JSON.parse(decoded) as {
+      missionId?: unknown;
+      offset?: unknown;
+      limit?: unknown;
+      artifactIds?: unknown;
+    };
+
+    if (
+      typeof parsed.missionId !== "string" ||
+      parsed.missionId.length === 0 ||
+      !Number.isInteger(parsed.offset) ||
+      !Number.isInteger(parsed.limit) ||
+      typeof parsed.offset !== "number" ||
+      typeof parsed.limit !== "number"
+    ) {
+      return null;
+    }
+
+    if (
+      parsed.artifactIds !== undefined &&
+      (!Array.isArray(parsed.artifactIds) ||
+        parsed.artifactIds.some(
+          (artifactId) => typeof artifactId !== "string" || artifactId.length === 0,
+        ))
+    ) {
+      return null;
+    }
+
+    return {
+      missionId: parsed.missionId,
+      offset: parsed.offset,
+      limit: parsed.limit,
+      artifactIds: parsed.artifactIds as string[] | undefined,
     };
   } catch {
     return null;
@@ -1361,6 +1428,7 @@ export class ExternalOverlayService {
       transitionArtifactOffset?: string;
       transitionArtifactLimit?: string;
       transitionArtifactCursor?: string;
+      transitionArtifactBookmark?: string;
     },
   ): Promise<{
     missionId: string;
@@ -1387,12 +1455,45 @@ export class ExternalOverlayService {
     const artifacts = chronologyResult.chronology.transitions.map((transition) =>
       buildAreaOverlayRefreshRunTransitionArtifact(missionId, transition),
     );
+    let filteredArtifactIds = filters.transitionArtifactIds;
     let paginationOffset = filters.transitionArtifactOffset
       ? Number(filters.transitionArtifactOffset)
       : 0;
     let paginationLimit = filters.transitionArtifactLimit
       ? Number(filters.transitionArtifactLimit)
       : Math.max(artifacts.length, 1);
+
+    if (filters.transitionArtifactBookmark) {
+      if (
+        filters.transitionArtifactIds ||
+        filters.transitionArtifactOffset ||
+        filters.transitionArtifactLimit ||
+        filters.transitionArtifactCursor
+      ) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyBookmarkQueryInvalidError(
+          "transitionArtifactBookmark cannot be combined with transitionArtifactIds, transitionArtifactOffset, transitionArtifactLimit, or transitionArtifactCursor",
+        );
+      }
+
+      const parsedBookmark = parseAreaOverlayRefreshRunTransitionArtifactBookmark(
+        filters.transitionArtifactBookmark,
+      );
+      if (!parsedBookmark) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyBookmarkQueryInvalidError(
+          "transitionArtifactBookmark is invalid",
+        );
+      }
+
+      if (parsedBookmark.missionId !== missionId) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyBookmarkQueryInvalidError(
+          "transitionArtifactBookmark must match the requested mission",
+        );
+      }
+
+      filteredArtifactIds = parsedBookmark.artifactIds;
+      paginationOffset = parsedBookmark.offset;
+      paginationLimit = parsedBookmark.limit;
+    }
 
     if (filters.transitionArtifactCursor) {
       if (filters.transitionArtifactOffset || filters.transitionArtifactLimit) {
@@ -1430,8 +1531,8 @@ export class ExternalOverlayService {
     }
 
     let filteredArtifacts = artifacts;
-    if (filters.transitionArtifactIds && filters.transitionArtifactIds.length > 0) {
-      for (const artifactId of filters.transitionArtifactIds) {
+    if (filteredArtifactIds && filteredArtifactIds.length > 0) {
+      for (const artifactId of filteredArtifactIds) {
         const parsedArtifactId = parseAreaOverlayRefreshRunTransitionArtifactId(
           artifactId,
         );
@@ -1448,7 +1549,7 @@ export class ExternalOverlayService {
         }
       }
 
-      const selectedArtifactIds = new Set(filters.transitionArtifactIds);
+      const selectedArtifactIds = new Set(filteredArtifactIds);
       filteredArtifacts = artifacts.filter((artifact) =>
         selectedArtifactIds.has(artifact.artifactId),
       );
@@ -1480,6 +1581,12 @@ export class ExternalOverlayService {
             paginationLimit,
           )
         : null;
+    const bookmark = buildAreaOverlayRefreshRunTransitionArtifactBookmark(
+      missionId,
+      paginationOffset,
+      paginationLimit,
+      filteredArtifactIds,
+    );
 
     return {
       missionId,
@@ -1494,6 +1601,7 @@ export class ExternalOverlayService {
           previousOffset,
           nextCursor,
           previousCursor,
+          bookmark,
         },
       },
     };
