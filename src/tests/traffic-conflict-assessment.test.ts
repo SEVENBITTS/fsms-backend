@@ -551,6 +551,91 @@ describe("traffic conflict assessment integration", () => {
     );
   });
 
+  it("does not create redundant interpreted conflicts for deduplicated overlapping area sources", async () => {
+    const missionId = await createMission();
+    await recordTelemetry(missionId);
+
+    const normalizeResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-900",
+            },
+            observedAt: "2026-04-21T12:00:10.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5075,
+              centerLng: -0.1277,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            area: {
+              areaId: "EGD-900",
+              label: "Danger Area EGD-900",
+              areaType: "danger_area",
+              description: "Base area",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B9000/26",
+            },
+            observedAt: "2026-04-21T12:00:20.000Z",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5075,
+              centerLng: -0.1277,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B9000-26",
+              label: "Danger Area EGD-900 Active NOTAM",
+              areaType: "notam_restriction",
+              description: "Higher-priority duplicate",
+              authorityName: "NATS",
+              notamNumber: "B9000/26",
+              sourceReference: "NOTAM B9000/26",
+            },
+          },
+        ],
+      });
+
+    expect(normalizeResponse.status).toBe(201);
+    expect(normalizeResponse.body.overlays).toHaveLength(1);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/conflict-assessment`,
+    );
+
+    expect(response.status).toBe(200);
+    const areaConflicts = response.body.assessment.conflicts.filter(
+      (item: { overlayKind: string }) => item.overlayKind === "area_conflict",
+    );
+    expect(areaConflicts).toHaveLength(1);
+    expect(areaConflicts[0]).toMatchObject({
+      overlayLabel: "Danger Area EGD-900 Active NOTAM",
+      relatedSource: {
+        sourceType: "notam_restriction",
+      },
+    });
+  });
+
   it("preserves mission isolation for conflict assessment reads", async () => {
     const firstMissionId = await createMission();
     const secondMissionId = await createMission();

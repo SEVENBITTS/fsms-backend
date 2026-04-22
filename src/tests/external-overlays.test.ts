@@ -561,6 +561,106 @@ describe("mission external overlays integration", () => {
     );
   });
 
+  it("deduplicates overlapping authoritative area sources and preserves source traceability", async () => {
+    const missionId = await createMission();
+
+    const normalizeResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-400",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-400",
+              label: "Danger Area EGD-400",
+              areaType: "danger_area",
+              description: "Permanent danger area",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B4000/26",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B4000-26",
+              label: "Danger Area EGD-400 Active NOTAM",
+              areaType: "notam_restriction",
+              description: "NOTAM overlay for the same area",
+              authorityName: "NATS",
+              notamNumber: "B4000/26",
+              sourceReference: "NOTAM B4000/26",
+            },
+          },
+        ],
+      });
+
+    expect(normalizeResponse.status).toBe(201);
+    expect(normalizeResponse.body.overlays).toHaveLength(1);
+    expect(normalizeResponse.body.overlays[0]).toMatchObject({
+      kind: "area_conflict",
+      source: {
+        provider: "uk-ais",
+        sourceType: "notam_restriction",
+        sourceRecordId: "B4000/26",
+      },
+      severity: "critical",
+      metadata: expect.objectContaining({
+        areaType: "notam_restriction",
+        normalizedSourcePriority: 3,
+        dedupeKey: expect.any(String),
+        sourceTrace: [
+          expect.objectContaining({
+            sourceType: "danger_area",
+            sourceRecordId: "EGD-400",
+          }),
+          expect.objectContaining({
+            sourceType: "notam_restriction",
+            sourceRecordId: "B4000/26",
+          }),
+        ],
+      }),
+    });
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(1);
+  });
+
   it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 
