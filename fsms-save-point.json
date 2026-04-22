@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add area conflict geometry support to mission-linked conflict assessment so bearing and range metadata can extend beyond traffic overlays.",
+  "nextBuildStep": "Add migration-backed normalized area overlay ingestion for danger areas, temporary danger areas, and NOTAM-derived restrictions so mission-linked area conflict assessment can operate on authoritative area geometry.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

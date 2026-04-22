@@ -18,7 +18,10 @@ export interface TrafficConflictAssessmentItem {
   id: string;
   missionId: string;
   overlayId: string;
-  overlayKind: Extract<ExternalOverlayKind, "crewed_traffic" | "drone_traffic">;
+  overlayKind: Extract<
+    ExternalOverlayKind,
+    "crewed_traffic" | "drone_traffic" | "area_conflict"
+  >;
   assessedAt: string;
   referenceTimestamp: string;
   overlayObservedAt: string;
@@ -34,8 +37,8 @@ export interface TrafficConflictAssessmentItem {
   };
   measurementBasis: {
     referencePoint: "latest_telemetry";
-    targetGeometry: "overlay_point";
-    rangeRule: "point_to_point";
+    targetGeometry: "overlay_point" | "overlay_circle" | "overlay_polygon";
+    rangeRule: "point_to_point" | "nearest_boundary";
     bearingReference: "true_north";
   };
   metrics: {
@@ -44,6 +47,7 @@ export interface TrafficConflictAssessmentItem {
     lateralDistanceMeters: number | null;
     altitudeDeltaFt: number | null;
     timeDeltaSeconds: number | null;
+    insideArea: boolean | null;
     overlayHeadingDegrees: number | null;
     overlaySpeedKnots: number | null;
   };

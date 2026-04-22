@@ -162,6 +162,9 @@ const formatRangeBearing = (metrics) => {
       ? "Unknown range"
       : `${Math.round(rangeMeters)} m`;
   const bearingText = formatBearingDegrees(metrics?.bearingDegrees ?? null);
+  if (metrics?.insideArea === true) {
+    return `Inside area | ${rangeText} to boundary @ ${bearingText}`;
+  }
   return `${rangeText} @ ${bearingText}`;
 };
 
