@@ -8,6 +8,8 @@ type MissionIdParams = {
 
 type RefreshRunQuery = {
   refreshRunId?: string;
+  fromRefreshRunId?: string;
+  toRefreshRunId?: string;
 };
 
 export class ExternalOverlayController {
@@ -106,6 +108,30 @@ export class ExternalOverlayController {
         req.query.refreshRunId.trim().length > 0
           ? req.query.refreshRunId.trim()
           : undefined;
+      const fromRefreshRunId =
+        typeof req.query.fromRefreshRunId === "string" &&
+        req.query.fromRefreshRunId.trim().length > 0
+          ? req.query.fromRefreshRunId.trim()
+          : undefined;
+      const toRefreshRunId =
+        typeof req.query.toRefreshRunId === "string" &&
+        req.query.toRefreshRunId.trim().length > 0
+          ? req.query.toRefreshRunId.trim()
+          : undefined;
+
+      if (fromRefreshRunId || toRefreshRunId) {
+        const result =
+          await this.externalOverlayService.diffAreaOverlayRefreshRuns(
+            req.params.missionId,
+            {
+              fromRefreshRunId,
+              toRefreshRunId,
+            },
+          );
+
+        res.status(200).json(result);
+        return;
+      }
 
       const result =
         await this.externalOverlayService.listAreaOverlayRefreshRuns(

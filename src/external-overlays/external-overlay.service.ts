@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { ExternalOverlayRepository } from "./external-overlay.repository";
 import {
   MissionExternalOverlayMissionNotFoundError,
+  MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
 } from "./external-overlay.errors";
 import type {
@@ -266,6 +267,20 @@ type AreaOverlayRefreshRunSummary = {
   active: AreaOverlayRefreshRunSummaryItem[];
 };
 
+type AreaOverlayRefreshRunDiff = {
+  missionId: string;
+  fromRefreshRunId: string;
+  toRefreshRunId: string;
+  added: AreaOverlayRefreshRunSummaryItem[];
+  removed: AreaOverlayRefreshRunSummaryItem[];
+  persisted: AreaOverlayRefreshRunSummaryItem[];
+  changed: {
+    updated: AreaOverlayRefreshRunSummaryItem[];
+    superseded: AreaOverlayRefreshRunSummaryItem[];
+    retired: AreaOverlayRefreshRunSummaryItem[];
+  };
+};
+
 const areaOverlayRefreshSummaryItemFromOverlay = (
   overlay: ExternalOverlay,
 ): AreaOverlayRefreshRunSummaryItem => {
@@ -279,6 +294,198 @@ const areaOverlayRefreshSummaryItemFromOverlay = (
     sourceRecordId: overlay.source.sourceRecordId ?? null,
     retired: isRetiredAreaOverlay(overlay),
   };
+};
+
+const buildAreaOverlayRefreshRunSummaries = (
+  missionId: string,
+  overlays: ExternalOverlay[],
+): AreaOverlayRefreshRunSummary[] => {
+  const refreshRunMap = new Map<string, AreaOverlayRefreshRunSummary>();
+
+  const ensureSummary = (refreshRunId: string): AreaOverlayRefreshRunSummary => {
+    const existingSummary = refreshRunMap.get(refreshRunId);
+    if (existingSummary) {
+      return existingSummary;
+    }
+
+    const createdSummary: AreaOverlayRefreshRunSummary = {
+      refreshRunId,
+      missionId,
+      created: [],
+      updated: [],
+      superseded: [],
+      retired: [],
+      active: [],
+    };
+    refreshRunMap.set(refreshRunId, createdSummary);
+    return createdSummary;
+  };
+
+  for (const overlay of overlays) {
+    if (!isNormalizedAreaOverlay(overlay)) {
+      continue;
+    }
+
+    const provenance = areaMetadataFromOverlay(overlay).refreshProvenance;
+    if (!provenance) {
+      continue;
+    }
+
+    const summaryItem = areaOverlayRefreshSummaryItemFromOverlay(overlay);
+    ensureSummary(provenance.createdByRunId).created.push(summaryItem);
+    ensureSummary(provenance.lastUpdatedByRunId).updated.push(summaryItem);
+
+    if (provenance.supersededByRunId) {
+      ensureSummary(provenance.supersededByRunId).superseded.push(summaryItem);
+    }
+
+    if (provenance.retiredByRunId) {
+      ensureSummary(provenance.retiredByRunId).retired.push(summaryItem);
+    }
+
+    if (!summaryItem.retired) {
+      ensureSummary(provenance.lastUpdatedByRunId).active.push(summaryItem);
+    }
+  }
+
+  return [...refreshRunMap.values()].sort((left, right) =>
+    right.refreshRunId.localeCompare(left.refreshRunId),
+  );
+};
+
+const buildRefreshRunOrder = (overlays: ExternalOverlay[]): Map<string, number> => {
+  const nodes = new Set<string>();
+  const outgoing = new Map<string, Set<string>>();
+  const indegree = new Map<string, number>();
+
+  const ensureNode = (runId: string): void => {
+    nodes.add(runId);
+    if (!outgoing.has(runId)) {
+      outgoing.set(runId, new Set());
+    }
+    if (!indegree.has(runId)) {
+      indegree.set(runId, 0);
+    }
+  };
+
+  const addEdge = (fromRunId: string, toRunId: string): void => {
+    if (fromRunId === toRunId) {
+      ensureNode(fromRunId);
+      return;
+    }
+
+    ensureNode(fromRunId);
+    ensureNode(toRunId);
+
+    const edges = outgoing.get(fromRunId);
+    if (!edges || edges.has(toRunId)) {
+      return;
+    }
+
+    edges.add(toRunId);
+    indegree.set(toRunId, (indegree.get(toRunId) ?? 0) + 1);
+  };
+
+  for (const overlay of overlays) {
+    if (!isNormalizedAreaOverlay(overlay)) {
+      continue;
+    }
+
+    const provenance = areaMetadataFromOverlay(overlay).refreshProvenance;
+    if (!provenance) {
+      continue;
+    }
+
+    ensureNode(provenance.createdByRunId);
+    ensureNode(provenance.lastUpdatedByRunId);
+
+    addEdge(provenance.createdByRunId, provenance.lastUpdatedByRunId);
+
+    if (provenance.supersededByRunId) {
+      ensureNode(provenance.supersededByRunId);
+      addEdge(provenance.createdByRunId, provenance.supersededByRunId);
+      addEdge(provenance.supersededByRunId, provenance.lastUpdatedByRunId);
+    }
+
+    if (provenance.retiredByRunId) {
+      ensureNode(provenance.retiredByRunId);
+      addEdge(provenance.createdByRunId, provenance.retiredByRunId);
+      addEdge(provenance.lastUpdatedByRunId, provenance.retiredByRunId);
+      if (provenance.supersededByRunId) {
+        addEdge(provenance.supersededByRunId, provenance.retiredByRunId);
+      }
+    }
+  }
+
+  const queue = [...nodes]
+    .filter((runId) => (indegree.get(runId) ?? 0) === 0)
+    .sort((left, right) => left.localeCompare(right));
+  const orderedRunIds: string[] = [];
+
+  while (queue.length > 0) {
+    const nextRunId = queue.shift();
+    if (!nextRunId) {
+      break;
+    }
+
+    orderedRunIds.push(nextRunId);
+
+    for (const adjacentRunId of outgoing.get(nextRunId) ?? []) {
+      const nextIndegree = (indegree.get(adjacentRunId) ?? 0) - 1;
+      indegree.set(adjacentRunId, nextIndegree);
+      if (nextIndegree === 0) {
+        queue.push(adjacentRunId);
+        queue.sort((left, right) => left.localeCompare(right));
+      }
+    }
+  }
+
+  const unresolvedRunIds = [...nodes]
+    .filter((runId) => !orderedRunIds.includes(runId))
+    .sort((left, right) => left.localeCompare(right));
+  orderedRunIds.push(...unresolvedRunIds);
+
+  return new Map(orderedRunIds.map((runId, index) => [runId, index] as const));
+};
+
+const buildAreaOverlaySnapshotForRun = (
+  overlays: ExternalOverlay[],
+  refreshRunOrder: Map<string, number>,
+  refreshRunId: string,
+): AreaOverlayRefreshRunSummaryItem[] => {
+  const snapshotIndex = refreshRunOrder.get(refreshRunId);
+  if (snapshotIndex === undefined) {
+    return [];
+  }
+
+  return overlays
+    .filter((overlay) => isNormalizedAreaOverlay(overlay))
+    .map((overlay) => ({
+      overlay,
+      provenance: areaMetadataFromOverlay(overlay).refreshProvenance,
+    }))
+    .filter(
+      (
+        candidate,
+      ): candidate is {
+        overlay: ExternalOverlay;
+        provenance: NonNullable<AreaConflictOverlayMetadata["refreshProvenance"]>;
+      } => candidate.provenance !== null,
+    )
+    .filter(({ provenance }) => {
+      const createdIndex = refreshRunOrder.get(provenance.createdByRunId);
+      if (createdIndex === undefined || createdIndex > snapshotIndex) {
+        return false;
+      }
+
+      if (!provenance.retiredByRunId) {
+        return true;
+      }
+
+      const retiredIndex = refreshRunOrder.get(provenance.retiredByRunId);
+      return retiredIndex === undefined || retiredIndex > snapshotIndex;
+    })
+    .map(({ overlay }) => areaOverlayRefreshSummaryItemFromOverlay(overlay));
 };
 
 export class ExternalOverlayService {
@@ -706,58 +913,7 @@ export class ExternalOverlayService {
         missionId,
         { kind: "area_conflict", includeRetired: true },
       );
-
-      const refreshRunMap = new Map<string, AreaOverlayRefreshRunSummary>();
-
-      const ensureSummary = (refreshRunId: string): AreaOverlayRefreshRunSummary => {
-        const existingSummary = refreshRunMap.get(refreshRunId);
-        if (existingSummary) {
-          return existingSummary;
-        }
-
-        const createdSummary: AreaOverlayRefreshRunSummary = {
-          refreshRunId,
-          missionId,
-          created: [],
-          updated: [],
-          superseded: [],
-          retired: [],
-          active: [],
-        };
-        refreshRunMap.set(refreshRunId, createdSummary);
-        return createdSummary;
-      };
-
-      for (const overlay of overlays) {
-        if (!isNormalizedAreaOverlay(overlay)) {
-          continue;
-        }
-
-        const provenance = areaMetadataFromOverlay(overlay).refreshProvenance;
-        if (!provenance) {
-          continue;
-        }
-
-        const summaryItem = areaOverlayRefreshSummaryItemFromOverlay(overlay);
-        ensureSummary(provenance.createdByRunId).created.push(summaryItem);
-        ensureSummary(provenance.lastUpdatedByRunId).updated.push(summaryItem);
-
-        if (provenance.supersededByRunId) {
-          ensureSummary(provenance.supersededByRunId).superseded.push(summaryItem);
-        }
-
-        if (provenance.retiredByRunId) {
-          ensureSummary(provenance.retiredByRunId).retired.push(summaryItem);
-        }
-
-        if (!summaryItem.retired) {
-          ensureSummary(provenance.lastUpdatedByRunId).active.push(summaryItem);
-        }
-      }
-
-      const refreshRuns = [...refreshRunMap.values()].sort((left, right) =>
-        right.refreshRunId.localeCompare(left.refreshRunId),
-      );
+      const refreshRuns = buildAreaOverlayRefreshRunSummaries(missionId, overlays);
 
       if (filters.refreshRunId) {
         const matchingRun = refreshRuns.find(
@@ -780,6 +936,112 @@ export class ExternalOverlayService {
       return {
         missionId,
         refreshRuns,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async diffAreaOverlayRefreshRuns(
+    missionId: string,
+    filters: {
+      fromRefreshRunId?: string;
+      toRefreshRunId?: string;
+    },
+  ): Promise<{ missionId: string; diff: AreaOverlayRefreshRunDiff }> {
+    if (!filters.fromRefreshRunId || !filters.toRefreshRunId) {
+      throw new MissionExternalOverlayRefreshRunDiffQueryInvalidError(
+        "Both fromRefreshRunId and toRefreshRunId are required for refresh-run diff queries",
+      );
+    }
+
+    if (filters.fromRefreshRunId === filters.toRefreshRunId) {
+      throw new MissionExternalOverlayRefreshRunDiffQueryInvalidError(
+        "fromRefreshRunId and toRefreshRunId must be different",
+      );
+    }
+
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
+      }
+
+      const overlays = await this.externalOverlayRepository.listForMission(
+        client,
+        missionId,
+        { kind: "area_conflict", includeRetired: true },
+      );
+      const refreshRuns = buildAreaOverlayRefreshRunSummaries(missionId, overlays);
+      const refreshRunOrder = buildRefreshRunOrder(overlays);
+
+      const fromRun = refreshRuns.find(
+        (refreshRun) => refreshRun.refreshRunId === filters.fromRefreshRunId,
+      );
+      if (!fromRun) {
+        throw new MissionExternalOverlayRefreshRunNotFoundError(
+          missionId,
+          filters.fromRefreshRunId,
+        );
+      }
+
+      const toRun = refreshRuns.find(
+        (refreshRun) => refreshRun.refreshRunId === filters.toRefreshRunId,
+      );
+      if (!toRun) {
+        throw new MissionExternalOverlayRefreshRunNotFoundError(
+          missionId,
+          filters.toRefreshRunId,
+        );
+      }
+
+      const fromSnapshot = buildAreaOverlaySnapshotForRun(
+        overlays,
+        refreshRunOrder,
+        filters.fromRefreshRunId,
+      );
+      const toSnapshot = buildAreaOverlaySnapshotForRun(
+        overlays,
+        refreshRunOrder,
+        filters.toRefreshRunId,
+      );
+
+      const fromActiveById = new Map(
+        fromSnapshot.map((item) => [item.overlayId, item] as const),
+      );
+      const toActiveById = new Map(
+        toSnapshot.map((item) => [item.overlayId, item] as const),
+      );
+
+      const added = toSnapshot.filter((item) => !fromActiveById.has(item.overlayId));
+      const removed = fromSnapshot.filter((item) => !toActiveById.has(item.overlayId));
+      const persisted = toSnapshot.filter((item) => fromActiveById.has(item.overlayId));
+      const persistedIds = new Set(persisted.map((item) => item.overlayId));
+      const removedIds = new Set(removed.map((item) => item.overlayId));
+
+      return {
+        missionId,
+        diff: {
+          missionId,
+          fromRefreshRunId: filters.fromRefreshRunId,
+          toRefreshRunId: filters.toRefreshRunId,
+          added,
+          removed,
+          persisted,
+          changed: {
+            updated: toRun.updated.filter((item) => persistedIds.has(item.overlayId)),
+            superseded: toRun.superseded.filter((item) =>
+              persistedIds.has(item.overlayId),
+            ),
+            retired: toRun.retired.filter((item) => removedIds.has(item.overlayId)),
+          },
+        },
       };
     } finally {
       client.release();
