@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add authoritative area-source ingestion freshness and partial-refresh handling so normalized danger areas and NOTAM-derived overlays remain operationally trustworthy during incomplete or stale source updates.",
+  "nextBuildStep": "Surface normalized area-source freshness degradation in operator-facing review context so stale and partial refresh states are visible without changing conflict-engine branching.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

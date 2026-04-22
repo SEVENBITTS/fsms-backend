@@ -24,6 +24,7 @@ import type {
   ExternalOverlayKind,
   ExternalOverlayPolygonGeometry,
   NormalizeAreaOverlaySourcesInput,
+  NormalizeAreaOverlayRefreshStatus,
 } from "./external-overlay.types";
 import {
   validateCreateAreaConflictExternalOverlayInput,
@@ -125,7 +126,44 @@ const normalizedAreaMetadata = (
     supersededByRunId: null,
     retiredByRunId: null,
   },
+  sourceRefresh: {
+    status: "fresh",
+    evaluatedByRunId: refreshRunId,
+    lastSuccessfulRefreshRunId: refreshRunId,
+  },
   ...extras,
+});
+
+const isSuccessfulAreaRefreshStatus = (
+  status: NormalizeAreaOverlayRefreshStatus,
+): boolean => status === "fresh";
+
+const areaRefreshStateFromMetadata = (
+  metadata: AreaConflictOverlayMetadata,
+): NonNullable<AreaConflictOverlayMetadata["sourceRefresh"]> | null => {
+  return metadata.sourceRefresh ?? null;
+};
+
+const priorSuccessfulRefreshRunId = (
+  metadata: AreaConflictOverlayMetadata,
+): string | null =>
+  areaRefreshStateFromMetadata(metadata)?.lastSuccessfulRefreshRunId ??
+  metadata.refreshProvenance?.lastUpdatedByRunId ??
+  metadata.refreshProvenance?.createdByRunId ??
+  null;
+
+const buildAreaSourceRefreshState = (
+  refreshRunId: string,
+  refreshStatus: NormalizeAreaOverlayRefreshStatus,
+  metadata?: AreaConflictOverlayMetadata,
+): NonNullable<AreaConflictOverlayMetadata["sourceRefresh"]> => ({
+  status: refreshStatus,
+  evaluatedByRunId: refreshRunId,
+  lastSuccessfulRefreshRunId: isSuccessfulAreaRefreshStatus(refreshStatus)
+    ? refreshRunId
+    : metadata
+      ? priorSuccessfulRefreshRunId(metadata)
+      : null,
 });
 
 const sourceTraceEntryKey = (
@@ -886,6 +924,7 @@ export class ExternalOverlayService {
   ): Promise<{ missionId: string; refreshRunId: string; overlays: ExternalOverlay[] }> {
     const validated = validateNormalizeAreaOverlaySourcesInput(input);
     const refreshRunId = randomUUID();
+    const refreshStatus = validated.refresh?.status ?? "fresh";
     const client = await this.pool.connect();
 
     try {
@@ -974,6 +1013,10 @@ export class ExternalOverlayService {
                 metadata: normalizedAreaMetadata(winner, refreshRunId, {
                   dedupeKey,
                   sourceTrace,
+                  sourceRefresh: buildAreaSourceRefreshState(
+                    refreshRunId,
+                    refreshStatus,
+                  ),
                   supersession: {
                     supersededExisting: false,
                     replacedSourceType: null,
@@ -1013,6 +1056,11 @@ export class ExternalOverlayService {
                 metadata: normalizedAreaMetadata(winner, refreshRunId, {
                   dedupeKey,
                   sourceTrace: mergedTrace,
+                  sourceRefresh: buildAreaSourceRefreshState(
+                    refreshRunId,
+                    refreshStatus,
+                    existingMetadata,
+                  ),
                   supersession: {
                     supersededExisting: true,
                     replacedSourceType: existing.source.sourceType,
@@ -1076,6 +1124,11 @@ export class ExternalOverlayService {
                   retiredAt: null,
                   reason: null,
                 },
+                sourceRefresh: buildAreaSourceRefreshState(
+                  refreshRunId,
+                  refreshStatus,
+                  existingMetadata,
+                ),
                 refreshProvenance: {
                   createdByRunId:
                     existingMetadata.refreshProvenance?.createdByRunId ?? refreshRunId,
@@ -1090,43 +1143,76 @@ export class ExternalOverlayService {
         );
       }
 
-      const retirementTimestamp = new Date().toISOString();
-      for (const overlay of existingAreaOverlays) {
-        if (isRetiredAreaOverlay(overlay)) {
-          continue;
-        }
+      if (isSuccessfulAreaRefreshStatus(refreshStatus)) {
+        const retirementTimestamp = new Date().toISOString();
+        for (const overlay of existingAreaOverlays) {
+          if (isRetiredAreaOverlay(overlay)) {
+            continue;
+          }
 
-        const dedupeKey = dedupeKeyFromOverlay(overlay);
-        if (
-          !dedupeKey ||
-          processedDedupeKeys.has(dedupeKey) ||
-          !isNormalizedAreaOverlay(overlay)
-        ) {
-          continue;
-        }
+          const dedupeKey = dedupeKeyFromOverlay(overlay);
+          if (
+            !dedupeKey ||
+            processedDedupeKeys.has(dedupeKey) ||
+            !isNormalizedAreaOverlay(overlay)
+          ) {
+            continue;
+          }
 
-        const metadata = areaMetadataFromOverlay(overlay);
-        await this.externalOverlayRepository.retireAreaConflictOverlay(
-          client,
-          overlay.id,
-          missionId,
-          {
-            ...metadata,
-            retirement: {
-              retired: true,
-              retiredAt: retirementTimestamp,
-              reason: "missing_from_refresh",
+          const metadata = areaMetadataFromOverlay(overlay);
+          await this.externalOverlayRepository.retireAreaConflictOverlay(
+            client,
+            overlay.id,
+            missionId,
+            {
+              ...metadata,
+              retirement: {
+                retired: true,
+                retiredAt: retirementTimestamp,
+                reason: "missing_from_refresh",
+              },
+              sourceRefresh: buildAreaSourceRefreshState(
+                refreshRunId,
+                refreshStatus,
+                metadata,
+              ),
+              refreshProvenance: {
+                createdByRunId:
+                  metadata.refreshProvenance?.createdByRunId ?? refreshRunId,
+                lastUpdatedByRunId: refreshRunId,
+                supersededByRunId:
+                  metadata.refreshProvenance?.supersededByRunId ?? null,
+                retiredByRunId: refreshRunId,
+              },
             },
-            refreshProvenance: {
-              createdByRunId:
-                metadata.refreshProvenance?.createdByRunId ?? refreshRunId,
-              lastUpdatedByRunId: refreshRunId,
-              supersededByRunId:
-                metadata.refreshProvenance?.supersededByRunId ?? null,
-              retiredByRunId: refreshRunId,
+          );
+        }
+      } else {
+        for (const overlay of existingAreaOverlays) {
+          if (isRetiredAreaOverlay(overlay) || !isNormalizedAreaOverlay(overlay)) {
+            continue;
+          }
+
+          const dedupeKey = dedupeKeyFromOverlay(overlay);
+          if (dedupeKey && processedDedupeKeys.has(dedupeKey)) {
+            continue;
+          }
+
+          const metadata = areaMetadataFromOverlay(overlay);
+          await this.externalOverlayRepository.retireAreaConflictOverlay(
+            client,
+            overlay.id,
+            missionId,
+            {
+              ...metadata,
+              sourceRefresh: buildAreaSourceRefreshState(
+                refreshRunId,
+                refreshStatus,
+                metadata,
+              ),
             },
-          },
-        );
+          );
+        }
       }
 
       return {
