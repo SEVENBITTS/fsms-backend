@@ -6,6 +6,7 @@ import {
   MissionExternalOverlayMissionNotFoundError,
   MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
+  MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError,
 } from "./external-overlay.errors";
@@ -304,6 +305,11 @@ type AreaOverlayRefreshRunTransitionArtifact = {
   transition: AreaOverlayRefreshRunDiff;
 };
 
+type AreaOverlayRefreshRunTransitionArtifactChronology = {
+  missionId: string;
+  artifacts: AreaOverlayRefreshRunTransitionArtifact[];
+};
+
 const buildAreaOverlayRefreshRunTransitionArtifactId = (
   missionId: string,
   fromRefreshRunId: string,
@@ -339,6 +345,22 @@ const parseAreaOverlayRefreshRunTransitionArtifactId = (
     toRefreshRunId,
   };
 };
+
+const buildAreaOverlayRefreshRunTransitionArtifact = (
+  missionId: string,
+  transition: AreaOverlayRefreshRunDiff,
+): AreaOverlayRefreshRunTransitionArtifact => ({
+  artifactId: buildAreaOverlayRefreshRunTransitionArtifactId(
+    missionId,
+    transition.fromRefreshRunId,
+    transition.toRefreshRunId,
+  ),
+  missionId,
+  artifactType: "refresh_run_transition",
+  fromRefreshRunId: transition.fromRefreshRunId,
+  toRefreshRunId: transition.toRefreshRunId,
+  transition,
+});
 
 const areaOverlayRefreshSummaryItemFromOverlay = (
   overlay: ExternalOverlay,
@@ -1272,17 +1294,55 @@ export class ExternalOverlayService {
 
     return {
       missionId,
-      artifact: {
-        artifactId: buildAreaOverlayRefreshRunTransitionArtifactId(
-          missionId,
-          transitionFromRefreshRunId,
-          transitionToRefreshRunId,
-        ),
+      artifact: buildAreaOverlayRefreshRunTransitionArtifact(
         missionId,
-        artifactType: "refresh_run_transition",
-        fromRefreshRunId: transitionFromRefreshRunId,
-        toRefreshRunId: transitionToRefreshRunId,
-        transition: transitionResult.transition,
+        transitionResult.transition,
+      ),
+    };
+  }
+
+  async listAreaOverlayRefreshRunTransitionArtifacts(
+    missionId: string,
+    filters: {
+      refreshRunId?: string;
+      fromRefreshRunId?: string;
+      toRefreshRunId?: string;
+      chronology?: boolean;
+      transitionArtifact?: boolean;
+      transitionFromRefreshRunId?: string;
+      transitionToRefreshRunId?: string;
+      transitionArtifactId?: string;
+    },
+  ): Promise<{
+    missionId: string;
+    chronology: AreaOverlayRefreshRunTransitionArtifactChronology;
+  }> {
+    if (
+      filters.refreshRunId ||
+      filters.fromRefreshRunId ||
+      filters.toRefreshRunId ||
+      filters.chronology ||
+      filters.transitionArtifact ||
+      filters.transitionFromRefreshRunId ||
+      filters.transitionToRefreshRunId ||
+      filters.transitionArtifactId
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError(
+        "transition artifact chronology queries cannot be combined with other refresh-run or transition artifact filters",
+      );
+    }
+
+    const chronologyResult = await this.listAreaOverlayRefreshRunChronology(
+      missionId,
+    );
+
+    return {
+      missionId,
+      chronology: {
+        missionId,
+        artifacts: chronologyResult.chronology.transitions.map((transition) =>
+          buildAreaOverlayRefreshRunTransitionArtifact(missionId, transition),
+        ),
       },
     };
   }
