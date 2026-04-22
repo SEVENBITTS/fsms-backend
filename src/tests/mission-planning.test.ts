@@ -2065,6 +2065,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("conflictProximityEnvelopeSummary");
     expect(response.text).toContain("conflictEnvelopeRadius");
     expect(response.text).toContain("map-envelope-summary");
+    expect(response.text).toContain("lastFailedRefreshRunId");
+    expect(response.text).toContain("carriedForwardFromFailedRefresh");
+    expect(response.text).toContain("Last failed refresh");
+    expect(response.text).toContain("carried forward after failed refresh");
     expect(response.text).toContain(
       "No mission-specific fetch is attempted until a valid mission ID is provided.",
     );
