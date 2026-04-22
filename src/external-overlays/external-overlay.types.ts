@@ -94,6 +94,11 @@ export interface AreaConflictOverlayMetadata {
     areaId: string;
     label: string;
   }>;
+  supersession?: {
+    supersededExisting: boolean;
+    replacedSourceType: string | null;
+    replacedSourceRecordId: string | null;
+  } | null;
 }
 
 export interface ExternalOverlay {

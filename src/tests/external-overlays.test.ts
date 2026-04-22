@@ -661,6 +661,174 @@ describe("mission external overlays integration", () => {
     expect(listResponse.body.overlays).toHaveLength(1);
   });
 
+  it("supersedes an existing lower-priority normalized area overlay on a later normalization run", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-700",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-700",
+              label: "Danger Area EGD-700",
+              areaType: "danger_area",
+              description: "Base danger area",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(firstRun.body.overlays).toHaveLength(1);
+    const originalOverlayId = firstRun.body.overlays[0].id;
+
+    const secondRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B7000/26",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B7000-26",
+              label: "Danger Area EGD-700 Active NOTAM",
+              areaType: "notam_restriction",
+              description: "Higher-priority update",
+              authorityName: "NATS",
+              notamNumber: "B7000/26",
+              sourceReference: "NOTAM B7000/26",
+            },
+          },
+        ],
+      });
+
+    expect(secondRun.status).toBe(201);
+    expect(secondRun.body.overlays).toHaveLength(1);
+    expect(secondRun.body.overlays[0]).toMatchObject({
+      id: originalOverlayId,
+      source: {
+        sourceType: "notam_restriction",
+        sourceRecordId: "B7000/26",
+      },
+      severity: "critical",
+      metadata: expect.objectContaining({
+        supersession: {
+          supersededExisting: true,
+          replacedSourceType: "danger_area",
+          replacedSourceRecordId: "EGD-700",
+        },
+        sourceTrace: [
+          expect.objectContaining({
+            sourceType: "danger_area",
+            sourceRecordId: "EGD-700",
+          }),
+          expect.objectContaining({
+            sourceType: "notam_restriction",
+            sourceRecordId: "B7000/26",
+          }),
+        ],
+      }),
+    });
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(1);
+    expect(listResponse.body.overlays[0].id).toBe(originalOverlayId);
+  });
+
+  it("re-sees equivalent normalized area overlays across runs without creating duplicates", async () => {
+    const missionId = await createMission();
+
+    const requestBody = {
+      records: [
+        {
+          source: {
+            provider: "uk-ais",
+            sourceType: "temporary_danger_area",
+            sourceRecordId: "TDA-808",
+          },
+          observedAt: "2026-04-21T10:07:00.000Z",
+          validFrom: "2026-04-21T10:00:00.000Z",
+          validTo: "2026-04-21T14:00:00.000Z",
+          geometry: {
+            type: "circle",
+            centerLat: 51.5078,
+            centerLng: -0.1269,
+            radiusMeters: 350,
+            altitudeFloorFt: 0,
+            altitudeCeilingFt: 900,
+          },
+          severity: "caution",
+          area: {
+            areaId: "TDA-808",
+            label: "Temporary Danger Area 808",
+            areaType: "temporary_danger_area",
+            description: "Repeated authoritative input",
+            authorityName: "CAA",
+            sourceReference: "Temporary activation notice",
+          },
+        },
+      ],
+    };
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send(requestBody);
+    const secondRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send(requestBody);
+
+    expect(firstRun.status).toBe(201);
+    expect(secondRun.status).toBe(201);
+    expect(secondRun.body.overlays).toHaveLength(1);
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.overlays).toHaveLength(1);
+    expect(listResponse.body.overlays[0].metadata.sourceTrace).toHaveLength(1);
+  });
+
   it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 

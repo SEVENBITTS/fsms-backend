@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add supersession updates to normalized area overlay ingestion so higher-priority NOTAM-derived restrictions can replace existing lower-priority area overlays across repeated normalization runs.",
+  "nextBuildStep": "Add normalized area overlay retirement handling so previously-ingested restrictions that disappear from later authoritative refreshes can be marked inactive without losing traceability.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

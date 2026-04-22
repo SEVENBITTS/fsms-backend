@@ -8,7 +8,9 @@ import type {
   CreateDroneTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
   ExternalOverlay,
+  ExternalOverlayCircleGeometry,
   ExternalOverlayKind,
+  ExternalOverlayPolygonGeometry,
   NormalizeAreaOverlaySourcesInput,
 } from "./external-overlay.types";
 import {
@@ -101,6 +103,102 @@ const normalizedAreaMetadata = (
   ],
   ...extras,
 });
+
+const sourceTraceEntryKey = (
+  entry: NonNullable<AreaConflictOverlayMetadata["sourceTrace"]>[number],
+): string =>
+  [
+    entry.provider,
+    entry.sourceType,
+    entry.sourceRecordId ?? "",
+    entry.areaId,
+  ].join("|");
+
+const mergeSourceTrace = (
+  ...traces: Array<NonNullable<AreaConflictOverlayMetadata["sourceTrace"]> | undefined>
+): NonNullable<AreaConflictOverlayMetadata["sourceTrace"]> => {
+  const merged = new Map<
+    string,
+    NonNullable<AreaConflictOverlayMetadata["sourceTrace"]>[number]
+  >();
+
+  for (const trace of traces) {
+    for (const entry of trace ?? []) {
+      merged.set(sourceTraceEntryKey(entry), entry);
+    }
+  }
+
+  return [...merged.values()];
+};
+
+const areaMetadataFromOverlay = (
+  overlay: ExternalOverlay,
+): AreaConflictOverlayMetadata => overlay.metadata as unknown as AreaConflictOverlayMetadata;
+
+const isAreaConflictGeometry = (
+  geometry: ExternalOverlay["geometry"],
+): geometry is ExternalOverlayCircleGeometry | ExternalOverlayPolygonGeometry =>
+  geometry.type === "circle" || geometry.type === "polygon";
+
+const sourceTraceFromOverlay = (
+  overlay: ExternalOverlay,
+): NonNullable<AreaConflictOverlayMetadata["sourceTrace"]> => {
+  const metadata = areaMetadataFromOverlay(overlay);
+  if (Array.isArray(metadata.sourceTrace) && metadata.sourceTrace.length > 0) {
+    return metadata.sourceTrace;
+  }
+
+  return [
+    {
+      provider: overlay.source.provider,
+      sourceType: overlay.source.sourceType,
+      sourceRecordId: overlay.source.sourceRecordId ?? null,
+      authorityName: metadata.authorityName ?? null,
+      notamNumber: metadata.notamNumber ?? null,
+      sourceReference: metadata.sourceReference ?? null,
+      areaId: metadata.areaId,
+      label: metadata.label,
+    },
+  ];
+};
+
+const dedupeKeyFromOverlay = (overlay: ExternalOverlay): string | null => {
+  const metadata = areaMetadataFromOverlay(overlay);
+  if (typeof metadata.dedupeKey === "string" && metadata.dedupeKey.length > 0) {
+    return metadata.dedupeKey;
+  }
+
+  if (overlay.kind !== "area_conflict" || !isAreaConflictGeometry(overlay.geometry)) {
+    return null;
+  }
+
+  return [
+    dedupeGeometryKey(overlay.geometry),
+    dedupeWindowKey(overlay.validFrom, overlay.validTo),
+  ].join("|");
+};
+
+const compareIncomingToExistingAreaPriority = (
+  incoming: NormalizeAreaOverlaySourcesInput["records"][number],
+  existing: ExternalOverlay,
+): number => {
+  const priorityDiff =
+    areaSourcePriority(incoming.source.sourceType) -
+    areaSourcePriority(existing.source.sourceType);
+  if (priorityDiff !== 0) {
+    return priorityDiff;
+  }
+
+  const incomingSeverity = severityRank[incoming.severity ?? "info"] ?? 0;
+  const existingSeverity = severityRank[existing.severity ?? "info"] ?? 0;
+  if (incomingSeverity !== existingSeverity) {
+    return incomingSeverity - existingSeverity;
+  }
+
+  const incomingObserved = Date.parse(incoming.observedAt);
+  const existingObserved = Date.parse(existing.observedAt);
+  return incomingObserved - existingObserved;
+};
 
 const compareAreaNormalizationPriority = (
   left: NormalizeAreaOverlaySourcesInput["records"][number],
@@ -254,6 +352,19 @@ export class ExternalOverlayService {
         throw new MissionExternalOverlayMissionNotFoundError(missionId);
       }
 
+      const existingAreaOverlays = await this.externalOverlayRepository.listForMission(
+        client,
+        missionId,
+        { kind: "area_conflict" },
+      );
+      const existingByDedupeKey = new Map<string, ExternalOverlay>();
+      for (const overlay of existingAreaOverlays) {
+        const dedupeKey = dedupeKeyFromOverlay(overlay);
+        if (dedupeKey) {
+          existingByDedupeKey.set(dedupeKey, overlay);
+        }
+      }
+
       const dedupedRecords = new Map<
         string,
         {
@@ -291,24 +402,118 @@ export class ExternalOverlayService {
       }
 
       const overlays: ExternalOverlay[] = [];
-      for (const { winner, sourceTrace } of dedupedRecords.values()) {
+      for (const [dedupeKey, { winner, sourceTrace }] of dedupedRecords.entries()) {
+        const existing = existingByDedupeKey.get(dedupeKey);
+
+        if (!existing) {
+          overlays.push(
+            await this.externalOverlayRepository.insertAreaConflictOverlay(
+              client,
+              missionId,
+              {
+                kind: "area_conflict",
+                source: winner.source,
+                observedAt: winner.observedAt,
+                validFrom: winner.validFrom,
+                validTo: winner.validTo,
+                geometry: winner.geometry,
+                severity: winner.severity,
+                confidence: winner.confidence,
+                freshnessSeconds: winner.freshnessSeconds,
+                metadata: normalizedAreaMetadata(winner, {
+                  dedupeKey,
+                  sourceTrace,
+                  supersession: {
+                    supersededExisting: false,
+                    replacedSourceType: null,
+                    replacedSourceRecordId: null,
+                  },
+                }),
+              },
+            ),
+          );
+          continue;
+        }
+
+        const existingMetadata = areaMetadataFromOverlay(existing);
+        const mergedTrace = mergeSourceTrace(
+          sourceTraceFromOverlay(existing),
+          sourceTrace,
+        );
+        const incomingWins =
+          compareIncomingToExistingAreaPriority(winner, existing) > 0;
+
+        if (incomingWins) {
+          overlays.push(
+            await this.externalOverlayRepository.updateAreaConflictOverlay(
+              client,
+              existing.id,
+              missionId,
+              {
+                kind: "area_conflict",
+                source: winner.source,
+                observedAt: winner.observedAt,
+                validFrom: winner.validFrom,
+                validTo: winner.validTo,
+                geometry: winner.geometry,
+                severity: winner.severity,
+                confidence: winner.confidence,
+                freshnessSeconds: winner.freshnessSeconds,
+                metadata: normalizedAreaMetadata(winner, {
+                  dedupeKey,
+                  sourceTrace: mergedTrace,
+                  supersession: {
+                    supersededExisting: true,
+                    replacedSourceType: existing.source.sourceType,
+                    replacedSourceRecordId: existing.source.sourceRecordId,
+                  },
+                }),
+              },
+            ),
+          );
+          continue;
+        }
+
         overlays.push(
-          await this.externalOverlayRepository.insertAreaConflictOverlay(
+          await this.externalOverlayRepository.updateAreaConflictOverlay(
             client,
+            existing.id,
             missionId,
             {
               kind: "area_conflict",
-              source: winner.source,
-              observedAt: winner.observedAt,
-              validFrom: winner.validFrom,
-              validTo: winner.validTo,
-              geometry: winner.geometry,
-              severity: winner.severity,
-              confidence: winner.confidence,
-              freshnessSeconds: winner.freshnessSeconds,
-              metadata: normalizedAreaMetadata(winner, {
-                sourceTrace,
-              }),
+              source: {
+                provider: existing.source.provider,
+                sourceType: existing.source.sourceType,
+                sourceRecordId: existing.source.sourceRecordId,
+              },
+              observedAt: existing.observedAt,
+              validFrom: existing.validFrom,
+              validTo: existing.validTo,
+              geometry: isAreaConflictGeometry(existing.geometry)
+                ? existing.geometry
+                : winner.geometry,
+              severity: existing.severity,
+              confidence: existing.confidence,
+              freshnessSeconds: existing.freshnessSeconds,
+              metadata: {
+                areaId: existingMetadata.areaId,
+                label: existingMetadata.label,
+                areaType: existingMetadata.areaType,
+                description: existingMetadata.description ?? null,
+                authorityName: existingMetadata.authorityName ?? null,
+                notamNumber: existingMetadata.notamNumber ?? null,
+                sourceReference: existingMetadata.sourceReference ?? null,
+                normalizedSourcePriority:
+                  existingMetadata.normalizedSourcePriority ??
+                  areaSourcePriority(existing.source.sourceType),
+                dedupeKey,
+                sourceTrace: mergedTrace,
+                supersession: {
+                  supersededExisting: false,
+                  replacedSourceType: null,
+                  replacedSourceRecordId: null,
+                },
+              },
             },
           ),
         );
