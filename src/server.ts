@@ -13,8 +13,20 @@ async function start() {
       await runMigrations(pool);
     }
 
-    app.listen(port, () => {
+    const server = app.listen(port, () => {
       console.log(`Express server running on http://localhost:${port}`);
+    });
+
+    server.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EADDRINUSE") {
+        console.error(
+          `Failed to start server: port ${port} is already in use.`,
+        );
+      } else {
+        console.error("Failed to start server:", error);
+      }
+
+      process.exit(1);
     });
   } catch (error) {
     console.error("Failed to start server:", error);
