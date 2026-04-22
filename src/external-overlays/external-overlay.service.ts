@@ -323,6 +323,14 @@ type AreaOverlayRefreshRunTransitionArtifactChronology = {
   };
 };
 
+type AreaOverlayRefreshRunTransitionArtifactChronologyExport = {
+  exportId: string;
+  exportType: "refresh_run_transition_artifact_chronology_snapshot";
+  missionId: string;
+  exportedAt: string;
+  snapshot: AreaOverlayRefreshRunTransitionArtifactChronology;
+};
+
 const buildAreaOverlayRefreshRunTransitionArtifactId = (
   missionId: string,
   fromRefreshRunId: string,
@@ -473,6 +481,16 @@ const parseAreaOverlayRefreshRunTransitionArtifactBookmark = (
     return null;
   }
 };
+
+const buildAreaOverlayRefreshRunTransitionArtifactChronologyExportId = (
+  missionId: string,
+  bookmark: string,
+): string =>
+  [
+    "refresh_run_transition_artifact_chronology_snapshot",
+    missionId,
+    bookmark,
+  ].join(":");
 
 const areaOverlayRefreshSummaryItemFromOverlay = (
   overlay: ExternalOverlay,
@@ -1429,10 +1447,12 @@ export class ExternalOverlayService {
       transitionArtifactLimit?: string;
       transitionArtifactCursor?: string;
       transitionArtifactBookmark?: string;
+      transitionArtifactExport?: boolean;
     },
   ): Promise<{
     missionId: string;
     chronology: AreaOverlayRefreshRunTransitionArtifactChronology;
+    export?: AreaOverlayRefreshRunTransitionArtifactChronologyExport;
   }> {
     if (
       filters.refreshRunId ||
@@ -1604,6 +1624,35 @@ export class ExternalOverlayService {
           bookmark,
         },
       },
+      ...(filters.transitionArtifactExport
+        ? {
+            export: {
+              exportId:
+                buildAreaOverlayRefreshRunTransitionArtifactChronologyExportId(
+                  missionId,
+                  bookmark,
+                ),
+              exportType:
+                "refresh_run_transition_artifact_chronology_snapshot" as const,
+              missionId,
+              exportedAt: new Date().toISOString(),
+              snapshot: {
+                missionId,
+                artifacts: paginatedArtifacts,
+                pagination: {
+                  totalCount: filteredArtifacts.length,
+                  offset: paginationOffset,
+                  limit: paginationLimit,
+                  nextOffset,
+                  previousOffset,
+                  nextCursor,
+                  previousCursor,
+                  bookmark,
+                },
+              },
+            },
+          }
+        : {}),
     };
   }
 

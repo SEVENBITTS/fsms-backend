@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add transition artifact chronology snapshot export support to normalized area overlay chronology queries so bounded ordered transition review payload windows can be exported for audit review.",
+  "nextBuildStep": "Add transition artifact chronology export manifest support to normalized area overlay chronology queries so exported audit snapshots include a stable manifest envelope.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
