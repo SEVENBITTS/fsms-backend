@@ -1,33 +1,43 @@
-# NEXT STEP
+# NEXT STEPS
 
-## Goal
-Build replay on top of telemetry history.
+## Audit Read Surface Pause
 
----
+Stopping the transition-artifact chronology audit-read expansion here for now.
 
-## Build
+Current coverage is sufficient for deferred consumer discovery:
+- single-run summary
+- diff
+- chronology
+- transition drilldown
+- artifact query
+- filtering
+- pagination
+- cursor
+- bookmark
+- export
 
-### 1. Replay service
-- read telemetry history for mission
-- return ordered records for time-window replay
+Further refinements will be driven only by a concrete consumer requirement such as:
+- operator UI workflow
+- reviewer or audit workflow
+- downstream service integration
+- compliance or export requirement
 
-### 2. Replay endpoint
-- `GET /missions/:id/replay?from=...&to=...`
+No further read-path refinements should be opened until a real consumer and payload requirement is identified.
 
-### 3. Tests
-- respects ordering
-- respects mission isolation
-- respects requested time range
+## Current Backend Priority
 
----
+Focus should move to authoritative source ingestion robustness.
 
-## Do NOT do
-- No UI
-- No auth
-- No performance optimization yet
+Recommended areas:
+- source freshness and staleness policy
+- partial-refresh failure handling
+- provenance for failed or partial normalization runs
+- validation and reporting for malformed authoritative records
 
----
+## Reopen Criteria
 
-## Done When
-- Replay data can be fetched for a mission and range
-- Covered by integration tests
+Reopen the audit-read chain only when all of the following are true:
+1. a named consumer exists
+2. the exact payload gap is identified
+3. the current API cannot satisfy it by composition
+4. the new read path is narrower than another generic variant

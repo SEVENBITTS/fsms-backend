@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add transition artifact chronology export manifest support to normalized area overlay chronology queries so exported audit snapshots include a stable manifest envelope.",
+  "nextBuildStep": "Add authoritative area-source ingestion freshness and partial-refresh handling so normalized danger areas and NOTAM-derived overlays remain operationally trustworthy during incomplete or stale source updates.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

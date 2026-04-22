@@ -385,3 +385,52 @@ Adopt a vendor-neutral, time-aware external overlay envelope for live operations
 The first implementation issue after this design should be:
 
 `Add weather external overlay ingestion and live operations display using the mission-linked external overlay model.`
+
+## Audit Read Surface Status
+
+The normalized area overlay audit read surface is now considered sufficient for the current stage.
+
+Implemented scope:
+
+- refresh-run summary query
+- single refresh-run filtering
+- two-run diff query
+- chronology query
+- transition drilldown
+- transition artifact query
+- transition artifact filtering
+- transition artifact chronology listing
+- chronology filtering
+- pagination
+- cursor resume
+- bookmark replay
+- bounded snapshot export
+
+### Design Constraints
+
+The audit read surface:
+
+- stays on the existing mission-linked external overlay boundary
+- reuses normalized overlay provenance rather than introducing a parallel audit store
+- remains read-only from the operator perspective
+- does not change lifecycle behavior
+- does not add operator command automation
+- does not change conflict-assessment source-agnostic behavior
+
+### Intentional Stopping Point
+
+Further audit read-path refinements are intentionally paused here.
+
+Additional read variants should only be added when driven by a concrete consumer requirement such as:
+
+- operator UI workflow
+- reviewer or audit workflow
+- downstream service integration
+- compliance or export requirement
+
+Entry criteria for reopening this area:
+
+1. a named consumer exists
+2. the exact payload gap is identified
+3. the current API cannot satisfy it with composition
+4. the new read path is narrower than adding another generic variant
