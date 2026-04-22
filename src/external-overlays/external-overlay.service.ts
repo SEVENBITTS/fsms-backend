@@ -7,6 +7,7 @@ import {
   MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
   MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError,
+  MissionExternalOverlayRefreshRunTransitionArtifactChronologyCursorQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionArtifactChronologyPaginationQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError,
@@ -315,6 +316,8 @@ type AreaOverlayRefreshRunTransitionArtifactChronology = {
     limit: number;
     nextOffset: number | null;
     previousOffset: number | null;
+    nextCursor: string | null;
+    previousCursor: string | null;
   };
 };
 
@@ -369,6 +372,40 @@ const buildAreaOverlayRefreshRunTransitionArtifact = (
   toRefreshRunId: transition.toRefreshRunId,
   transition,
 });
+
+const buildAreaOverlayRefreshRunTransitionArtifactCursor = (
+  offset: number,
+  limit: number,
+): string =>
+  Buffer.from(JSON.stringify({ offset, limit }), "utf8").toString("base64url");
+
+const parseAreaOverlayRefreshRunTransitionArtifactCursor = (
+  cursor: string,
+): { offset: number; limit: number } | null => {
+  try {
+    const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+    const parsed = JSON.parse(decoded) as {
+      offset?: unknown;
+      limit?: unknown;
+    };
+
+    if (
+      !Number.isInteger(parsed.offset) ||
+      !Number.isInteger(parsed.limit) ||
+      typeof parsed.offset !== "number" ||
+      typeof parsed.limit !== "number"
+    ) {
+      return null;
+    }
+
+    return {
+      offset: parsed.offset,
+      limit: parsed.limit,
+    };
+  } catch {
+    return null;
+  }
+};
 
 const areaOverlayRefreshSummaryItemFromOverlay = (
   overlay: ExternalOverlay,
@@ -1323,6 +1360,7 @@ export class ExternalOverlayService {
       transitionArtifactIds?: string[];
       transitionArtifactOffset?: string;
       transitionArtifactLimit?: string;
+      transitionArtifactCursor?: string;
     },
   ): Promise<{
     missionId: string;
@@ -1349,12 +1387,32 @@ export class ExternalOverlayService {
     const artifacts = chronologyResult.chronology.transitions.map((transition) =>
       buildAreaOverlayRefreshRunTransitionArtifact(missionId, transition),
     );
-    const paginationOffset = filters.transitionArtifactOffset
+    let paginationOffset = filters.transitionArtifactOffset
       ? Number(filters.transitionArtifactOffset)
       : 0;
-    const paginationLimit = filters.transitionArtifactLimit
+    let paginationLimit = filters.transitionArtifactLimit
       ? Number(filters.transitionArtifactLimit)
       : Math.max(artifacts.length, 1);
+
+    if (filters.transitionArtifactCursor) {
+      if (filters.transitionArtifactOffset || filters.transitionArtifactLimit) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyCursorQueryInvalidError(
+          "transitionArtifactCursor cannot be combined with transitionArtifactOffset or transitionArtifactLimit",
+        );
+      }
+
+      const parsedCursor = parseAreaOverlayRefreshRunTransitionArtifactCursor(
+        filters.transitionArtifactCursor,
+      );
+      if (!parsedCursor) {
+        throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyCursorQueryInvalidError(
+          "transitionArtifactCursor is invalid",
+        );
+      }
+
+      paginationOffset = parsedCursor.offset;
+      paginationLimit = parsedCursor.limit;
+    }
 
     if (
       !Number.isInteger(paginationOffset) ||
@@ -1408,6 +1466,20 @@ export class ExternalOverlayService {
       paginationOffset > 0
         ? Math.max(0, paginationOffset - paginationLimit)
         : null;
+    const nextCursor =
+      nextOffset !== null
+        ? buildAreaOverlayRefreshRunTransitionArtifactCursor(
+            nextOffset,
+            paginationLimit,
+          )
+        : null;
+    const previousCursor =
+      previousOffset !== null
+        ? buildAreaOverlayRefreshRunTransitionArtifactCursor(
+            previousOffset,
+            paginationLimit,
+          )
+        : null;
 
     return {
       missionId,
@@ -1420,6 +1492,8 @@ export class ExternalOverlayService {
           limit: paginationLimit,
           nextOffset,
           previousOffset,
+          nextCursor,
+          previousCursor,
         },
       },
     };
