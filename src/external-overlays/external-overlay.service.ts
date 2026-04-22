@@ -6,6 +6,7 @@ import {
   MissionExternalOverlayMissionNotFoundError,
   MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
+  MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError,
 } from "./external-overlay.errors";
 import type {
@@ -293,6 +294,27 @@ type AreaOverlayRefreshRunTransitionDrilldown = {
   missionId: string;
   transition: AreaOverlayRefreshRunDiff;
 };
+
+type AreaOverlayRefreshRunTransitionArtifact = {
+  artifactId: string;
+  missionId: string;
+  artifactType: "refresh_run_transition";
+  fromRefreshRunId: string;
+  toRefreshRunId: string;
+  transition: AreaOverlayRefreshRunDiff;
+};
+
+const buildAreaOverlayRefreshRunTransitionArtifactId = (
+  missionId: string,
+  fromRefreshRunId: string,
+  toRefreshRunId: string,
+): string =>
+  [
+    "refresh_run_transition",
+    missionId,
+    fromRefreshRunId,
+    toRefreshRunId,
+  ].join(":");
 
 const areaOverlayRefreshSummaryItemFromOverlay = (
   overlay: ExternalOverlay,
@@ -1150,6 +1172,70 @@ export class ExternalOverlayService {
     } finally {
       client.release();
     }
+  }
+
+  async getAreaOverlayRefreshRunTransitionArtifact(
+    missionId: string,
+    filters: {
+      refreshRunId?: string;
+      fromRefreshRunId?: string;
+      toRefreshRunId?: string;
+      chronology?: boolean;
+      transitionFromRefreshRunId?: string;
+      transitionToRefreshRunId?: string;
+    },
+  ): Promise<{ missionId: string; artifact: AreaOverlayRefreshRunTransitionArtifact }> {
+    if (
+      !filters.transitionFromRefreshRunId ||
+      !filters.transitionToRefreshRunId
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+        "Both transitionFromRefreshRunId and transitionToRefreshRunId are required for refresh-run transition artifact queries",
+      );
+    }
+
+    if (
+      filters.transitionFromRefreshRunId === filters.transitionToRefreshRunId
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+        "transitionFromRefreshRunId and transitionToRefreshRunId must be different",
+      );
+    }
+
+    if (
+      filters.refreshRunId ||
+      filters.fromRefreshRunId ||
+      filters.toRefreshRunId ||
+      filters.chronology
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError(
+        "transition artifact queries cannot be combined with refreshRunId, fromRefreshRunId, toRefreshRunId, or chronology",
+      );
+    }
+
+    const transitionResult = await this.getAreaOverlayRefreshRunTransition(
+      missionId,
+      {
+        transitionFromRefreshRunId: filters.transitionFromRefreshRunId,
+        transitionToRefreshRunId: filters.transitionToRefreshRunId,
+      },
+    );
+
+    return {
+      missionId,
+      artifact: {
+        artifactId: buildAreaOverlayRefreshRunTransitionArtifactId(
+          missionId,
+          filters.transitionFromRefreshRunId,
+          filters.transitionToRefreshRunId,
+        ),
+        missionId,
+        artifactType: "refresh_run_transition",
+        fromRefreshRunId: filters.transitionFromRefreshRunId,
+        toRefreshRunId: filters.transitionToRefreshRunId,
+        transition: transitionResult.transition,
+      },
+    };
   }
 
   async listAreaOverlayRefreshRunChronology(
