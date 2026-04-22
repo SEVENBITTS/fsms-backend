@@ -201,6 +201,38 @@ const isNormalizedAreaOverlay = (overlay: ExternalOverlay): boolean => {
   return typeof metadata.dedupeKey === "string" && metadata.dedupeKey.length > 0;
 };
 
+type AreaRefreshRunOverlaySummary = {
+  overlayId: string;
+  areaId: string;
+  label: string;
+  sourceType: string;
+  sourceRecordId: string | null;
+  retired: boolean;
+};
+
+type AreaRefreshRunSummary = {
+  refreshRunId: string;
+  created: AreaRefreshRunOverlaySummary[];
+  updated: AreaRefreshRunOverlaySummary[];
+  superseded: AreaRefreshRunOverlaySummary[];
+  retired: AreaRefreshRunOverlaySummary[];
+  active: AreaRefreshRunOverlaySummary[];
+};
+
+const toRefreshRunOverlaySummary = (
+  overlay: ExternalOverlay,
+): AreaRefreshRunOverlaySummary => {
+  const metadata = areaMetadataFromOverlay(overlay);
+  return {
+    overlayId: overlay.id,
+    areaId: metadata.areaId,
+    label: metadata.label,
+    sourceType: overlay.source.sourceType,
+    sourceRecordId: overlay.source.sourceRecordId,
+    retired: metadata.retirement?.retired === true,
+  };
+};
+
 const compareIncomingToExistingAreaPriority = (
   incoming: NormalizeAreaOverlaySourcesInput["records"][number],
   existing: ExternalOverlay,
@@ -642,6 +674,91 @@ export class ExternalOverlayService {
       return {
         missionId,
         overlays,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAreaOverlayRefreshRuns(
+    missionId: string,
+  ): Promise<{ missionId: string; refreshRuns: AreaRefreshRunSummary[] }> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
+      }
+
+      const overlays = await this.externalOverlayRepository.listForMission(
+        client,
+        missionId,
+        { kind: "area_conflict", includeRetired: true },
+      );
+
+      const runs = new Map<string, AreaRefreshRunSummary>();
+      const ensureRun = (refreshRunId: string): AreaRefreshRunSummary => {
+        const existingRun = runs.get(refreshRunId);
+        if (existingRun) {
+          return existingRun;
+        }
+
+        const createdRun: AreaRefreshRunSummary = {
+          refreshRunId,
+          created: [],
+          updated: [],
+          superseded: [],
+          retired: [],
+          active: [],
+        };
+        runs.set(refreshRunId, createdRun);
+        return createdRun;
+      };
+
+      for (const overlay of overlays) {
+        if (!isNormalizedAreaOverlay(overlay)) {
+          continue;
+        }
+
+        const metadata = areaMetadataFromOverlay(overlay);
+        const provenance = metadata.refreshProvenance;
+        if (!provenance?.createdByRunId || !provenance.lastUpdatedByRunId) {
+          continue;
+        }
+
+        const summary = toRefreshRunOverlaySummary(overlay);
+
+        ensureRun(provenance.createdByRunId).created.push(summary);
+
+        if (provenance.lastUpdatedByRunId !== provenance.createdByRunId) {
+          ensureRun(provenance.lastUpdatedByRunId).updated.push(summary);
+        }
+
+        if (provenance.supersededByRunId) {
+          ensureRun(provenance.supersededByRunId).superseded.push(summary);
+        }
+
+        if (provenance.retiredByRunId) {
+          ensureRun(provenance.retiredByRunId).retired.push(summary);
+        }
+
+        if (!summary.retired) {
+          ensureRun(provenance.lastUpdatedByRunId).active.push(summary);
+        }
+      }
+
+      const refreshRuns = [...runs.values()].sort((left, right) =>
+        right.refreshRunId.localeCompare(left.refreshRunId),
+      );
+
+      return {
+        missionId,
+        refreshRuns,
       };
     } finally {
       client.release();

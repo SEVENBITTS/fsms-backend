@@ -69,6 +69,22 @@ export class ExternalOverlayController {
     }
   };
 
+  listAreaOverlayRefreshRuns = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const result = await this.externalOverlayService.listAreaOverlayRefreshRuns(
+        req.params.missionId,
+      );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   listExternalOverlays = async (
     req: Request<MissionIdParams>,
     res: Response,
