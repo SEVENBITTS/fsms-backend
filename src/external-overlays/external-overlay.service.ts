@@ -6,6 +6,7 @@ import {
   MissionExternalOverlayMissionNotFoundError,
   MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
+  MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError,
 } from "./external-overlay.errors";
 import type {
   AreaConflictOverlayMetadata,
@@ -286,6 +287,11 @@ type AreaOverlayRefreshRunChronology = {
   missionId: string;
   refreshRuns: AreaOverlayRefreshRunSummary[];
   transitions: AreaOverlayRefreshRunDiff[];
+};
+
+type AreaOverlayRefreshRunTransitionDrilldown = {
+  missionId: string;
+  transition: AreaOverlayRefreshRunDiff;
 };
 
 const areaOverlayRefreshSummaryItemFromOverlay = (
@@ -1064,6 +1070,81 @@ export class ExternalOverlayService {
           refreshRunOrder,
           filters.fromRefreshRunId,
           filters.toRefreshRunId,
+        ),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getAreaOverlayRefreshRunTransition(
+    missionId: string,
+    filters: {
+      refreshRunId?: string;
+      fromRefreshRunId?: string;
+      toRefreshRunId?: string;
+      chronology?: boolean;
+      transitionFromRefreshRunId?: string;
+      transitionToRefreshRunId?: string;
+    },
+  ): Promise<AreaOverlayRefreshRunTransitionDrilldown> {
+    if (
+      !filters.transitionFromRefreshRunId ||
+      !filters.transitionToRefreshRunId
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError(
+        "Both transitionFromRefreshRunId and transitionToRefreshRunId are required for refresh-run transition drilldown queries",
+      );
+    }
+
+    if (
+      filters.transitionFromRefreshRunId === filters.transitionToRefreshRunId
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError(
+        "transitionFromRefreshRunId and transitionToRefreshRunId must be different",
+      );
+    }
+
+    if (
+      filters.refreshRunId ||
+      filters.fromRefreshRunId ||
+      filters.toRefreshRunId ||
+      filters.chronology
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError(
+        "transition drilldown queries cannot be combined with refreshRunId, fromRefreshRunId, toRefreshRunId, or chronology",
+      );
+    }
+
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
+      }
+
+      const overlays = await this.externalOverlayRepository.listForMission(
+        client,
+        missionId,
+        { kind: "area_conflict", includeRetired: true },
+      );
+      const refreshRuns = buildAreaOverlayRefreshRunSummaries(missionId, overlays);
+      const refreshRunOrder = buildRefreshRunOrder(overlays);
+
+      return {
+        missionId,
+        transition: buildAreaOverlayRefreshRunDiff(
+          missionId,
+          overlays,
+          refreshRuns,
+          refreshRunOrder,
+          filters.transitionFromRefreshRunId,
+          filters.transitionToRefreshRunId,
         ),
       };
     } finally {

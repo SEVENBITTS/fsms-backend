@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add refresh-run transition drilldown support to normalized area overlay chronology queries so individual snapshot transitions can be reviewed directly.",
+  "nextBuildStep": "Add refresh-run transition artifact query support to normalized area overlay chronology queries so transition-level review payloads can be retrieved directly.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

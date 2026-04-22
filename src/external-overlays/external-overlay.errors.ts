@@ -33,3 +33,12 @@ export class MissionExternalOverlayRefreshRunChronologyQueryInvalidError extends
     super(message);
   }
 }
+
+export class MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError extends Error {
+  readonly statusCode = 400;
+  readonly type = "refresh_run_transition_drilldown_query_invalid";
+
+  constructor(message: string) {
+    super(message);
+  }
+}

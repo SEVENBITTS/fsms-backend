@@ -10,6 +10,8 @@ type RefreshRunQuery = {
   refreshRunId?: string;
   fromRefreshRunId?: string;
   toRefreshRunId?: string;
+  transitionFromRefreshRunId?: string;
+  transitionToRefreshRunId?: string;
   chronology?: string;
 };
 
@@ -119,9 +121,37 @@ export class ExternalOverlayController {
         req.query.toRefreshRunId.trim().length > 0
           ? req.query.toRefreshRunId.trim()
           : undefined;
+      const transitionFromRefreshRunId =
+        typeof req.query.transitionFromRefreshRunId === "string" &&
+        req.query.transitionFromRefreshRunId.trim().length > 0
+          ? req.query.transitionFromRefreshRunId.trim()
+          : undefined;
+      const transitionToRefreshRunId =
+        typeof req.query.transitionToRefreshRunId === "string" &&
+        req.query.transitionToRefreshRunId.trim().length > 0
+          ? req.query.transitionToRefreshRunId.trim()
+          : undefined;
       const chronology =
         typeof req.query.chronology === "string" &&
         ["1", "true", "yes"].includes(req.query.chronology.trim().toLowerCase());
+
+      if (transitionFromRefreshRunId || transitionToRefreshRunId) {
+        const result =
+          await this.externalOverlayService.getAreaOverlayRefreshRunTransition(
+            req.params.missionId,
+            {
+              refreshRunId,
+              fromRefreshRunId,
+              toRefreshRunId,
+              chronology,
+              transitionFromRefreshRunId,
+              transitionToRefreshRunId,
+            },
+          );
+
+        res.status(200).json(result);
+        return;
+      }
 
       if (chronology) {
         const result =
