@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add normalized area overlay retirement handling so previously-ingested restrictions that disappear from later authoritative refreshes can be marked inactive without losing traceability.",
+  "nextBuildStep": "Add refresh-run provenance metadata to normalized area overlay ingestion so authoritative snapshots can be audited across repeated normalization cycles.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
