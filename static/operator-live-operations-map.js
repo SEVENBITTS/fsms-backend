@@ -151,6 +151,32 @@ const areaOverlaySourceRefreshDetail = (overlay) => {
   return detailParts.join(" | ");
 };
 
+const areaOverlaySourceRefreshCardContext = (overlay) => {
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  if (!refreshState) {
+    return null;
+  }
+
+  const label =
+    refreshState.status === "failed"
+      ? "Area source failed"
+      : refreshState.status === "partial"
+        ? "Area source partial"
+        : refreshState.status === "stale"
+          ? "Area source stale"
+          : refreshState.status === "fresh"
+            ? "Area source fresh"
+            : null;
+
+  if (!label) {
+    return null;
+  }
+
+  return refreshState.carriedForwardFromFailedRefresh
+    ? `${label} | carried forward`
+    : label;
+};
+
 const areaSourceRefreshSummary = () => {
   const overlays = areaConflictOverlays();
   if (overlays.length === 0) {
@@ -787,10 +813,22 @@ const conflictAssessmentSummary = () => {
   }
 
   const highest = conflicts[0];
+  const highestOverlay =
+    highest.overlayKind === "area_conflict" ? conflictOverlayForItem(highest) : null;
+  const highestRefreshContext = areaOverlaySourceRefreshCardContext(highestOverlay);
   return {
     label: `${conflicts.length} conflict candidate${conflicts.length === 1 ? "" : "s"}`,
     tone: highest.severity,
-    detail: `${highest.overlayLabel} | ${formatRangeBearing(highest.metrics)} | ${highest.overlayKind === "area_conflict" ? `${formatTemporalContext(highest)} | ${formatVerticalContext(highest)}` : `${formatVerticalSeparation(highest.metrics?.altitudeDeltaFt)} vertical`}`,
+    detail: [
+      highest.overlayLabel,
+      formatRangeBearing(highest.metrics),
+      highest.overlayKind === "area_conflict"
+        ? `${formatTemporalContext(highest)} | ${formatVerticalContext(highest)}`
+        : `${formatVerticalSeparation(highest.metrics?.altitudeDeltaFt)} vertical`,
+      highestRefreshContext,
+    ]
+      .filter(Boolean)
+      .join(" | "),
   };
 };
 
@@ -1369,6 +1407,13 @@ const buildOverlayCards = () => {
   const dispatchWorkspace = uiState.dispatchWorkspace;
   const primaryConflict = primaryConflictAssessmentItem();
   const primaryAdvisory = primaryConflictAdvisory();
+  const primaryConflictOverlay = primaryConflict
+    ? conflictOverlayForItem(primaryConflict)
+    : null;
+  const primaryConflictRefreshContext =
+    primaryConflict?.overlayKind === "area_conflict"
+      ? areaOverlaySourceRefreshCardContext(primaryConflictOverlay)
+      : null;
   const cards = [
     summarizeRiskState(planningWorkspace),
     summarizeAirspaceState(planningWorkspace),
@@ -1382,7 +1427,16 @@ const buildOverlayCards = () => {
       ? {
           label: "Primary conflict",
           tone: primaryConflict.severity,
-          detail: `${primaryConflict.overlayLabel} | ${formatRangeBearing(primaryConflict.metrics)} | ${primaryConflict.overlayKind === "area_conflict" ? formatVerticalContext(primaryConflict) : `${formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)} vertical`}`,
+          detail: [
+            primaryConflict.overlayLabel,
+            formatRangeBearing(primaryConflict.metrics),
+            primaryConflict.overlayKind === "area_conflict"
+              ? formatVerticalContext(primaryConflict)
+              : `${formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt)} vertical`,
+            primaryConflictRefreshContext,
+          ]
+            .filter(Boolean)
+            .join(" | "),
         }
       : conflictAssessmentSummary(),
     primaryAdvisory
