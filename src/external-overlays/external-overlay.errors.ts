@@ -51,3 +51,12 @@ export class MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError
     super(message);
   }
 }
+
+export class MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError extends Error {
+  readonly statusCode = 400;
+  readonly type = "refresh_run_transition_artifact_chronology_query_invalid";
+
+  constructor(message: string) {
+    super(message);
+  }
+}
