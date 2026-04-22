@@ -18,6 +18,7 @@ type RefreshRunQuery = {
   transitionArtifactIds?: string;
   transitionArtifactOffset?: string;
   transitionArtifactLimit?: string;
+  transitionArtifactCursor?: string;
   chronology?: string;
 };
 
@@ -173,6 +174,11 @@ export class ExternalOverlayController {
         req.query.transitionArtifactLimit.trim().length > 0
           ? req.query.transitionArtifactLimit.trim()
           : undefined;
+      const transitionArtifactCursor =
+        typeof req.query.transitionArtifactCursor === "string" &&
+        req.query.transitionArtifactCursor.trim().length > 0
+          ? req.query.transitionArtifactCursor.trim()
+          : undefined;
 
       if (transitionArtifactChronology) {
         const result =
@@ -190,6 +196,7 @@ export class ExternalOverlayController {
               transitionArtifactIds,
               transitionArtifactOffset,
               transitionArtifactLimit,
+              transitionArtifactCursor,
             },
           );
 

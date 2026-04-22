@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add transition artifact chronology cursor support to normalized area overlay chronology queries so bounded ordered transition review payload windows can be resumed directly.",
+  "nextBuildStep": "Add transition artifact chronology bookmark support to normalized area overlay chronology queries so bounded ordered transition review payload windows can be revisited directly.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
