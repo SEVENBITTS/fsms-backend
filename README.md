@@ -123,6 +123,8 @@ Keep runtime and test data in separate PostgreSQL databases.
 - runtime dev database: `timeline_dev_db` via [\.env](C:\Users\rabbi\Documents\Codex\2026-04-20-fsms-issue-105-governance-rollup-signoff-render\.env)
 - test database: `timeline_test_db` via [\.env.test](C:\Users\rabbi\Documents\Codex\2026-04-20-fsms-issue-105-governance-rollup-signoff-render\.env.test)
 
+To create local runtime config, copy [\.env.example](C:\Users\rabbi\Documents\Codex\2026-04-20-fsms-issue-105-governance-rollup-signoff-render\.env.example) to `.env` and set the local PostgreSQL password as needed.
+
 This matters because the Vitest suite clears and reseeds mission tables. If both files point at the same database, running tests will destroy the live dev dataset.
 
 Create and migrate the dev database:
