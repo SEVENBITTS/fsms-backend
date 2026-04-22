@@ -10,6 +10,7 @@ type RefreshRunQuery = {
   refreshRunId?: string;
   fromRefreshRunId?: string;
   toRefreshRunId?: string;
+  chronology?: string;
 };
 
 export class ExternalOverlayController {
@@ -118,6 +119,24 @@ export class ExternalOverlayController {
         req.query.toRefreshRunId.trim().length > 0
           ? req.query.toRefreshRunId.trim()
           : undefined;
+      const chronology =
+        typeof req.query.chronology === "string" &&
+        ["1", "true", "yes"].includes(req.query.chronology.trim().toLowerCase());
+
+      if (chronology) {
+        const result =
+          await this.externalOverlayService.listAreaOverlayRefreshRunChronology(
+            req.params.missionId,
+            {
+              refreshRunId,
+              fromRefreshRunId,
+              toRefreshRunId,
+            },
+          );
+
+        res.status(200).json(result);
+        return;
+      }
 
       if (fromRefreshRunId || toRefreshRunId) {
         const result =

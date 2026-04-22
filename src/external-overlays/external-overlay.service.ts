@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { Pool } from "pg";
 import { ExternalOverlayRepository } from "./external-overlay.repository";
 import {
+  MissionExternalOverlayRefreshRunChronologyQueryInvalidError,
   MissionExternalOverlayMissionNotFoundError,
   MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
@@ -281,6 +282,12 @@ type AreaOverlayRefreshRunDiff = {
   };
 };
 
+type AreaOverlayRefreshRunChronology = {
+  missionId: string;
+  refreshRuns: AreaOverlayRefreshRunSummary[];
+  transitions: AreaOverlayRefreshRunDiff[];
+};
+
 const areaOverlayRefreshSummaryItemFromOverlay = (
   overlay: ExternalOverlay,
 ): AreaOverlayRefreshRunSummaryItem => {
@@ -486,6 +493,73 @@ const buildAreaOverlaySnapshotForRun = (
       return retiredIndex === undefined || retiredIndex > snapshotIndex;
     })
     .map(({ overlay }) => areaOverlayRefreshSummaryItemFromOverlay(overlay));
+};
+
+const buildAreaOverlayRefreshRunDiff = (
+  missionId: string,
+  overlays: ExternalOverlay[],
+  refreshRuns: AreaOverlayRefreshRunSummary[],
+  refreshRunOrder: Map<string, number>,
+  fromRefreshRunId: string,
+  toRefreshRunId: string,
+): AreaOverlayRefreshRunDiff => {
+  const fromRun = refreshRuns.find(
+    (refreshRun) => refreshRun.refreshRunId === fromRefreshRunId,
+  );
+  if (!fromRun) {
+    throw new MissionExternalOverlayRefreshRunNotFoundError(
+      missionId,
+      fromRefreshRunId,
+    );
+  }
+
+  const toRun = refreshRuns.find(
+    (refreshRun) => refreshRun.refreshRunId === toRefreshRunId,
+  );
+  if (!toRun) {
+    throw new MissionExternalOverlayRefreshRunNotFoundError(
+      missionId,
+      toRefreshRunId,
+    );
+  }
+
+  const fromSnapshot = buildAreaOverlaySnapshotForRun(
+    overlays,
+    refreshRunOrder,
+    fromRefreshRunId,
+  );
+  const toSnapshot = buildAreaOverlaySnapshotForRun(
+    overlays,
+    refreshRunOrder,
+    toRefreshRunId,
+  );
+
+  const fromActiveById = new Map(
+    fromSnapshot.map((item) => [item.overlayId, item] as const),
+  );
+  const toActiveById = new Map(
+    toSnapshot.map((item) => [item.overlayId, item] as const),
+  );
+
+  const added = toSnapshot.filter((item) => !fromActiveById.has(item.overlayId));
+  const removed = fromSnapshot.filter((item) => !toActiveById.has(item.overlayId));
+  const persisted = toSnapshot.filter((item) => fromActiveById.has(item.overlayId));
+  const persistedIds = new Set(persisted.map((item) => item.overlayId));
+  const removedIds = new Set(removed.map((item) => item.overlayId));
+
+  return {
+    missionId,
+    fromRefreshRunId,
+    toRefreshRunId,
+    added,
+    removed,
+    persisted,
+    changed: {
+      updated: toRun.updated.filter((item) => persistedIds.has(item.overlayId)),
+      superseded: toRun.superseded.filter((item) => persistedIds.has(item.overlayId)),
+      retired: toRun.retired.filter((item) => removedIds.has(item.overlayId)),
+    },
+  };
 };
 
 export class ExternalOverlayService {
@@ -981,66 +1055,81 @@ export class ExternalOverlayService {
       const refreshRuns = buildAreaOverlayRefreshRunSummaries(missionId, overlays);
       const refreshRunOrder = buildRefreshRunOrder(overlays);
 
-      const fromRun = refreshRuns.find(
-        (refreshRun) => refreshRun.refreshRunId === filters.fromRefreshRunId,
-      );
-      if (!fromRun) {
-        throw new MissionExternalOverlayRefreshRunNotFoundError(
+      return {
+        missionId,
+        diff: buildAreaOverlayRefreshRunDiff(
           missionId,
+          overlays,
+          refreshRuns,
+          refreshRunOrder,
           filters.fromRefreshRunId,
-        );
-      }
-
-      const toRun = refreshRuns.find(
-        (refreshRun) => refreshRun.refreshRunId === filters.toRefreshRunId,
-      );
-      if (!toRun) {
-        throw new MissionExternalOverlayRefreshRunNotFoundError(
-          missionId,
           filters.toRefreshRunId,
-        );
+        ),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAreaOverlayRefreshRunChronology(
+    missionId: string,
+    filters: {
+      refreshRunId?: string;
+      fromRefreshRunId?: string;
+      toRefreshRunId?: string;
+    } = {},
+  ): Promise<{ missionId: string; chronology: AreaOverlayRefreshRunChronology }> {
+    if (filters.refreshRunId || filters.fromRefreshRunId || filters.toRefreshRunId) {
+      throw new MissionExternalOverlayRefreshRunChronologyQueryInvalidError(
+        "chronology queries cannot be combined with refreshRunId, fromRefreshRunId, or toRefreshRunId",
+      );
+    }
+
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
       }
 
-      const fromSnapshot = buildAreaOverlaySnapshotForRun(
-        overlays,
-        refreshRunOrder,
-        filters.fromRefreshRunId,
+      const overlays = await this.externalOverlayRepository.listForMission(
+        client,
+        missionId,
+        { kind: "area_conflict", includeRetired: true },
       );
-      const toSnapshot = buildAreaOverlaySnapshotForRun(
-        overlays,
-        refreshRunOrder,
-        filters.toRefreshRunId,
-      );
-
-      const fromActiveById = new Map(
-        fromSnapshot.map((item) => [item.overlayId, item] as const),
-      );
-      const toActiveById = new Map(
-        toSnapshot.map((item) => [item.overlayId, item] as const),
+      const refreshRuns = buildAreaOverlayRefreshRunSummaries(missionId, overlays);
+      const refreshRunOrder = buildRefreshRunOrder(overlays);
+      const orderedRefreshRuns = [...refreshRuns].sort(
+        (left, right) =>
+          (refreshRunOrder.get(left.refreshRunId) ?? Number.MAX_SAFE_INTEGER) -
+          (refreshRunOrder.get(right.refreshRunId) ?? Number.MAX_SAFE_INTEGER),
       );
 
-      const added = toSnapshot.filter((item) => !fromActiveById.has(item.overlayId));
-      const removed = fromSnapshot.filter((item) => !toActiveById.has(item.overlayId));
-      const persisted = toSnapshot.filter((item) => fromActiveById.has(item.overlayId));
-      const persistedIds = new Set(persisted.map((item) => item.overlayId));
-      const removedIds = new Set(removed.map((item) => item.overlayId));
+      const transitions: AreaOverlayRefreshRunDiff[] = [];
+      for (let index = 1; index < orderedRefreshRuns.length; index += 1) {
+        transitions.push(
+          buildAreaOverlayRefreshRunDiff(
+            missionId,
+            overlays,
+            refreshRuns,
+            refreshRunOrder,
+            orderedRefreshRuns[index - 1].refreshRunId,
+            orderedRefreshRuns[index].refreshRunId,
+          ),
+        );
+      }
 
       return {
         missionId,
-        diff: {
+        chronology: {
           missionId,
-          fromRefreshRunId: filters.fromRefreshRunId,
-          toRefreshRunId: filters.toRefreshRunId,
-          added,
-          removed,
-          persisted,
-          changed: {
-            updated: toRun.updated.filter((item) => persistedIds.has(item.overlayId)),
-            superseded: toRun.superseded.filter((item) =>
-              persistedIds.has(item.overlayId),
-            ),
-            retired: toRun.retired.filter((item) => removedIds.has(item.overlayId)),
-          },
+          refreshRuns: orderedRefreshRuns,
+          transitions,
         },
       };
     } finally {
