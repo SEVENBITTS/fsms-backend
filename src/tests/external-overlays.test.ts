@@ -1154,6 +1154,268 @@ describe("mission external overlays integration", () => {
     });
   });
 
+  it("returns refresh-run diffs between two authoritative snapshots", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "EGD-1300",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "caution",
+            area: {
+              areaId: "EGD-1300",
+              label: "Danger Area EGD-1300",
+              areaType: "danger_area",
+              description: "Base area",
+              authorityName: "CAA",
+              sourceReference: "ENR 5.1",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-1301",
+            },
+            observedAt: "2026-04-21T10:08:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5091,
+              centerLng: -0.1261,
+              radiusMeters: 280,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "critical",
+            area: {
+              areaId: "TDA-1301",
+              label: "Temporary Danger Area 1301",
+              areaType: "temporary_danger_area",
+              description: "Will be retired later",
+              authorityName: "CAA",
+              sourceReference: "Temporary activation notice",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+
+    const secondRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1300/26",
+            },
+            observedAt: "2026-04-21T10:09:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B1300-26",
+              label: "Danger Area EGD-1300 NOTAM",
+              areaType: "notam_restriction",
+              description: "Superseding area",
+              authorityName: "NATS",
+              notamNumber: "B1300/26",
+              sourceReference: "NOTAM B1300/26",
+            },
+          },
+        ],
+      });
+
+    expect(secondRun.status).toBe(201);
+
+    const diffSecondResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?fromRefreshRunId=${firstRun.body.refreshRunId}&toRefreshRunId=${secondRun.body.refreshRunId}`,
+    );
+
+    expect(diffSecondResponse.status).toBe(200);
+    expect(diffSecondResponse.body).toMatchObject({
+      missionId,
+      diff: {
+        missionId,
+        fromRefreshRunId: firstRun.body.refreshRunId,
+        toRefreshRunId: secondRun.body.refreshRunId,
+        added: [],
+        removed: [
+          expect.objectContaining({
+            areaId: "TDA-1301",
+            retired: true,
+          }),
+        ],
+        persisted: [
+          expect.objectContaining({
+            areaId: "NOTAM-B1300-26",
+            sourceType: "notam_restriction",
+          }),
+        ],
+        changed: {
+          updated: [
+            expect.objectContaining({
+              areaId: "NOTAM-B1300-26",
+            }),
+          ],
+          superseded: [
+            expect.objectContaining({
+              areaId: "NOTAM-B1300-26",
+            }),
+          ],
+          retired: [
+            expect.objectContaining({
+              areaId: "TDA-1301",
+              retired: true,
+            }),
+          ],
+        },
+      },
+    });
+
+    const thirdRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1300/26",
+            },
+            observedAt: "2026-04-21T10:09:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5078,
+              centerLng: -0.1269,
+              radiusMeters: 350,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 900,
+            },
+            severity: "critical",
+            area: {
+              areaId: "NOTAM-B1300-26",
+              label: "Danger Area EGD-1300 NOTAM",
+              areaType: "notam_restriction",
+              description: "Superseding area",
+              authorityName: "NATS",
+              notamNumber: "B1300/26",
+              sourceReference: "NOTAM B1300/26",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-1302",
+            },
+            observedAt: "2026-04-21T10:10:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5102,
+              centerLng: -0.1251,
+              radiusMeters: 250,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1100,
+            },
+            severity: "caution",
+            area: {
+              areaId: "TDA-1302",
+              label: "Temporary Danger Area 1302",
+              areaType: "temporary_danger_area",
+              description: "New area in later run",
+              authorityName: "CAA",
+              sourceReference: "Temporary activation notice",
+            },
+          },
+        ],
+      });
+
+    expect(thirdRun.status).toBe(201);
+
+    const diffThirdResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?fromRefreshRunId=${secondRun.body.refreshRunId}&toRefreshRunId=${thirdRun.body.refreshRunId}`,
+    );
+
+    expect(diffThirdResponse.status).toBe(200);
+    expect(diffThirdResponse.body).toMatchObject({
+      missionId,
+      diff: {
+        missionId,
+        fromRefreshRunId: secondRun.body.refreshRunId,
+        toRefreshRunId: thirdRun.body.refreshRunId,
+        added: [
+          expect.objectContaining({
+            areaId: "TDA-1302",
+            sourceType: "temporary_danger_area",
+          }),
+        ],
+        removed: [],
+        persisted: [
+          expect.objectContaining({
+            areaId: "NOTAM-B1300-26",
+            sourceType: "notam_restriction",
+          }),
+        ],
+      },
+    });
+
+    const missingParamResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?fromRefreshRunId=${firstRun.body.refreshRunId}`,
+    );
+
+    expect(missingParamResponse.status).toBe(400);
+    expect(missingParamResponse.body).toMatchObject({
+      error: {
+        type: "refresh_run_diff_query_invalid",
+      },
+    });
+
+    const sameRunResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?fromRefreshRunId=${firstRun.body.refreshRunId}&toRefreshRunId=${firstRun.body.refreshRunId}`,
+    );
+
+    expect(sameRunResponse.status).toBe(400);
+    expect(sameRunResponse.body).toMatchObject({
+      error: {
+        type: "refresh_run_diff_query_invalid",
+      },
+    });
+  });
+
   it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 

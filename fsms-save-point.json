@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add refresh-run detail filtering support to normalized area overlay summary queries so a single authoritative snapshot can be reviewed directly.",
+  "nextBuildStep": "Add refresh-run chronology query support to normalized area overlay summaries so authoritative snapshot changes can be reviewed in chronological order.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
