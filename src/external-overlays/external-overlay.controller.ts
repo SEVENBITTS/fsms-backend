@@ -6,6 +6,10 @@ type MissionIdParams = {
   missionId: string;
 };
 
+type RefreshRunQuery = {
+  refreshRunId?: string;
+};
+
 export class ExternalOverlayController {
   constructor(
     private readonly externalOverlayService: ExternalOverlayService,
@@ -84,6 +88,30 @@ export class ExternalOverlayController {
         req.params.missionId,
         { kind },
       );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listAreaOverlayRefreshRuns = async (
+    req: Request<MissionIdParams, unknown, unknown, RefreshRunQuery>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const refreshRunId =
+        typeof req.query.refreshRunId === "string" &&
+        req.query.refreshRunId.trim().length > 0
+          ? req.query.refreshRunId.trim()
+          : undefined;
+
+      const result =
+        await this.externalOverlayService.listAreaOverlayRefreshRuns(
+          req.params.missionId,
+          { refreshRunId },
+        );
 
       res.status(200).json(result);
     } catch (error) {
