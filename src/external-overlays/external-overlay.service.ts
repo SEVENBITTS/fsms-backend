@@ -7,6 +7,7 @@ import {
   MissionExternalOverlayRefreshRunDiffQueryInvalidError,
   MissionExternalOverlayRefreshRunNotFoundError,
   MissionExternalOverlayRefreshRunTransitionArtifactChronologyQueryInvalidError,
+  MissionExternalOverlayRefreshRunTransitionArtifactChronologyPaginationQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionArtifactQueryInvalidError,
   MissionExternalOverlayRefreshRunTransitionDrilldownQueryInvalidError,
 } from "./external-overlay.errors";
@@ -308,6 +309,13 @@ type AreaOverlayRefreshRunTransitionArtifact = {
 type AreaOverlayRefreshRunTransitionArtifactChronology = {
   missionId: string;
   artifacts: AreaOverlayRefreshRunTransitionArtifact[];
+  pagination: {
+    totalCount: number;
+    offset: number;
+    limit: number;
+    nextOffset: number | null;
+    previousOffset: number | null;
+  };
 };
 
 const buildAreaOverlayRefreshRunTransitionArtifactId = (
@@ -1313,6 +1321,8 @@ export class ExternalOverlayService {
       transitionToRefreshRunId?: string;
       transitionArtifactId?: string;
       transitionArtifactIds?: string[];
+      transitionArtifactOffset?: string;
+      transitionArtifactLimit?: string;
     },
   ): Promise<{
     missionId: string;
@@ -1339,7 +1349,29 @@ export class ExternalOverlayService {
     const artifacts = chronologyResult.chronology.transitions.map((transition) =>
       buildAreaOverlayRefreshRunTransitionArtifact(missionId, transition),
     );
+    const paginationOffset = filters.transitionArtifactOffset
+      ? Number(filters.transitionArtifactOffset)
+      : 0;
+    const paginationLimit = filters.transitionArtifactLimit
+      ? Number(filters.transitionArtifactLimit)
+      : Math.max(artifacts.length, 1);
 
+    if (
+      !Number.isInteger(paginationOffset) ||
+      paginationOffset < 0
+    ) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyPaginationQueryInvalidError(
+        "transitionArtifactOffset must be a non-negative integer",
+      );
+    }
+
+    if (!Number.isInteger(paginationLimit) || paginationLimit < 1) {
+      throw new MissionExternalOverlayRefreshRunTransitionArtifactChronologyPaginationQueryInvalidError(
+        "transitionArtifactLimit must be a positive integer",
+      );
+    }
+
+    let filteredArtifacts = artifacts;
     if (filters.transitionArtifactIds && filters.transitionArtifactIds.length > 0) {
       for (const artifactId of filters.transitionArtifactIds) {
         const parsedArtifactId = parseAreaOverlayRefreshRunTransitionArtifactId(
@@ -1359,22 +1391,36 @@ export class ExternalOverlayService {
       }
 
       const selectedArtifactIds = new Set(filters.transitionArtifactIds);
-      return {
-        missionId,
-        chronology: {
-          missionId,
-          artifacts: artifacts.filter((artifact) =>
-            selectedArtifactIds.has(artifact.artifactId),
-          ),
-        },
-      };
+      filteredArtifacts = artifacts.filter((artifact) =>
+        selectedArtifactIds.has(artifact.artifactId),
+      );
     }
+
+    const paginatedArtifacts = filteredArtifacts.slice(
+      paginationOffset,
+      paginationOffset + paginationLimit,
+    );
+    const nextOffset =
+      paginationOffset + paginationLimit < filteredArtifacts.length
+        ? paginationOffset + paginationLimit
+        : null;
+    const previousOffset =
+      paginationOffset > 0
+        ? Math.max(0, paginationOffset - paginationLimit)
+        : null;
 
     return {
       missionId,
       chronology: {
         missionId,
-        artifacts,
+        artifacts: paginatedArtifacts,
+        pagination: {
+          totalCount: filteredArtifacts.length,
+          offset: paginationOffset,
+          limit: paginationLimit,
+          nextOffset,
+          previousOffset,
+        },
       },
     };
   }
