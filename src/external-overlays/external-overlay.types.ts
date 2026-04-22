@@ -82,6 +82,18 @@ export interface AreaConflictOverlayMetadata {
   authorityName?: string | null;
   notamNumber?: string | null;
   sourceReference?: string | null;
+  normalizedSourcePriority?: number | null;
+  dedupeKey?: string | null;
+  sourceTrace?: Array<{
+    provider: string;
+    sourceType: string;
+    sourceRecordId: string | null;
+    authorityName?: string | null;
+    notamNumber?: string | null;
+    sourceReference?: string | null;
+    areaId: string;
+    label: string;
+  }>;
 }
 
 export interface ExternalOverlay {

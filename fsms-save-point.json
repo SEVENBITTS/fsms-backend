@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add source-priority and deduplication rules to normalized area overlay ingestion so overlapping danger areas and NOTAM-derived restrictions do not create redundant interpreted conflicts.",
+  "nextBuildStep": "Add supersession updates to normalized area overlay ingestion so higher-priority NOTAM-derived restrictions can replace existing lower-priority area overlays across repeated normalization runs.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
