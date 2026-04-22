@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add operator-facing area-source freshness review context so stale and partial refresh states are visible without changing conflict-engine branching.",
+  "nextBuildStep": "Add failed-refresh provenance to operator-facing review context so unsuccessful authoritative updates are distinguishable from stale carried-forward overlay state.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

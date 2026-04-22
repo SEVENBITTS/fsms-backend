@@ -130,6 +130,8 @@ const normalizedAreaMetadata = (
     status: "fresh",
     evaluatedByRunId: refreshRunId,
     lastSuccessfulRefreshRunId: refreshRunId,
+    lastFailedRefreshRunId: null,
+    carriedForwardFromFailedRefresh: false,
   },
   ...extras,
 });
@@ -152,6 +154,10 @@ const priorSuccessfulRefreshRunId = (
   metadata.refreshProvenance?.createdByRunId ??
   null;
 
+const priorFailedRefreshRunId = (
+  metadata: AreaConflictOverlayMetadata,
+): string | null => areaRefreshStateFromMetadata(metadata)?.lastFailedRefreshRunId ?? null;
+
 const buildAreaSourceRefreshState = (
   refreshRunId: string,
   refreshStatus: NormalizeAreaOverlayRefreshStatus,
@@ -164,6 +170,13 @@ const buildAreaSourceRefreshState = (
     : metadata
       ? priorSuccessfulRefreshRunId(metadata)
       : null,
+  lastFailedRefreshRunId:
+    refreshStatus === "failed"
+      ? refreshRunId
+      : metadata
+        ? priorFailedRefreshRunId(metadata)
+        : null,
+  carriedForwardFromFailedRefresh: refreshStatus === "failed",
 });
 
 const sourceTraceEntryKey = (
@@ -307,6 +320,7 @@ type AreaOverlayRefreshRunSummary = {
   missionId: string;
   created: AreaOverlayRefreshRunSummaryItem[];
   updated: AreaOverlayRefreshRunSummaryItem[];
+  failed: AreaOverlayRefreshRunSummaryItem[];
   superseded: AreaOverlayRefreshRunSummaryItem[];
   retired: AreaOverlayRefreshRunSummaryItem[];
   active: AreaOverlayRefreshRunSummaryItem[];
@@ -562,6 +576,7 @@ const buildAreaOverlayRefreshRunSummaries = (
       missionId,
       created: [],
       updated: [],
+      failed: [],
       superseded: [],
       retired: [],
       active: [],
@@ -581,8 +596,13 @@ const buildAreaOverlayRefreshRunSummaries = (
     }
 
     const summaryItem = areaOverlayRefreshSummaryItemFromOverlay(overlay);
+    const sourceRefresh = areaMetadataFromOverlay(overlay).sourceRefresh;
     ensureSummary(provenance.createdByRunId).created.push(summaryItem);
     ensureSummary(provenance.lastUpdatedByRunId).updated.push(summaryItem);
+
+    if (sourceRefresh?.lastFailedRefreshRunId) {
+      ensureSummary(sourceRefresh.lastFailedRefreshRunId).failed.push(summaryItem);
+    }
 
     if (provenance.supersededByRunId) {
       ensureSummary(provenance.supersededByRunId).superseded.push(summaryItem);
@@ -641,6 +661,7 @@ const buildRefreshRunOrder = (overlays: ExternalOverlay[]): Map<string, number> 
     }
 
     const provenance = areaMetadataFromOverlay(overlay).refreshProvenance;
+    const sourceRefresh = areaMetadataFromOverlay(overlay).sourceRefresh;
     if (!provenance) {
       continue;
     }
@@ -662,6 +683,24 @@ const buildRefreshRunOrder = (overlays: ExternalOverlay[]): Map<string, number> 
       addEdge(provenance.lastUpdatedByRunId, provenance.retiredByRunId);
       if (provenance.supersededByRunId) {
         addEdge(provenance.supersededByRunId, provenance.retiredByRunId);
+      }
+    }
+
+    if (sourceRefresh?.lastFailedRefreshRunId) {
+      ensureNode(sourceRefresh.lastFailedRefreshRunId);
+
+      if (
+        sourceRefresh.lastSuccessfulRefreshRunId &&
+        sourceRefresh.lastSuccessfulRefreshRunId !== sourceRefresh.lastFailedRefreshRunId
+      ) {
+        addEdge(
+          sourceRefresh.lastSuccessfulRefreshRunId,
+          sourceRefresh.lastFailedRefreshRunId,
+        );
+      }
+
+      if (sourceRefresh.evaluatedByRunId !== sourceRefresh.lastFailedRefreshRunId) {
+        addEdge(sourceRefresh.lastFailedRefreshRunId, sourceRefresh.evaluatedByRunId);
       }
     }
   }
