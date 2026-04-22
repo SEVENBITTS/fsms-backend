@@ -34,9 +34,14 @@ export class ExternalOverlayController {
           req.params.missionId,
           req.body,
         );
+      } else if (req.body?.kind === "area_conflict") {
+        overlay = await this.externalOverlayService.createAreaConflictOverlay(
+          req.params.missionId,
+          req.body,
+        );
       } else {
         throw new Error(
-          "Supported overlay kinds are: weather, crewed_traffic, drone_traffic",
+          "Supported overlay kinds are: weather, crewed_traffic, drone_traffic, area_conflict",
         );
       }
 

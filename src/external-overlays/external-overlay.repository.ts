@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
+  CreateAreaConflictExternalOverlayInput,
   CreateCrewedTrafficExternalOverlayInput,
   CreateDroneTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
@@ -19,7 +20,7 @@ interface ExternalOverlayRow extends QueryResultRow {
   observed_at: Date;
   valid_from: Date | null;
   valid_to: Date | null;
-  geometry_type: "point";
+  geometry_type: "point" | "circle" | "polygon";
   latitude: number | null;
   longitude: number | null;
   altitude_msl_ft: number | null;
@@ -33,6 +34,23 @@ interface ExternalOverlayRow extends QueryResultRow {
   updated_at: Date;
 }
 
+const polygonCentroid = (
+  points: Array<{ lat: number; lng: number }>,
+): { lat: number; lng: number } => {
+  const total = points.reduce(
+    (acc, point) => ({
+      lat: acc.lat + point.lat,
+      lng: acc.lng + point.lng,
+    }),
+    { lat: 0, lng: 0 },
+  );
+
+  return {
+    lat: total.lat / points.length,
+    lng: total.lng / points.length,
+  };
+};
+
 const toExternalOverlay = (row: ExternalOverlayRow): ExternalOverlay => ({
   id: row.id,
   missionId: row.mission_id,
@@ -45,13 +63,55 @@ const toExternalOverlay = (row: ExternalOverlayRow): ExternalOverlay => ({
   observedAt: row.observed_at.toISOString(),
   validFrom: row.valid_from ? row.valid_from.toISOString() : null,
   validTo: row.valid_to ? row.valid_to.toISOString() : null,
-  geometry: {
-    type: "point",
-    lat: Number(row.latitude),
-    lng: Number(row.longitude),
-    altitudeMslFt:
-      row.altitude_msl_ft == null ? null : Number(row.altitude_msl_ft),
-  },
+  geometry:
+    row.geometry_type === "circle"
+      ? {
+          type: "circle",
+          centerLat: Number(row.latitude),
+          centerLng: Number(row.longitude),
+          radiusMeters: Number((row.metadata as Record<string, unknown>).radiusMeters),
+          altitudeFloorFt:
+            typeof (row.metadata as Record<string, unknown>).altitudeFloorFt ===
+            "number"
+              ? Number((row.metadata as Record<string, unknown>).altitudeFloorFt)
+              : null,
+          altitudeCeilingFt:
+            typeof (row.metadata as Record<string, unknown>).altitudeCeilingFt ===
+            "number"
+              ? Number((row.metadata as Record<string, unknown>).altitudeCeilingFt)
+              : null,
+        }
+      : row.geometry_type === "polygon"
+        ? {
+            type: "polygon",
+            points: Array.isArray((row.metadata as Record<string, unknown>).points)
+              ? ((row.metadata as Record<string, unknown>).points as Array<Record<string, unknown>>).map(
+                  (point) => ({
+                    lat: Number(point.lat),
+                    lng: Number(point.lng),
+                  }),
+                )
+              : [],
+            centroidLat: Number(row.latitude),
+            centroidLng: Number(row.longitude),
+            altitudeFloorFt:
+              typeof (row.metadata as Record<string, unknown>).altitudeFloorFt ===
+              "number"
+                ? Number((row.metadata as Record<string, unknown>).altitudeFloorFt)
+                : null,
+            altitudeCeilingFt:
+              typeof (row.metadata as Record<string, unknown>).altitudeCeilingFt ===
+              "number"
+                ? Number((row.metadata as Record<string, unknown>).altitudeCeilingFt)
+                : null,
+          }
+        : {
+            type: "point",
+            lat: Number(row.latitude),
+            lng: Number(row.longitude),
+            altitudeMslFt:
+              row.altitude_msl_ft == null ? null : Number(row.altitude_msl_ft),
+          },
   headingDegrees:
     row.heading_degrees == null ? null : Number(row.heading_degrees),
   speedKnots: row.speed_knots == null ? null : Number(row.speed_knots),
@@ -241,6 +301,82 @@ export class ExternalOverlayRepository {
         input.confidence,
         input.freshnessSeconds,
         JSON.stringify(input.metadata),
+      ],
+    );
+
+    return toExternalOverlay(result.rows[0]);
+  }
+
+  async insertAreaConflictOverlay(
+    tx: PoolClient,
+    missionId: string,
+    input: CreateAreaConflictExternalOverlayInput,
+  ): Promise<ExternalOverlay> {
+    const geometryType = input.geometry.type;
+    const center =
+      geometryType === "circle"
+        ? { lat: input.geometry.centerLat, lng: input.geometry.centerLng }
+        : polygonCentroid(input.geometry.points);
+    const geometryMetadata =
+      geometryType === "circle"
+        ? {
+            radiusMeters: input.geometry.radiusMeters,
+            altitudeFloorFt: input.geometry.altitudeFloorFt ?? null,
+            altitudeCeilingFt: input.geometry.altitudeCeilingFt ?? null,
+          }
+        : {
+            points: input.geometry.points,
+            altitudeFloorFt: input.geometry.altitudeFloorFt ?? null,
+            altitudeCeilingFt: input.geometry.altitudeCeilingFt ?? null,
+          };
+
+    const result = await tx.query<ExternalOverlayRow>(
+      `
+      insert into mission_external_overlays (
+        id,
+        mission_id,
+        overlay_kind,
+        source_provider,
+        source_type,
+        source_record_id,
+        observed_at,
+        valid_from,
+        valid_to,
+        geometry_type,
+        latitude,
+        longitude,
+        altitude_msl_ft,
+        heading_degrees,
+        speed_knots,
+        severity,
+        confidence,
+        freshness_seconds,
+        metadata
+      )
+      values (
+        $1, $2, 'area_conflict', $3, $4, $5, $6, $7, $8, $9, $10, $11, null, null, null, $12, $13, $14, $15::jsonb
+      )
+      returning *
+      `,
+      [
+        randomUUID(),
+        missionId,
+        input.source.provider,
+        input.source.sourceType,
+        input.source.sourceRecordId,
+        input.observedAt,
+        input.validFrom,
+        input.validTo,
+        geometryType,
+        center.lat,
+        center.lng,
+        input.severity,
+        input.confidence,
+        input.freshnessSeconds,
+        JSON.stringify({
+          ...input.metadata,
+          ...geometryMetadata,
+        }),
       ],
     );
 

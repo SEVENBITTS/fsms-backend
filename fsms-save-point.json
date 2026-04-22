@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add area conflict geometry support to mission-linked conflict assessment so bearing and range metadata can extend beyond traffic overlays.",
+  "nextBuildStep": "Add altitude-band gating and vertical context refinement to mission-linked area conflict assessment so area conflicts only trigger within relevant operating volumes.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

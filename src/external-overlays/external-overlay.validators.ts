@@ -1,4 +1,5 @@
 import type {
+  CreateAreaConflictExternalOverlayInput,
   CreateCrewedTrafficExternalOverlayInput,
   CreateDroneTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
@@ -305,6 +306,114 @@ export const validateCreateDroneTrafficExternalOverlayInput = (
         candidate.metadata.verticalRateFpm,
         "metadata.verticalRateFpm",
       ),
+    },
+  };
+};
+
+export const validateCreateAreaConflictExternalOverlayInput = (
+  input: unknown,
+): CreateAreaConflictExternalOverlayInput => {
+  if (!input || typeof input !== "object") {
+    throw new Error("request body is required");
+  }
+
+  const candidate = input as Record<string, any>;
+  if (candidate.kind !== "area_conflict") {
+    throw new Error("kind must be 'area_conflict'");
+  }
+
+  if (!candidate.source || typeof candidate.source !== "object") {
+    throw new Error("source is required");
+  }
+
+  if (!candidate.geometry || typeof candidate.geometry !== "object") {
+    throw new Error("geometry is required");
+  }
+
+  if (!candidate.metadata || typeof candidate.metadata !== "object") {
+    throw new Error("metadata is required");
+  }
+
+  const geometryType = requiredString(
+    candidate.geometry.type,
+    "geometry.type",
+  ).toLowerCase();
+
+  let geometry: CreateAreaConflictExternalOverlayInput["geometry"];
+  if (geometryType === "circle") {
+    geometry = {
+      type: "circle",
+      centerLat: requiredNumber(candidate.geometry.centerLat, "geometry.centerLat"),
+      centerLng: requiredNumber(candidate.geometry.centerLng, "geometry.centerLng"),
+      radiusMeters: requiredNumber(
+        candidate.geometry.radiusMeters,
+        "geometry.radiusMeters",
+      ),
+      altitudeFloorFt: optionalNumber(
+        candidate.geometry.altitudeFloorFt,
+        "geometry.altitudeFloorFt",
+      ),
+      altitudeCeilingFt: optionalNumber(
+        candidate.geometry.altitudeCeilingFt,
+        "geometry.altitudeCeilingFt",
+      ),
+    };
+  } else if (geometryType === "polygon") {
+    if (
+      !Array.isArray(candidate.geometry.points) ||
+      candidate.geometry.points.length < 3
+    ) {
+      throw new Error("geometry.points must contain at least three points");
+    }
+
+    geometry = {
+      type: "polygon",
+      points: candidate.geometry.points.map((point: unknown, index: number) => {
+        if (!point || typeof point !== "object") {
+          throw new Error(`geometry.points[${index}] must be an object`);
+        }
+
+        const value = point as Record<string, unknown>;
+        return {
+          lat: requiredNumber(value.lat, `geometry.points[${index}].lat`),
+          lng: requiredNumber(value.lng, `geometry.points[${index}].lng`),
+        };
+      }),
+      altitudeFloorFt: optionalNumber(
+        candidate.geometry.altitudeFloorFt,
+        "geometry.altitudeFloorFt",
+      ),
+      altitudeCeilingFt: optionalNumber(
+        candidate.geometry.altitudeCeilingFt,
+        "geometry.altitudeCeilingFt",
+      ),
+    };
+  } else {
+    throw new Error("geometry.type must be 'circle' or 'polygon'");
+  }
+
+  return {
+    kind: "area_conflict",
+    source: {
+      provider: requiredString(candidate.source.provider, "source.provider"),
+      sourceType: requiredString(candidate.source.sourceType, "source.sourceType"),
+      sourceRecordId: optionalString(candidate.source.sourceRecordId),
+    },
+    observedAt: requiredTimestamp(candidate.observedAt, "observedAt"),
+    validFrom: optionalTimestamp(candidate.validFrom, "validFrom"),
+    validTo: optionalTimestamp(candidate.validTo, "validTo"),
+    geometry,
+    severity: optionalSeverity(candidate.severity),
+    confidence: optionalNumber(candidate.confidence, "confidence"),
+    freshnessSeconds:
+      candidate.freshnessSeconds == null
+        ? null
+        : requiredNumber(candidate.freshnessSeconds, "freshnessSeconds"),
+    metadata: {
+      areaId: requiredString(candidate.metadata.areaId, "metadata.areaId"),
+      label: requiredString(candidate.metadata.label, "metadata.label"),
+      areaType: requiredString(candidate.metadata.areaType, "metadata.areaType"),
+      description: optionalString(candidate.metadata.description),
     },
   };
 };

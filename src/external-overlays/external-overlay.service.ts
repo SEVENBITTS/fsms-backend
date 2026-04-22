@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { ExternalOverlayRepository } from "./external-overlay.repository";
 import { MissionExternalOverlayMissionNotFoundError } from "./external-overlay.errors";
 import type {
+  CreateAreaConflictExternalOverlayInput,
   CreateCrewedTrafficExternalOverlayInput,
   CreateDroneTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
@@ -9,6 +10,7 @@ import type {
   ExternalOverlayKind,
 } from "./external-overlay.types";
 import {
+  validateCreateAreaConflictExternalOverlayInput,
   validateCreateCrewedTrafficExternalOverlayInput,
   validateCreateDroneTrafficExternalOverlayInput,
   validateCreateWeatherExternalOverlayInput,
@@ -92,6 +94,33 @@ export class ExternalOverlayService {
       }
 
       return await this.externalOverlayRepository.insertDroneTrafficOverlay(
+        client,
+        missionId,
+        validated,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async createAreaConflictOverlay(
+    missionId: string,
+    input: unknown,
+  ): Promise<ExternalOverlay> {
+    const validated = validateCreateAreaConflictExternalOverlayInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.externalOverlayRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new MissionExternalOverlayMissionNotFoundError(missionId);
+      }
+
+      return await this.externalOverlayRepository.insertAreaConflictOverlay(
         client,
         missionId,
         validated,

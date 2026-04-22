@@ -1,7 +1,8 @@
 export type ExternalOverlayKind =
   | "weather"
   | "crewed_traffic"
-  | "drone_traffic";
+  | "drone_traffic"
+  | "area_conflict";
 
 export type ExternalOverlaySeverity = "info" | "caution" | "critical";
 
@@ -18,7 +19,31 @@ export interface ExternalOverlayPointGeometry {
   altitudeMslFt: number | null;
 }
 
-export type ExternalOverlayGeometry = ExternalOverlayPointGeometry;
+export interface ExternalOverlayCircleGeometry {
+  type: "circle";
+  centerLat: number;
+  centerLng: number;
+  radiusMeters: number;
+  altitudeFloorFt: number | null;
+  altitudeCeilingFt: number | null;
+}
+
+export interface ExternalOverlayPolygonGeometry {
+  type: "polygon";
+  points: Array<{
+    lat: number;
+    lng: number;
+  }>;
+  centroidLat: number;
+  centroidLng: number;
+  altitudeFloorFt: number | null;
+  altitudeCeilingFt: number | null;
+}
+
+export type ExternalOverlayGeometry =
+  | ExternalOverlayPointGeometry
+  | ExternalOverlayCircleGeometry
+  | ExternalOverlayPolygonGeometry;
 
 export interface WeatherOverlayMetadata {
   windSpeedKnots: number;
@@ -47,6 +72,13 @@ export interface DroneTrafficOverlayMetadata {
   vehicleType: string | null;
   operatorReference: string | null;
   verticalRateFpm: number | null;
+}
+
+export interface AreaConflictOverlayMetadata {
+  areaId: string;
+  label: string;
+  areaType: string;
+  description: string | null;
 }
 
 export interface ExternalOverlay {
@@ -136,6 +168,40 @@ export interface CreateDroneTrafficExternalOverlayInput {
   confidence?: number | null;
   freshnessSeconds?: number | null;
   metadata: DroneTrafficOverlayMetadata;
+}
+
+export interface CreateAreaConflictExternalOverlayInput {
+  kind: "area_conflict";
+  source: {
+    provider: string;
+    sourceType: string;
+    sourceRecordId?: string | null;
+  };
+  observedAt: string;
+  validFrom?: string | null;
+  validTo?: string | null;
+  geometry:
+    | {
+        type: "circle";
+        centerLat: number;
+        centerLng: number;
+        radiusMeters: number;
+        altitudeFloorFt?: number | null;
+        altitudeCeilingFt?: number | null;
+      }
+    | {
+        type: "polygon";
+        points: Array<{
+          lat: number;
+          lng: number;
+        }>;
+        altitudeFloorFt?: number | null;
+        altitudeCeilingFt?: number | null;
+      };
+  severity?: ExternalOverlaySeverity | null;
+  confidence?: number | null;
+  freshnessSeconds?: number | null;
+  metadata: AreaConflictOverlayMetadata;
 }
 
 export interface ListExternalOverlaysFilters {

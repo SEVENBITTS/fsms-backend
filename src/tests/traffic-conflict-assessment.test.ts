@@ -215,6 +215,107 @@ describe("traffic conflict assessment integration", () => {
     expect(after.rows).toEqual(before.rows);
   });
 
+  it("assesses area conflict geometry using nearest-boundary range and bearing metadata", async () => {
+    const missionId = await createMission();
+    await recordTelemetry(missionId);
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "area_conflict",
+        source: {
+          provider: "airspace-hub",
+          sourceType: "zone_service",
+        },
+        observedAt: "2026-04-21T12:00:10.000Z",
+        geometry: {
+          type: "circle",
+          centerLat: 51.5075,
+          centerLng: -0.1277,
+          radiusMeters: 150,
+          altitudeFloorFt: 0,
+          altitudeCeilingFt: 1000,
+        },
+        severity: "critical",
+        metadata: {
+          areaId: "zone-1",
+          label: "Restricted tower zone",
+          areaType: "restricted_zone",
+          description: "Temporary restriction",
+        },
+      });
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "area_conflict",
+        source: {
+          provider: "airspace-hub",
+          sourceType: "zone_service",
+        },
+        observedAt: "2026-04-21T12:00:20.000Z",
+        geometry: {
+          type: "polygon",
+          points: [
+            { lat: 51.5071, lng: -0.1281 },
+            { lat: 51.5071, lng: -0.1269 },
+            { lat: 51.5079, lng: -0.1269 },
+            { lat: 51.5079, lng: -0.1281 },
+          ],
+          altitudeFloorFt: 0,
+          altitudeCeilingFt: 900,
+        },
+        severity: "caution",
+        metadata: {
+          areaId: "zone-2",
+          label: "Event exclusion polygon",
+          areaType: "event_restriction",
+          description: null,
+        },
+      });
+
+    const response = await request(app).get(
+      `/missions/${missionId}/conflict-assessment`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.assessment.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          missionId,
+          overlayKind: "area_conflict",
+          overlayLabel: "Restricted tower zone",
+          measurementBasis: {
+            referencePoint: "latest_telemetry",
+            targetGeometry: "overlay_circle",
+            rangeRule: "nearest_boundary",
+            bearingReference: "true_north",
+          },
+          metrics: expect.objectContaining({
+            rangeMeters: expect.any(Number),
+            bearingDegrees: expect.any(Number),
+            insideArea: expect.any(Boolean),
+          }),
+        }),
+        expect.objectContaining({
+          missionId,
+          overlayKind: "area_conflict",
+          overlayLabel: "Event exclusion polygon",
+          measurementBasis: {
+            referencePoint: "latest_telemetry",
+            targetGeometry: "overlay_polygon",
+            rangeRule: "nearest_boundary",
+            bearingReference: "true_north",
+          },
+          metrics: expect.objectContaining({
+            rangeMeters: expect.any(Number),
+            insideArea: expect.any(Boolean),
+          }),
+        }),
+      ]),
+    );
+  });
+
   it("preserves mission isolation for conflict assessment reads", async () => {
     const firstMissionId = await createMission();
     const secondMissionId = await createMission();

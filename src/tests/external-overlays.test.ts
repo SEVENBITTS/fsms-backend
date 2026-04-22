@@ -368,7 +368,80 @@ describe("mission external overlays integration", () => {
     });
   });
 
-  it("keeps weather, crewed traffic, and drone traffic paths intact when listed together", async () => {
+  it("creates and lists area conflict overlays through the mission-linked external overlay boundary", async () => {
+    const missionId = await createMission();
+
+    const createResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "area_conflict",
+        source: {
+          provider: "airspace-hub",
+          sourceType: "zone_service",
+          sourceRecordId: "zone-6006",
+        },
+        observedAt: "2026-04-21T10:07:00.000Z",
+        geometry: {
+          type: "circle",
+          centerLat: 51.5078,
+          centerLng: -0.1269,
+          radiusMeters: 350,
+          altitudeFloorFt: 100,
+          altitudeCeilingFt: 900,
+        },
+        severity: "caution",
+        metadata: {
+          areaId: "zone-6006",
+          label: "Tower protection zone",
+          areaType: "restricted_zone",
+          description: "Temporary restricted area around event site",
+        },
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.overlay).toMatchObject({
+      missionId,
+      kind: "area_conflict",
+      geometry: {
+        type: "circle",
+        centerLat: 51.5078,
+        centerLng: -0.1269,
+        radiusMeters: 350,
+        altitudeFloorFt: 100,
+        altitudeCeilingFt: 900,
+      },
+      metadata: {
+        areaId: "zone-6006",
+        label: "Tower protection zone",
+        areaType: "restricted_zone",
+        description: "Temporary restricted area around event site",
+      },
+    });
+
+    const listResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays?kind=area_conflict`,
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body).toMatchObject({
+      missionId,
+      overlays: [
+        expect.objectContaining({
+          kind: "area_conflict",
+          geometry: expect.objectContaining({
+            type: "circle",
+            radiusMeters: 350,
+          }),
+          metadata: expect.objectContaining({
+            areaId: "zone-6006",
+            label: "Tower protection zone",
+          }),
+        }),
+      ],
+    });
+  });
+
+  it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 
     await request(app)
@@ -422,6 +495,34 @@ describe("mission external overlays integration", () => {
     await request(app)
       .post(`/missions/${missionId}/external-overlays`)
       .send({
+        kind: "area_conflict",
+        source: {
+          provider: "airspace-hub",
+          sourceType: "zone_service",
+        },
+        observedAt: "2026-04-21T10:06:00.000Z",
+        geometry: {
+          type: "polygon",
+          points: [
+            { lat: 51.5072, lng: -0.1285 },
+            { lat: 51.5089, lng: -0.1285 },
+            { lat: 51.5089, lng: -0.126 },
+            { lat: 51.5072, lng: -0.126 },
+          ],
+          altitudeFloorFt: 0,
+          altitudeCeilingFt: 1200,
+        },
+        metadata: {
+          areaId: "zone-7007",
+          label: "City event exclusion area",
+          areaType: "event_restriction",
+          description: null,
+        },
+      });
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
         kind: "drone_traffic",
         source: {
           provider: "utm-hub",
@@ -455,6 +556,7 @@ describe("mission external overlays integration", () => {
         expect.objectContaining({ kind: "weather" }),
         expect.objectContaining({ kind: "crewed_traffic" }),
         expect.objectContaining({ kind: "drone_traffic" }),
+        expect.objectContaining({ kind: "area_conflict" }),
       ]),
     );
   });

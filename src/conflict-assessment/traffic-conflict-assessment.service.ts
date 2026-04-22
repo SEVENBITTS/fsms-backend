@@ -2,9 +2,12 @@ import { randomUUID } from "crypto";
 import type { Pool } from "pg";
 import { ExternalOverlayRepository } from "../external-overlays/external-overlay.repository";
 import type {
+  AreaConflictOverlayMetadata,
   CrewedTrafficOverlayMetadata,
   DroneTrafficOverlayMetadata,
   ExternalOverlay,
+  ExternalOverlayCircleGeometry,
+  ExternalOverlayPolygonGeometry,
   WeatherOverlayMetadata,
 } from "../external-overlays/external-overlay.types";
 import { MissionRepository } from "../missions/mission.repository";
@@ -60,6 +63,181 @@ const bearingDegrees = (
 const round = (value: number | null): number | null =>
   value == null || Number.isNaN(value) ? null : Math.round(value);
 
+const pointInPolygon = (
+  lat: number,
+  lng: number,
+  points: Array<{ lat: number; lng: number }>,
+): boolean => {
+  let inside = false;
+  for (let index = 0, previous = points.length - 1; index < points.length; previous = index++) {
+    const xi = points[index].lng;
+    const yi = points[index].lat;
+    const xj = points[previous].lng;
+    const yj = points[previous].lat;
+
+    const intersects =
+      yi > lat !== yj > lat &&
+      lng <
+        ((xj - xi) * (lat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+};
+
+const projectMeters = (
+  originLat: number,
+  originLng: number,
+  lat: number,
+  lng: number,
+): { x: number; y: number } => ({
+  x:
+    toRadians(lng - originLng) *
+    EARTH_RADIUS_M *
+    Math.cos(toRadians((lat + originLat) / 2)),
+  y: toRadians(lat - originLat) * EARTH_RADIUS_M,
+});
+
+const unprojectMeters = (
+  originLat: number,
+  originLng: number,
+  x: number,
+  y: number,
+): { lat: number; lng: number } => ({
+  lat: originLat + toDegrees(y / EARTH_RADIUS_M),
+  lng:
+    originLng +
+    toDegrees(
+      x /
+        (EARTH_RADIUS_M * Math.cos(toRadians(originLat || Number.EPSILON))),
+    ),
+});
+
+const nearestPointOnSegment = (
+  point: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): { x: number; y: number; distance: number } => {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+
+  if (lengthSquared === 0) {
+    const distance = Math.hypot(point.x - start.x, point.y - start.y);
+    return { x: start.x, y: start.y, distance };
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared,
+    ),
+  );
+  const nearest = {
+    x: start.x + t * dx,
+    y: start.y + t * dy,
+  };
+
+  return {
+    ...nearest,
+    distance: Math.hypot(point.x - nearest.x, point.y - nearest.y),
+  };
+};
+
+const nearestBoundaryForPolygon = (
+  referenceLat: number,
+  referenceLng: number,
+  geometry: ExternalOverlayPolygonGeometry,
+): {
+  rangeMeters: number;
+  bearingDegrees: number | null;
+  insideArea: boolean;
+} => {
+  const insideArea = pointInPolygon(referenceLat, referenceLng, geometry.points);
+  const referencePoint = { x: 0, y: 0 };
+  let best:
+    | {
+        x: number;
+        y: number;
+        distance: number;
+      }
+    | null = null;
+
+  for (let index = 0; index < geometry.points.length; index += 1) {
+    const startPoint = geometry.points[index];
+    const endPoint = geometry.points[(index + 1) % geometry.points.length];
+    const start = projectMeters(
+      referenceLat,
+      referenceLng,
+      startPoint.lat,
+      startPoint.lng,
+    );
+    const end = projectMeters(referenceLat, referenceLng, endPoint.lat, endPoint.lng);
+    const candidate = nearestPointOnSegment(referencePoint, start, end);
+
+    if (!best || candidate.distance < best.distance) {
+      best = candidate;
+    }
+  }
+
+  if (!best) {
+    return { rangeMeters: 0, bearingDegrees: null, insideArea };
+  }
+
+  const boundaryPoint = unprojectMeters(
+    referenceLat,
+    referenceLng,
+    best.x,
+    best.y,
+  );
+
+  return {
+    rangeMeters: best.distance,
+    bearingDegrees: best.distance === 0
+      ? null
+      : bearingDegrees(referenceLat, referenceLng, boundaryPoint.lat, boundaryPoint.lng),
+    insideArea,
+  };
+};
+
+const nearestBoundaryForCircle = (
+  referenceLat: number,
+  referenceLng: number,
+  geometry: ExternalOverlayCircleGeometry,
+): {
+  rangeMeters: number;
+  bearingDegrees: number | null;
+  insideArea: boolean;
+} => {
+  const distanceToCenter = haversineMeters(
+    referenceLat,
+    referenceLng,
+    geometry.centerLat,
+    geometry.centerLng,
+  );
+  const insideArea = distanceToCenter <= geometry.radiusMeters;
+  const rangeMeters = Math.abs(distanceToCenter - geometry.radiusMeters);
+  const bearingToCenter =
+    distanceToCenter === 0
+      ? null
+      : bearingDegrees(
+          referenceLat,
+          referenceLng,
+          geometry.centerLat,
+          geometry.centerLng,
+        );
+
+  return {
+    rangeMeters,
+    bearingDegrees: bearingToCenter,
+    insideArea,
+  };
+};
+
 const severityRank = (severity: TrafficConflictSeverity): number => {
   if (severity === "critical") return 3;
   if (severity === "caution") return 2;
@@ -78,6 +256,11 @@ const escalateSeverity = (
 };
 
 const trafficLabel = (overlay: ExternalOverlay): string => {
+  if (overlay.kind === "area_conflict") {
+    const metadata = overlay.metadata as unknown as AreaConflictOverlayMetadata;
+    return metadata.label ?? metadata.areaId ?? "Area conflict";
+  }
+
   if (overlay.kind === "crewed_traffic") {
     const metadata = overlay.metadata as unknown as CrewedTrafficOverlayMetadata;
     return metadata.callsign ?? metadata.trafficId ?? "Crewed traffic";
@@ -189,6 +372,47 @@ const classifyTrafficConflict = (
   return null;
 };
 
+const areaAltitudeRelevant = (
+  referenceAltitudeFt: number | null,
+  floorFt: number | null,
+  ceilingFt: number | null,
+): boolean => {
+  if (referenceAltitudeFt == null) {
+    return true;
+  }
+  if (floorFt != null && referenceAltitudeFt < floorFt) {
+    return false;
+  }
+  if (ceilingFt != null && referenceAltitudeFt > ceilingFt) {
+    return false;
+  }
+
+  return true;
+};
+
+const classifyAreaConflict = (
+  boundaryDistanceMeters: number | null,
+  insideArea: boolean,
+): { status: TrafficConflictStatus; severity: TrafficConflictSeverity } | null => {
+  if (insideArea) {
+    return { status: "conflict_candidate", severity: "critical" };
+  }
+  if (boundaryDistanceMeters == null) {
+    return null;
+  }
+  if (boundaryDistanceMeters <= 250) {
+    return { status: "conflict_candidate", severity: "critical" };
+  }
+  if (boundaryDistanceMeters <= 750) {
+    return { status: "conflict_candidate", severity: "caution" };
+  }
+  if (boundaryDistanceMeters <= 1500) {
+    return { status: "monitor", severity: "info" };
+  }
+
+  return null;
+};
+
 const buildExplanation = (
   overlay: ExternalOverlay,
   lateralDistanceMeters: number | null,
@@ -197,7 +421,9 @@ const buildExplanation = (
   weatherReason: string | null,
 ): string => {
   const base =
-    overlay.kind === "drone_traffic"
+    overlay.kind === "area_conflict"
+      ? "Area conflict proximity candidate"
+      : overlay.kind === "drone_traffic"
       ? "Drone traffic proximity candidate"
       : "Crewed traffic proximity candidate";
   const lateral =
@@ -234,6 +460,12 @@ const isTrafficOverlay = (
 ): overlay is ExternalOverlay & {
   kind: "crewed_traffic" | "drone_traffic";
 } => overlay.kind === "crewed_traffic" || overlay.kind === "drone_traffic";
+
+const isAreaConflictOverlay = (
+  overlay: ExternalOverlay,
+): overlay is ExternalOverlay & {
+  kind: "area_conflict";
+} => overlay.kind === "area_conflict";
 
 export class TrafficConflictAssessmentService {
   constructor(
@@ -278,13 +510,135 @@ export class TrafficConflictAssessmentService {
         latestTelemetry?.altitudeM == null ? null : latestTelemetry.altitudeM * FEET_PER_METER;
 
       const conflicts = overlays
-        .filter(isTrafficOverlay)
+        .filter(
+          (overlay): overlay is ExternalOverlay & {
+            kind: "crewed_traffic" | "drone_traffic" | "area_conflict";
+          } => isTrafficOverlay(overlay) || isAreaConflictOverlay(overlay),
+        )
         .map((overlay): TrafficConflictAssessmentItem | null => {
+          const overlayLabel = trafficLabel(overlay);
+          const observedAt = Date.parse(overlay.observedAt);
+          const referenceTime = Date.parse(referenceTimestamp);
+          const timeDeltaSeconds =
+            Number.isFinite(observedAt) && Number.isFinite(referenceTime)
+              ? Math.abs(referenceTime - observedAt) / 1000
+              : null;
+
+          if (overlay.kind === "area_conflict") {
+            const geometry = overlay.geometry;
+            if (
+              referenceLat == null ||
+              referenceLng == null ||
+              (geometry.type !== "circle" && geometry.type !== "polygon")
+            ) {
+              return null;
+            }
+
+            const altitudeFloorFt =
+              geometry.type === "circle"
+                ? geometry.altitudeFloorFt
+                : geometry.altitudeFloorFt;
+            const altitudeCeilingFt =
+              geometry.type === "circle"
+                ? geometry.altitudeCeilingFt
+                : geometry.altitudeCeilingFt;
+
+            if (
+              !areaAltitudeRelevant(
+                referenceAltitudeFt,
+                altitudeFloorFt,
+                altitudeCeilingFt,
+              )
+            ) {
+              return null;
+            }
+
+            const geometryAssessment =
+              geometry.type === "circle"
+                ? nearestBoundaryForCircle(referenceLat, referenceLng, geometry)
+                : nearestBoundaryForPolygon(referenceLat, referenceLng, geometry);
+            const classification = classifyAreaConflict(
+              geometryAssessment.rangeMeters,
+              geometryAssessment.insideArea,
+            );
+
+            if (!classification) {
+              return null;
+            }
+
+            const areaMetadata =
+              overlay.metadata as unknown as AreaConflictOverlayMetadata;
+            const severity = escalateSeverity(
+              overlay.severity ?? classification.severity,
+              weather.steps,
+            );
+            const geometryLabel =
+              geometry.type === "circle" ? "area circle" : "area polygon";
+            const summary =
+              classification.status === "conflict_candidate"
+                ? `${overlayLabel} area conflict candidate`
+                : `${overlayLabel} area monitor candidate`;
+            const verticalContext =
+              altitudeFloorFt != null || altitudeCeilingFt != null
+                ? ` altitude band ${altitudeFloorFt ?? "surface"}-${altitudeCeilingFt ?? "open"} ft`
+                : "";
+            const explanation = geometryAssessment.insideArea
+              ? `Area conflict proximity candidate: mission reference is inside ${geometryLabel} ${overlayLabel}; nearest boundary ${round(geometryAssessment.rangeMeters)} m away, ${
+                  geometryAssessment.bearingDegrees == null
+                    ? "unknown bearing"
+                    : `${round(geometryAssessment.bearingDegrees)}° bearing from mission reference`
+                },${verticalContext}${weather.reason ? ` ${weather.reason}` : ""}.`
+              : `Area conflict proximity candidate: ${overlayLabel} boundary is ${round(
+                  geometryAssessment.rangeMeters,
+                )} m away at ${
+                  geometryAssessment.bearingDegrees == null
+                    ? "unknown bearing"
+                    : `${round(geometryAssessment.bearingDegrees)}° bearing from mission reference`
+                },${verticalContext}${weather.reason ? ` ${weather.reason}` : ""}.`;
+
+            return {
+              id: randomUUID(),
+              missionId,
+              overlayId: overlay.id,
+              overlayKind: "area_conflict",
+              assessedAt,
+              referenceTimestamp,
+              overlayObservedAt: overlay.observedAt,
+              status: classification.status,
+              severity,
+              summary,
+              explanation,
+              overlayLabel,
+              relatedSource: { ...overlay.source },
+              measurementBasis: {
+                referencePoint: "latest_telemetry",
+                targetGeometry:
+                  geometry.type === "circle" ? "overlay_circle" : "overlay_polygon",
+                rangeRule: "nearest_boundary",
+                bearingReference: "true_north",
+              },
+              metrics: {
+                rangeMeters: round(geometryAssessment.rangeMeters),
+                bearingDegrees: round(geometryAssessment.bearingDegrees),
+                lateralDistanceMeters: round(geometryAssessment.rangeMeters),
+                altitudeDeltaFt: null,
+                timeDeltaSeconds: round(timeDeltaSeconds),
+                insideArea: geometryAssessment.insideArea,
+                overlayHeadingDegrees: null,
+                overlaySpeedKnots: null,
+              },
+            };
+          }
+
+          if (overlay.geometry.type !== "point") {
+            return null;
+          }
+
           const lateralDistanceMeters =
             referenceLat == null ||
             referenceLng == null ||
-            overlay.geometry?.lat == null ||
-            overlay.geometry?.lng == null
+            overlay.geometry.lat == null ||
+            overlay.geometry.lng == null
               ? null
               : haversineMeters(
                   referenceLat,
@@ -295,8 +649,8 @@ export class TrafficConflictAssessmentService {
           const bearingToOverlayDegrees =
             referenceLat == null ||
             referenceLng == null ||
-            overlay.geometry?.lat == null ||
-            overlay.geometry?.lng == null
+            overlay.geometry.lat == null ||
+            overlay.geometry.lng == null
               ? null
               : bearingDegrees(
                   referenceLat,
@@ -319,17 +673,10 @@ export class TrafficConflictAssessmentService {
             return null;
           }
 
-          const observedAt = Date.parse(overlay.observedAt);
-          const referenceTime = Date.parse(referenceTimestamp);
-          const timeDeltaSeconds =
-            Number.isFinite(observedAt) && Number.isFinite(referenceTime)
-              ? Math.abs(referenceTime - observedAt) / 1000
-              : null;
           const severity = escalateSeverity(
             classification.severity,
             weather.steps,
           );
-          const overlayLabel = trafficLabel(overlay);
 
           return {
             id: randomUUID(),
@@ -366,6 +713,7 @@ export class TrafficConflictAssessmentService {
               lateralDistanceMeters: round(lateralDistanceMeters),
               altitudeDeltaFt: round(altitudeDeltaFt),
               timeDeltaSeconds: round(timeDeltaSeconds),
+              insideArea: null,
               overlayHeadingDegrees: overlay.headingDegrees,
               overlaySpeedKnots: overlay.speedKnots,
             },
