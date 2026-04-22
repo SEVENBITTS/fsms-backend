@@ -177,6 +177,32 @@ const formatVerticalContext = (conflict) => {
   return "Not applicable";
 };
 
+const formatTemporalContext = (conflict) => {
+  const relation = conflict?.temporalContext?.relation ?? "not_applicable";
+  const validFrom = conflict?.temporalContext?.validFrom;
+  const validTo = conflict?.temporalContext?.validTo;
+  const referenceTimestamp = conflict?.temporalContext?.referenceTimestamp;
+  const windowText =
+    validFrom == null && validTo == null
+      ? "No active window"
+      : `${formatDateTime(validFrom)} - ${formatDateTime(validTo)}`;
+
+  if (relation === "inside_window") {
+    return `Inside active window | ${windowText} | ref ${formatDateTime(referenceTimestamp)}`;
+  }
+  if (relation === "before_window") {
+    return `Before active window | ${windowText} | ref ${formatDateTime(referenceTimestamp)}`;
+  }
+  if (relation === "after_window") {
+    return `After active window | ${windowText} | ref ${formatDateTime(referenceTimestamp)}`;
+  }
+  if (relation === "unknown") {
+    return `Active window ${windowText} | reference time unknown`;
+  }
+
+  return "Not applicable";
+};
+
 const formatRangeBearing = (metrics) => {
   const rangeMeters = metrics?.rangeMeters ?? metrics?.lateralDistanceMeters;
   if (rangeMeters == null && metrics?.bearingDegrees == null) {
@@ -657,7 +683,7 @@ const conflictAssessmentSummary = () => {
   return {
     label: `${conflicts.length} conflict candidate${conflicts.length === 1 ? "" : "s"}`,
     tone: highest.severity,
-    detail: `${highest.overlayLabel} | ${formatRangeBearing(highest.metrics)} | ${highest.overlayKind === "area_conflict" ? formatVerticalContext(highest) : `${formatVerticalSeparation(highest.metrics?.altitudeDeltaFt)} vertical`}`,
+    detail: `${highest.overlayLabel} | ${formatRangeBearing(highest.metrics)} | ${highest.overlayKind === "area_conflict" ? `${formatTemporalContext(highest)} | ${formatVerticalContext(highest)}` : `${formatVerticalSeparation(highest.metrics?.altitudeDeltaFt)} vertical`}`,
   };
 };
 
@@ -692,7 +718,7 @@ const deriveConflictAdvisories = () =>
       relatedSource: `${conflict.relatedSource.provider} / ${conflict.relatedSource.sourceType}`,
       reasoning: conflict.explanation,
       relevance: replayRelevance,
-      summary: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? formatVerticalContext(conflict) : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
+      summary: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? `${formatTemporalContext(conflict)} | ${formatVerticalContext(conflict)}` : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
     };
   });
 
@@ -2042,6 +2068,14 @@ const renderStatus = () => {
               ? formatRangeBearing(primaryConflict.metrics)
               : "Not recorded",
           )}</div>
+          <div class="k">Time relevance</div>
+          <div>${escapeHtml(
+            primaryConflict
+              ? primaryConflict.overlayKind === "area_conflict"
+                ? formatTemporalContext(primaryConflict)
+                : "Not applicable"
+              : "Not recorded",
+          )}</div>
           <div class="k">Vertical context</div>
           <div>${escapeHtml(
             primaryConflict
@@ -2234,6 +2268,7 @@ const renderConflictAssessment = () => {
                   Source: ${escapeHtml(primaryConflict.relatedSource.provider)} / ${escapeHtml(primaryConflict.relatedSource.sourceType)}<br />
                   Observed: ${escapeHtml(formatDateTime(primaryConflict.overlayObservedAt))}<br />
                   Range / bearing: ${escapeHtml(formatRangeBearing(primaryConflict.metrics))}<br />
+                  Time relevance: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatTemporalContext(primaryConflict) : "Not applicable")}<br />
                   Vertical context: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatVerticalContext(primaryConflict) : formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt))}<br />
                   Replay relevance: ${escapeHtml(primaryConflict.replayRelevant ? "Current replay window" : `${primaryConflict.replayTimeDeltaSeconds} s from replay cursor`)}
                 </div>

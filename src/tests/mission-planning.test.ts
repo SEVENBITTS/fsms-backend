@@ -2035,11 +2035,13 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("conflictAssessmentSummary");
     expect(response.text).toContain("conflictAdvisorySummary");
     expect(response.text).toContain("formatRangeBearing");
+    expect(response.text).toContain("formatTemporalContext");
     expect(response.text).toContain("formatVerticalContext");
     expect(response.text).toContain("formatBearingDegrees");
     expect(response.text).toContain("rangeMeters");
     expect(response.text).toContain("bearingDegrees");
     expect(response.text).toContain("insideArea");
+    expect(response.text).toContain("inside_window");
     expect(response.text).toContain("inside_band");
     expect(response.text).toContain("primaryConflictAssessmentItem");
     expect(response.text).toContain("secondaryConflictAssessmentItems");

@@ -291,6 +291,12 @@ describe("traffic conflict assessment integration", () => {
             rangeRule: "nearest_boundary",
             bearingReference: "true_north",
           },
+          temporalContext: {
+            referenceTimestamp: "2026-04-21T12:00:00.000Z",
+            validFrom: null,
+            validTo: null,
+            relation: "not_applicable",
+          },
           verticalContext: {
             referenceAltitudeFt: expect.any(Number),
             altitudeFloorFt: 0,
@@ -312,6 +318,12 @@ describe("traffic conflict assessment integration", () => {
             targetGeometry: "overlay_polygon",
             rangeRule: "nearest_boundary",
             bearingReference: "true_north",
+          },
+          temporalContext: {
+            referenceTimestamp: "2026-04-21T12:00:00.000Z",
+            validFrom: null,
+            validTo: null,
+            relation: "not_applicable",
           },
           verticalContext: {
             referenceAltitudeFt: expect.any(Number),
@@ -367,6 +379,56 @@ describe("traffic conflict assessment integration", () => {
       response.body.assessment.conflicts.some(
         (item: { overlayLabel: string }) =>
           item.overlayLabel === "Low ceiling restriction",
+      ),
+    ).toBe(false);
+  });
+
+  it("suppresses area conflicts when mission reference time is outside the active window", async () => {
+    const missionId = await createMission();
+    await recordTelemetry(missionId);
+
+    await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B9999/26",
+            },
+            observedAt: "2026-04-21T12:00:10.000Z",
+            validFrom: "2026-04-21T13:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5075,
+              centerLng: -0.1277,
+              radiusMeters: 150,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            area: {
+              areaId: "NOTAM-LATE",
+              label: "Future NOTAM Zone",
+              areaType: "notam_restriction",
+              description: "Should not apply before validFrom",
+              authorityName: "NATS",
+              notamNumber: "B9999/26",
+              sourceReference: "NOTAM B9999/26",
+            },
+          },
+        ],
+      });
+
+    const response = await request(app).get(
+      `/missions/${missionId}/conflict-assessment`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      response.body.assessment.conflicts.some(
+        (item: { overlayLabel: string }) => item.overlayLabel === "Future NOTAM Zone",
       ),
     ).toBe(false);
   });
@@ -457,6 +519,11 @@ describe("traffic conflict assessment integration", () => {
           measurementBasis: expect.objectContaining({
             rangeRule: "nearest_boundary",
           }),
+          temporalContext: expect.objectContaining({
+            relation: "inside_window",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+          }),
           verticalContext: expect.objectContaining({
             relation: "inside_band",
           }),
@@ -470,6 +537,11 @@ describe("traffic conflict assessment integration", () => {
           }),
           measurementBasis: expect.objectContaining({
             rangeRule: "nearest_boundary",
+          }),
+          temporalContext: expect.objectContaining({
+            relation: "inside_window",
+            validFrom: "2026-04-21T12:00:00.000Z",
+            validTo: "2026-04-21T15:00:00.000Z",
           }),
           verticalContext: expect.objectContaining({
             relation: "inside_band",

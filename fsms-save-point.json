@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add validity-window gating to mission-linked area conflict assessment so normalized danger areas and NOTAM-derived restrictions only trigger when the replay or telemetry reference time falls inside the active restriction window.",
+  "nextBuildStep": "Add source-priority and deduplication rules to normalized area overlay ingestion so overlapping danger areas and NOTAM-derived restrictions do not create redundant interpreted conflicts.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
