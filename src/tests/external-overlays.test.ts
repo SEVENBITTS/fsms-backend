@@ -3330,6 +3330,173 @@ describe("mission external overlays integration", () => {
     });
   });
 
+  it("exports bounded transition artifact chronology windows directly for audit review", async () => {
+    const missionId = await createMission();
+
+    const firstRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "danger_area",
+              sourceRecordId: "D-EXPORT-1",
+            },
+            observedAt: "2026-04-21T10:00:00.000Z",
+            validFrom: "2026-04-21T09:00:00.000Z",
+            validTo: "2026-04-21T13:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5074,
+              centerLng: -0.1278,
+              radiusMeters: 200,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "caution",
+            area: {
+              areaId: "D-EXPORT-1",
+              label: "Danger Area Export 1",
+              areaType: "danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const secondRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "NOTAM-EXPORT-2",
+            },
+            observedAt: "2026-04-21T10:30:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5074,
+              centerLng: -0.1278,
+              radiusMeters: 200,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1200,
+            },
+            severity: "critical",
+            area: {
+              areaId: "D-EXPORT-1",
+              label: "Danger Area Export 1",
+              areaType: "notam_restriction",
+              authorityName: "NATS",
+              notamNumber: "B3100/26",
+            },
+          },
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "temporary_danger_area",
+              sourceRecordId: "TDA-EXPORT-2",
+            },
+            observedAt: "2026-04-21T10:35:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5112,
+              centerLng: -0.1241,
+              radiusMeters: 220,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            severity: "info",
+            area: {
+              areaId: "TDA-EXPORT-2",
+              label: "Temporary Danger Area Export 2",
+              areaType: "temporary_danger_area",
+              authorityName: "CAA",
+            },
+          },
+        ],
+      });
+
+    const thirdRun = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "NOTAM-EXPORT-3",
+            },
+            observedAt: "2026-04-21T11:00:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T15:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: 51.5112,
+              centerLng: -0.1241,
+              radiusMeters: 220,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 1000,
+            },
+            severity: "critical",
+            area: {
+              areaId: "TDA-EXPORT-2",
+              label: "Temporary Danger Area Export 2",
+              areaType: "notam_restriction",
+              authorityName: "NATS",
+              notamNumber: "B3101/26",
+            },
+          },
+        ],
+      });
+
+    expect(firstRun.status).toBe(201);
+    expect(secondRun.status).toBe(201);
+    expect(thirdRun.status).toBe(201);
+
+    const fullChronologyResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true`,
+    );
+    const selectedArtifactId =
+      fullChronologyResponse.body.chronology.artifacts[1].artifactId;
+
+    const exportResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true&transitionArtifactExport=true&transitionArtifactIds=${selectedArtifactId}&transitionArtifactOffset=0&transitionArtifactLimit=1`,
+    );
+
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.body).toMatchObject({
+      missionId,
+      export: {
+        exportId: expect.any(String),
+        exportType: "refresh_run_transition_artifact_chronology_snapshot",
+        missionId,
+        exportedAt: expect.any(String),
+      },
+    });
+    expect(exportResponse.body.export.snapshot).toEqual(
+      exportResponse.body.chronology,
+    );
+    expect(exportResponse.body.export.exportId).toContain(
+      exportResponse.body.chronology.pagination.bookmark,
+    );
+
+    const bookmarkedExportResponse = await request(app).get(
+      `/missions/${missionId}/external-overlays/refresh-runs?transitionArtifactChronology=true&transitionArtifactExport=true&transitionArtifactBookmark=${exportResponse.body.chronology.pagination.bookmark}`,
+    );
+
+    expect(bookmarkedExportResponse.status).toBe(200);
+    expect(bookmarkedExportResponse.body.export.snapshot).toEqual(
+      exportResponse.body.chronology,
+    );
+  });
+
   it("keeps weather, crewed traffic, drone traffic, and area conflict paths intact when listed together", async () => {
     const missionId = await createMission();
 
