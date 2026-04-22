@@ -4,10 +4,16 @@ import type {
   CreateDroneTrafficExternalOverlayInput,
   CreateWeatherExternalOverlayInput,
   ExternalOverlaySeverity,
+  NormalizeAreaOverlaySourcesInput,
 } from "./external-overlay.types";
 
 const SEVERITIES: ExternalOverlaySeverity[] = ["info", "caution", "critical"];
 const PRECIPITATION = ["none", "drizzle", "rain", "snow", "hail", "mixed"];
+const AREA_SOURCE_TYPES = [
+  "danger_area",
+  "temporary_danger_area",
+  "notam_restriction",
+] as const;
 
 const requiredString = (value: unknown, fieldName: string): string => {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -414,6 +420,124 @@ export const validateCreateAreaConflictExternalOverlayInput = (
       label: requiredString(candidate.metadata.label, "metadata.label"),
       areaType: requiredString(candidate.metadata.areaType, "metadata.areaType"),
       description: optionalString(candidate.metadata.description),
+      authorityName: optionalString(candidate.metadata.authorityName),
+      notamNumber: optionalString(candidate.metadata.notamNumber),
+      sourceReference: optionalString(candidate.metadata.sourceReference),
     },
+  };
+};
+
+export const validateNormalizeAreaOverlaySourcesInput = (
+  input: unknown,
+): NormalizeAreaOverlaySourcesInput => {
+  if (!input || typeof input !== "object") {
+    throw new Error("request body is required");
+  }
+
+  const candidate = input as Record<string, unknown>;
+  if (!Array.isArray(candidate.records) || candidate.records.length === 0) {
+    throw new Error("records must be a non-empty array");
+  }
+
+  return {
+    records: candidate.records.map((record, index) => {
+      if (!record || typeof record !== "object") {
+        throw new Error(`records[${index}] must be an object`);
+      }
+
+      const value = record as Record<string, any>;
+      if (!value.source || typeof value.source !== "object") {
+        throw new Error(`records[${index}].source is required`);
+      }
+      if (!value.area || typeof value.area !== "object") {
+        throw new Error(`records[${index}].area is required`);
+      }
+      if (!value.geometry || typeof value.geometry !== "object") {
+        throw new Error(`records[${index}].geometry is required`);
+      }
+
+      const sourceType = requiredString(
+        value.source.sourceType,
+        `records[${index}].source.sourceType`,
+      ).toLowerCase();
+      if (
+        !AREA_SOURCE_TYPES.includes(
+          sourceType as (typeof AREA_SOURCE_TYPES)[number],
+        )
+      ) {
+        throw new Error(
+          `records[${index}].source.sourceType must be one of: danger_area, temporary_danger_area, notam_restriction`,
+        );
+      }
+
+      const areaType = requiredString(
+        value.area.areaType,
+        `records[${index}].area.areaType`,
+      ).toLowerCase();
+      if (
+        !AREA_SOURCE_TYPES.includes(
+          areaType as (typeof AREA_SOURCE_TYPES)[number],
+        )
+      ) {
+        throw new Error(
+          `records[${index}].area.areaType must be one of: danger_area, temporary_danger_area, notam_restriction`,
+        );
+      }
+
+      const normalized = validateCreateAreaConflictExternalOverlayInput({
+        kind: "area_conflict",
+        source: {
+          provider: value.source.provider,
+          sourceType,
+          sourceRecordId: value.source.sourceRecordId,
+        },
+        observedAt: value.observedAt,
+        validFrom: value.validFrom,
+        validTo: value.validTo,
+        geometry: value.geometry,
+        severity: value.severity,
+        confidence: value.confidence,
+        freshnessSeconds: value.freshnessSeconds,
+        metadata: {
+          areaId: value.area.areaId,
+          label: value.area.label,
+          areaType,
+          description: value.area.description,
+          authorityName: value.area.authorityName,
+          notamNumber: value.area.notamNumber,
+          sourceReference: value.area.sourceReference,
+        },
+      });
+
+      return {
+        source: {
+          provider: normalized.source.provider,
+          sourceType: normalized.source.sourceType as
+            | "danger_area"
+            | "temporary_danger_area"
+            | "notam_restriction",
+          sourceRecordId: normalized.source.sourceRecordId,
+        },
+        observedAt: normalized.observedAt,
+        validFrom: normalized.validFrom,
+        validTo: normalized.validTo,
+        geometry: normalized.geometry,
+        severity: normalized.severity,
+        confidence: normalized.confidence,
+        freshnessSeconds: normalized.freshnessSeconds,
+        area: {
+          areaId: normalized.metadata.areaId,
+          label: normalized.metadata.label,
+          areaType: normalized.metadata.areaType as
+            | "danger_area"
+            | "temporary_danger_area"
+            | "notam_restriction",
+          description: normalized.metadata.description ?? null,
+          authorityName: normalized.metadata.authorityName ?? null,
+          notamNumber: normalized.metadata.notamNumber ?? null,
+          sourceReference: normalized.metadata.sourceReference ?? null,
+        },
+      };
+    }),
   };
 };

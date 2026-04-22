@@ -51,6 +51,24 @@ export class ExternalOverlayController {
     }
   };
 
+  normalizeAreaOverlaySources = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const result =
+        await this.externalOverlayService.normalizeAreaOverlaySources(
+          req.params.missionId,
+          req.body,
+        );
+
+      res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   listExternalOverlays = async (
     req: Request<MissionIdParams>,
     res: Response,

@@ -79,6 +79,9 @@ export interface AreaConflictOverlayMetadata {
   label: string;
   areaType: string;
   description: string | null;
+  authorityName?: string | null;
+  notamNumber?: string | null;
+  sourceReference?: string | null;
 }
 
 export interface ExternalOverlay {
@@ -202,6 +205,57 @@ export interface CreateAreaConflictExternalOverlayInput {
   confidence?: number | null;
   freshnessSeconds?: number | null;
   metadata: AreaConflictOverlayMetadata;
+}
+
+export interface NormalizeAreaOverlaySourceRecordInput {
+  source: {
+    provider: string;
+    sourceType:
+      | "danger_area"
+      | "temporary_danger_area"
+      | "notam_restriction";
+    sourceRecordId?: string | null;
+  };
+  observedAt: string;
+  validFrom?: string | null;
+  validTo?: string | null;
+  geometry:
+    | {
+        type: "circle";
+        centerLat: number;
+        centerLng: number;
+        radiusMeters: number;
+        altitudeFloorFt?: number | null;
+        altitudeCeilingFt?: number | null;
+      }
+    | {
+        type: "polygon";
+        points: Array<{
+          lat: number;
+          lng: number;
+        }>;
+        altitudeFloorFt?: number | null;
+        altitudeCeilingFt?: number | null;
+      };
+  severity?: ExternalOverlaySeverity | null;
+  confidence?: number | null;
+  freshnessSeconds?: number | null;
+  area: {
+    areaId: string;
+    label: string;
+    areaType:
+      | "danger_area"
+      | "temporary_danger_area"
+      | "notam_restriction";
+    description?: string | null;
+    authorityName?: string | null;
+    notamNumber?: string | null;
+    sourceReference?: string | null;
+  };
+}
+
+export interface NormalizeAreaOverlaySourcesInput {
+  records: NormalizeAreaOverlaySourceRecordInput[];
 }
 
 export interface ListExternalOverlaysFilters {
