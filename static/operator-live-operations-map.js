@@ -144,6 +144,16 @@ const areaOverlaySourceRefreshDetail = (overlay) => {
     );
   }
 
+  if (refreshState.lastPartialRefreshRunId) {
+    detailParts.push(
+      `last partial ${formatDateTime(refreshState.lastPartialRefreshRunId)}`,
+    );
+  }
+
+  if (refreshState.carriedForwardFromPartialRefresh) {
+    detailParts.push("carried forward after partial refresh");
+  }
+
   if (refreshState.carriedForwardFromFailedRefresh) {
     detailParts.push("carried forward after failed refresh");
   }
@@ -172,9 +182,15 @@ const areaOverlaySourceRefreshCardContext = (overlay) => {
     return null;
   }
 
-  return refreshState.carriedForwardFromFailedRefresh
-    ? `${label} | carried forward`
-    : label;
+  if (refreshState.carriedForwardFromFailedRefresh) {
+    return `${label} | carried forward after failed refresh`;
+  }
+
+  if (refreshState.carriedForwardFromPartialRefresh) {
+    return `${label} | carried forward after partial refresh`;
+  }
+
+  return label;
 };
 
 const areaSourceRefreshSummary = () => {
@@ -209,6 +225,15 @@ const areaSourceRefreshSummary = () => {
     .filter(Boolean)
     .sort()
     .at(-1);
+  const latestPartialRefresh = overlays
+    .map((overlay) => areaOverlaySourceRefreshState(overlay)?.lastPartialRefreshRunId)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const carriedForwardPartialCount = overlays.filter(
+    (overlay) =>
+      areaOverlaySourceRefreshState(overlay)?.carriedForwardFromPartialRefresh === true,
+  ).length;
   const carriedForwardFailedCount = overlays.filter(
     (overlay) =>
       areaOverlaySourceRefreshState(overlay)?.carriedForwardFromFailedRefresh === true,
@@ -238,6 +263,20 @@ const areaSourceRefreshSummary = () => {
           ]
             .filter(Boolean)
             .join(" | ")
+        : highestPriorityStatus === "partial"
+          ? [
+              latestPartialRefresh != null
+                ? `Last partial refresh ${formatDateTime(latestPartialRefresh)}`
+                : "Partial refresh recorded",
+              latestSuccessfulRefresh != null
+                ? `last successful ${formatDateTime(latestSuccessfulRefresh)}`
+                : "no successful refresh recorded",
+              carriedForwardPartialCount > 0
+                ? `${carriedForwardPartialCount} carried-forward overlay${carriedForwardPartialCount === 1 ? "" : "s"}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" | ")
         : latestSuccessfulRefresh != null
           ? `Last successful refresh ${formatDateTime(latestSuccessfulRefresh)}`
           : "No successful refresh recorded",

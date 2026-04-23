@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add operator-facing partial-refresh review visibility so incomplete authoritative area state is visible in live operations review.",
+  "nextBuildStep": "Add operator-facing partial-refresh summary-card context so incomplete authoritative area state is visible at a glance.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
