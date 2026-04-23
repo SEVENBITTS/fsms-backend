@@ -152,6 +152,19 @@ const areaOverlayNotamGeometryDetail = (overlay) => {
   return detailParts.join(" | ");
 };
 
+const areaOverlayNotamGeometrySummaryContext = (overlay) => {
+  const geometryContext = areaOverlayNotamGeometryContext(overlay);
+  if (!geometryContext) {
+    return null;
+  }
+
+  return geometryContext.geometrySource === "e_field"
+    ? "NOTAM geometry E-field"
+    : geometryContext.geometrySource === "q_line"
+      ? "NOTAM geometry Q-line fallback"
+      : "NOTAM geometry provided";
+};
+
 const areaOverlaySourceRefreshDetail = (overlay) => {
   const refreshState = areaOverlaySourceRefreshState(overlay);
   if (!refreshState) {
@@ -194,7 +207,7 @@ const areaOverlaySourceRefreshDetail = (overlay) => {
 const areaOverlaySourceRefreshCardContext = (overlay) => {
   const refreshState = areaOverlaySourceRefreshState(overlay);
   if (!refreshState) {
-    return null;
+    return areaOverlayNotamGeometrySummaryContext(overlay);
   }
 
   const label =
@@ -220,8 +233,8 @@ const areaOverlaySourceRefreshCardContext = (overlay) => {
     return `${label} | carried forward after partial refresh`;
   }
 
-  const notamGeometryDetail = areaOverlayNotamGeometryDetail(overlay);
-  return [label, notamGeometryDetail].filter(Boolean).join(" | ");
+  const notamGeometryContext = areaOverlayNotamGeometrySummaryContext(overlay);
+  return [label, notamGeometryContext].filter(Boolean).join(" | ");
 };
 
 const areaSourceRefreshSummary = () => {
