@@ -165,6 +165,21 @@ const areaOverlayNotamGeometrySummaryContext = (overlay) => {
       : "NOTAM geometry provided";
 };
 
+const areaOverlayQLineIndexReviewContext = (overlay) => {
+  const geometryContext = areaOverlayNotamGeometryContext(overlay);
+  const qLineIndex = geometryContext?.qLineIndex;
+  if (!qLineIndex) {
+    return null;
+  }
+
+  return [
+    "Q-line index metadata",
+    `center ${formatCoordinate(qLineIndex.centerLat)}, ${formatCoordinate(qLineIndex.centerLng)}`,
+    `radius ${qLineIndex.radiusNm} NM`,
+    "coarse index only",
+  ].join(" | ");
+};
+
 const areaOverlaySourceRefreshDetail = (overlay) => {
   const refreshState = areaOverlaySourceRefreshState(overlay);
   if (!refreshState) {
@@ -234,7 +249,8 @@ const areaOverlaySourceRefreshCardContext = (overlay) => {
   }
 
   const notamGeometryContext = areaOverlayNotamGeometrySummaryContext(overlay);
-  return [label, notamGeometryContext].filter(Boolean).join(" | ");
+  const qLineIndexContext = areaOverlayQLineIndexReviewContext(overlay);
+  return [label, notamGeometryContext, qLineIndexContext].filter(Boolean).join(" | ");
 };
 
 const areaSourceRefreshSummary = () => {

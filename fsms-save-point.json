@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add operator-facing Q-line index review visibility so coarse NOTAM index metadata is clearer in live operations review.",
+  "nextBuildStep": "Add operator-facing Q-line index summary context so coarse NOTAM index metadata is clearer at a glance in live operations review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

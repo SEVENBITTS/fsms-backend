@@ -2073,10 +2073,13 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("notamGeometryContext");
     expect(response.text).toContain("areaOverlayNotamGeometryDetail");
     expect(response.text).toContain("areaOverlayNotamGeometrySummaryContext");
+    expect(response.text).toContain("areaOverlayQLineIndexReviewContext");
     expect(response.text).toContain("NOTAM geometry");
     expect(response.text).toContain("NOTAM geometry E-field");
     expect(response.text).toContain("NOTAM geometry Q-line fallback");
     expect(response.text).toContain("NOTAM geometry provided");
+    expect(response.text).toContain("Q-line index metadata");
+    expect(response.text).toContain("coarse index only");
     expect(response.text).toContain("Q-line center");
     expect(response.text).toContain("Q-line radius");
     expect(response.text).toContain("Last failed refresh");
