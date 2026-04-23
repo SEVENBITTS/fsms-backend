@@ -2034,6 +2034,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("droneTrafficSummary");
     expect(response.text).toContain("conflictAssessmentSummary");
     expect(response.text).toContain("conflictAdvisorySummary");
+    expect(response.text).toContain("refreshContext");
     expect(response.text).toContain("formatRangeBearing");
     expect(response.text).toContain("formatTemporalContext");
     expect(response.text).toContain("formatVerticalContext");
