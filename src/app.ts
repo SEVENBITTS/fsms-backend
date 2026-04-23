@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import express, { NextFunction, Request, Response } from "express";
@@ -70,8 +71,15 @@ import { TrafficConflictAssessmentService } from "./conflict-assessment/traffic-
 import { TrafficConflictAssessmentController } from "./conflict-assessment/traffic-conflict-assessment.controller";
 import { createTrafficConflictAssessmentRouter } from "./conflict-assessment/traffic-conflict-assessment.routes";
 
+const projectRoot = path.resolve(__dirname, "..");
+const staticRoot = path.resolve(projectRoot, "static");
+
+function readStaticHtml(fileName: string): string {
+  return fs.readFileSync(path.resolve(staticRoot, fileName), "utf8");
+}
+
 dotenv.config({
-  path: path.resolve(process.cwd(), ".env"),
+  path: path.resolve(projectRoot, ".env"),
   quiet: true,
 });
 
@@ -79,7 +87,7 @@ dotenv.config({
 
 if (process.env.NODE_ENV !== "test") {
   console.log("PG env check", {
-    envPath: path.resolve(process.cwd(), ".env"),
+    envPath: path.resolve(projectRoot, ".env"),
     host: process.env.PGHOST,
     port: process.env.PGPORT,
     user: process.env.PGUSER,
@@ -91,7 +99,7 @@ if (process.env.NODE_ENV !== "test") {
 
 const app = express();
 app.use(express.json());
-app.use("/static", express.static(path.resolve(process.cwd(), "static")));
+app.use("/static", express.static(staticRoot));
 
 const pool = new Pool({
   host: process.env.PGHOST,
@@ -241,24 +249,16 @@ app.use("/platforms", createPlatformRouter(platformController));
 app.use("/pilots", createPilotRouter(pilotController));
 app.use("/timeline", createTimelineRouter(timelineService));
 app.get("/operator/mission-workspace", (_req, res) => {
-  res.sendFile(
-    path.resolve(process.cwd(), "static", "operator-mission-workspace.html"),
-  );
+  res.type("html").send(readStaticHtml("operator-mission-workspace.html"));
 });
 app.get("/operator/missions/:missionId", (_req, res) => {
-  res.sendFile(
-    path.resolve(process.cwd(), "static", "operator-mission-workspace.html"),
-  );
+  res.type("html").send(readStaticHtml("operator-mission-workspace.html"));
 });
 app.get("/operator/live-operations-map", (_req, res) => {
-  res.sendFile(
-    path.resolve(process.cwd(), "static", "operator-live-operations-map.html"),
-  );
+  res.type("html").send(readStaticHtml("operator-live-operations-map.html"));
 });
 app.get("/operator/missions/:missionId/live-operations", (_req, res) => {
-  res.sendFile(
-    path.resolve(process.cwd(), "static", "operator-live-operations-map.html"),
-  );
+  res.type("html").send(readStaticHtml("operator-live-operations-map.html"));
 });
 app.get("/", (_req, res) => {
   res.status(200).send("FSMS backend is running");
