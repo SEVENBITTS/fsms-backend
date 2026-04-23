@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add operator-facing partial-refresh summary-card context so incomplete authoritative area state is visible at a glance.",
+  "nextBuildStep": "Add operator-facing partial-refresh advisory review detail so incomplete authoritative area state is visible throughout advisory presentation.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

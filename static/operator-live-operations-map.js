@@ -892,6 +892,10 @@ const deriveConflictAdvisories = () =>
     const replayRelevance = conflict.replayRelevant
       ? "Current replay window"
       : `${conflict.replayTimeDeltaSeconds} s from replay cursor`;
+    const refreshContext =
+      conflict.overlayKind === "area_conflict"
+        ? areaOverlaySourceRefreshCardContext(conflictOverlayForItem(conflict))
+        : null;
 
     return {
       id: conflict.id,
@@ -902,7 +906,16 @@ const deriveConflictAdvisories = () =>
       relatedSource: `${conflict.relatedSource.provider} / ${conflict.relatedSource.sourceType}`,
       reasoning: conflict.explanation,
       relevance: replayRelevance,
-      summary: `${formatRangeBearing(conflict.metrics)} | ${conflict.overlayKind === "area_conflict" ? `${formatTemporalContext(conflict)} | ${formatVerticalContext(conflict)}` : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`}`,
+      refreshContext,
+      summary: [
+        formatRangeBearing(conflict.metrics),
+        conflict.overlayKind === "area_conflict"
+          ? `${formatTemporalContext(conflict)} | ${formatVerticalContext(conflict)}`
+          : `${formatVerticalSeparation(conflict.metrics?.altitudeDeltaFt)} vertical`,
+        refreshContext,
+      ]
+        .filter(Boolean)
+        .join(" | "),
     };
   });
 
@@ -1482,7 +1495,13 @@ const buildOverlayCards = () => {
       ? {
           label: "Primary advisory",
           tone: primaryAdvisory.tone,
-          detail: `${primaryAdvisory.recommendation} | ${primaryAdvisory.relatedObject}`,
+          detail: [
+            primaryAdvisory.recommendation,
+            primaryAdvisory.relatedObject,
+            primaryAdvisory.refreshContext,
+          ]
+            .filter(Boolean)
+            .join(" | "),
         }
       : conflictAdvisorySummary(),
   ];
