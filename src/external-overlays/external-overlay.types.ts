@@ -82,6 +82,14 @@ export interface AreaConflictOverlayMetadata {
   authorityName?: string | null;
   notamNumber?: string | null;
   sourceReference?: string | null;
+  notamGeometryContext?: {
+    geometrySource: "e_field" | "q_line" | "provided_geometry";
+    qLineIndex?: {
+      centerLat: number;
+      centerLng: number;
+      radiusNm: number;
+    } | null;
+  } | null;
   normalizedSourcePriority?: number | null;
   dedupeKey?: string | null;
   sourceTrace?: Array<{
@@ -294,6 +302,14 @@ export interface NormalizeAreaOverlaySourceRecordInput {
     authorityName?: string | null;
     notamNumber?: string | null;
     sourceReference?: string | null;
+    notamGeometryContext?: {
+      geometrySource: "e_field" | "q_line" | "provided_geometry";
+      qLineIndex?: {
+        centerLat: number;
+        centerLng: number;
+        radiusNm: number;
+      } | null;
+    } | null;
   };
 }
 

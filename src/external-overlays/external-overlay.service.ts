@@ -101,6 +101,7 @@ const normalizedAreaMetadata = (
   authorityName: record.area.authorityName ?? null,
   notamNumber: record.area.notamNumber ?? null,
   sourceReference: record.area.sourceReference ?? null,
+  notamGeometryContext: record.area.notamGeometryContext ?? null,
   normalizedSourcePriority: areaSourcePriority(record.source.sourceType),
   dedupeKey: buildAreaDedupeKey(record),
   sourceTrace: [
