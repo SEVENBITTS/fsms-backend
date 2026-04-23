@@ -2067,14 +2067,19 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("map-envelope-summary");
     expect(response.text).toContain("lastFailedRefreshRunId");
     expect(response.text).toContain("carriedForwardFromFailedRefresh");
+    expect(response.text).toContain("lastPartialRefreshRunId");
+    expect(response.text).toContain("carriedForwardFromPartialRefresh");
     expect(response.text).toContain("Last failed refresh");
+    expect(response.text).toContain("Last partial refresh");
+    expect(response.text).toContain("carried forward after partial refresh");
     expect(response.text).toContain("carried forward after failed refresh");
     expect(response.text).toContain("areaOverlaySourceRefreshCardContext");
     expect(response.text).toContain("Area source failed");
     expect(response.text).toContain("Area source partial");
     expect(response.text).toContain("Area source stale");
     expect(response.text).toContain("Area source fresh");
-    expect(response.text).toContain("carried forward");
+    expect(response.text).toContain("carried forward after failed refresh");
+    expect(response.text).toContain("carried forward after partial refresh");
     expect(response.text).toContain(
       "No mission-specific fetch is attempted until a valid mission ID is provided.",
     );
