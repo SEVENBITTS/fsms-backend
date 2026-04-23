@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add operator-facing partial-refresh advisory review detail so incomplete authoritative area state is visible throughout advisory presentation.",
+  "nextBuildStep": "Add operator-facing NOTAM geometry source summary context so geometry provenance is visible at a glance in live operations review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
