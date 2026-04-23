@@ -441,6 +441,49 @@ describe("mission external overlays integration", () => {
     });
   });
 
+  it("accepts NOTAM-style aviation coordinates for direct area conflict overlay creation", async () => {
+    const missionId = await createMission();
+
+    const createResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays`)
+      .send({
+        kind: "area_conflict",
+        source: {
+          provider: "airspace-hub",
+          sourceType: "zone_service",
+          sourceRecordId: "zone-dms-1",
+        },
+        observedAt: "2026-04-21T10:07:00.000Z",
+        geometry: {
+          type: "circle",
+          centerLat: "520512N",
+          centerLng: "0001907W",
+          radiusMeters: 350,
+          altitudeFloorFt: 100,
+          altitudeCeilingFt: 900,
+        },
+        severity: "caution",
+        metadata: {
+          areaId: "zone-dms-1",
+          label: "Tower protection zone DMS",
+          areaType: "restricted_zone",
+          description: "Temporary restricted area around event site",
+        },
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.overlay).toMatchObject({
+      missionId,
+      kind: "area_conflict",
+      geometry: expect.objectContaining({
+        type: "circle",
+        centerLat: 52.086666666666666,
+        centerLng: -0.3186111111111111,
+        radiusMeters: 350,
+      }),
+    });
+  });
+
   it("normalizes authoritative danger area and NOTAM records into area conflict overlays", async () => {
     const missionId = await createMission();
 
@@ -775,6 +818,217 @@ describe("mission external overlays integration", () => {
         lastFailedRefreshRunId: null,
         carriedForwardFromFailedRefresh: false,
       },
+    });
+  });
+
+  it("accepts NOTAM-style aviation coordinates during normalized area-source ingestion", async () => {
+    const missionId = await createMission();
+
+    const normalizeResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1234/26-DMS",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "polygon",
+              points: [
+                { lat: "520258N", lng: "0001553W" },
+                { lat: "520225N", lng: "0002056W" },
+                { lat: "520512N", lng: "0001907W" },
+              ],
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 3500,
+            },
+            severity: "caution",
+            area: {
+              areaId: "NOTAM-DMS-B1234-26",
+              label: "NOTAM Restriction DMS",
+              areaType: "notam_restriction",
+              description: "Polygon from NOTAM DMS coordinates",
+              authorityName: "CAA",
+              notamNumber: "B1234/26",
+              sourceReference: "NOTAM B1234/26",
+            },
+          },
+        ],
+      });
+
+    expect(normalizeResponse.status).toBe(201);
+    expect(normalizeResponse.body.overlays).toHaveLength(1);
+    expect(normalizeResponse.body.overlays[0]).toMatchObject({
+      kind: "area_conflict",
+      geometry: {
+        type: "polygon",
+      },
+      metadata: expect.objectContaining({
+        areaId: "NOTAM-DMS-B1234-26",
+        areaType: "notam_restriction",
+      }),
+    });
+    expect(normalizeResponse.body.overlays[0].geometry.points[0].lat).toBeCloseTo(
+      52.04944444444445,
+    );
+    expect(normalizeResponse.body.overlays[0].geometry.points[0].lng).toBeCloseTo(
+      -0.26472222222222225,
+    );
+    expect(normalizeResponse.body.overlays[0].geometry.points[1].lat).toBeCloseTo(
+      52.040277777777774,
+    );
+    expect(normalizeResponse.body.overlays[0].geometry.points[1].lng).toBeCloseTo(
+      -0.3488888888888889,
+    );
+    expect(normalizeResponse.body.overlays[0].geometry.points[2].lat).toBeCloseTo(
+      52.086666666666666,
+    );
+    expect(normalizeResponse.body.overlays[0].geometry.points[2].lng).toBeCloseTo(
+      -0.3186111111111111,
+    );
+  });
+
+  it("prefers E field polygon coordinates over Q line geometry and preserves Q line as coarse index metadata", async () => {
+    const missionId = await createMission();
+
+    const normalizeResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1235/26-DMS",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            geometry: {
+              type: "circle",
+              centerLat: "5205N",
+              centerLng: "00019W",
+              radiusMeters: 7408,
+              altitudeFloorFt: 0,
+              altitudeCeilingFt: 3500,
+            },
+            notamGeometry: {
+              qLine: {
+                centerLat: "5205N",
+                centerLng: "00019W",
+                radiusNm: 4,
+              },
+              eFieldGeometry: {
+                type: "polygon",
+                points: [
+                  { lat: "520258N", lng: "0001553W" },
+                  { lat: "520225N", lng: "0002056W" },
+                  { lat: "520512N", lng: "0001907W" },
+                ],
+                altitudeFloorFt: 0,
+                altitudeCeilingFt: 3500,
+              },
+            },
+            severity: "caution",
+            area: {
+              areaId: "NOTAM-DMS-B1235-26",
+              label: "NOTAM Restriction DMS Preferred E",
+              areaType: "notam_restriction",
+              description: "E field polygon should win over Q line circle",
+              authorityName: "CAA",
+              notamNumber: "B1235/26",
+              sourceReference: "NOTAM B1235/26",
+            },
+          },
+        ],
+      });
+
+    expect(normalizeResponse.status).toBe(201);
+    expect(normalizeResponse.body.overlays).toHaveLength(1);
+    expect(normalizeResponse.body.overlays[0]).toMatchObject({
+      kind: "area_conflict",
+      geometry: {
+        type: "polygon",
+      },
+      metadata: expect.objectContaining({
+        areaId: "NOTAM-DMS-B1235-26",
+        notamGeometryContext: {
+          geometrySource: "e_field",
+          qLineIndex: {
+            centerLat: 52.083333333333336,
+            centerLng: -0.31666666666666665,
+            radiusNm: 4,
+          },
+        },
+      }),
+    });
+  });
+
+  it("falls back to Q line circle geometry when E field geometry is unavailable", async () => {
+    const missionId = await createMission();
+
+    const normalizeResponse = await request(app)
+      .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+      .send({
+        records: [
+          {
+            source: {
+              provider: "uk-ais",
+              sourceType: "notam_restriction",
+              sourceRecordId: "B1236/26-QONLY",
+            },
+            observedAt: "2026-04-21T10:07:00.000Z",
+            validFrom: "2026-04-21T10:00:00.000Z",
+            validTo: "2026-04-21T14:00:00.000Z",
+            notamGeometry: {
+              qLine: {
+                centerLat: "5205N",
+                centerLng: "00019W",
+                radiusNm: 4,
+              },
+            },
+            altitudeFloorFt: 0,
+            altitudeCeilingFt: 3500,
+            severity: "caution",
+            area: {
+              areaId: "NOTAM-DMS-B1236-26",
+              label: "NOTAM Restriction Q Line Only",
+              areaType: "notam_restriction",
+              description: "Q line circle fallback",
+              authorityName: "CAA",
+              notamNumber: "B1236/26",
+              sourceReference: "NOTAM B1236/26",
+            },
+          },
+        ],
+      });
+
+    expect(normalizeResponse.status).toBe(201);
+    expect(normalizeResponse.body.overlays).toHaveLength(1);
+    expect(normalizeResponse.body.overlays[0]).toMatchObject({
+      kind: "area_conflict",
+      geometry: {
+        type: "circle",
+        centerLat: 52.083333333333336,
+        centerLng: -0.31666666666666665,
+        radiusMeters: 7408,
+      },
+      metadata: expect.objectContaining({
+        areaId: "NOTAM-DMS-B1236-26",
+        notamGeometryContext: {
+          geometrySource: "q_line",
+          qLineIndex: {
+            centerLat: 52.083333333333336,
+            centerLng: -0.31666666666666665,
+            radiusNm: 4,
+          },
+        },
+      }),
     });
   });
 

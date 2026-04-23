@@ -51,6 +51,168 @@ const requiredNumber = (value: unknown, fieldName: string): number => {
   return value;
 };
 
+const dmsToDecimal = (
+  degrees: number,
+  minutes: number,
+  seconds: number,
+  hemisphere: string,
+): number => {
+  const absolute = degrees + minutes / 60 + seconds / 3600;
+  return hemisphere === "S" || hemisphere === "W" ? -absolute : absolute;
+};
+
+const parseAviationCoordinate = (
+  value: string,
+  fieldName: string,
+): number => {
+  const normalized = value.trim().toUpperCase();
+
+  const compactDmsMatch = normalized.match(
+    /^(\d{2,3})(\d{2})(\d{2})?([NSEW])$/,
+  );
+  if (compactDmsMatch) {
+    const [, degreeText, minuteText, secondText, hemisphere] = compactDmsMatch;
+    const degrees = Number(degreeText);
+    const minutes = Number(minuteText);
+    const seconds = secondText ? Number(secondText) : 0;
+    return dmsToDecimal(degrees, minutes, seconds, hemisphere);
+  }
+
+  const separatedDmsMatch = normalized.match(
+    /^(\d{2,3})[:\s](\d{2})(?:[:\s](\d{2}))?([NSEW])$/,
+  );
+  if (separatedDmsMatch) {
+    const [, degreeText, minuteText, secondText, hemisphere] = separatedDmsMatch;
+    const degrees = Number(degreeText);
+    const minutes = Number(minuteText);
+    const seconds = secondText ? Number(secondText) : 0;
+    return dmsToDecimal(degrees, minutes, seconds, hemisphere);
+  }
+
+  throw new Error(
+    `${fieldName} must be a valid number or aviation coordinate (DDMMN, DDDMMW, DDMMSSN, DDDMMSSW)`,
+  );
+};
+
+const requiredCoordinate = (value: unknown, fieldName: string): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    return parseAviationCoordinate(value, fieldName);
+  }
+
+  throw new Error(
+    `${fieldName} must be a valid number or aviation coordinate (DDMMN, DDDMMW, DDMMSSN, DDDMMSSW)`,
+  );
+};
+
+const normalizeAreaGeometry = (
+  geometryInput: unknown,
+  fieldPrefix: string,
+): CreateAreaConflictExternalOverlayInput["geometry"] => {
+  if (!geometryInput || typeof geometryInput !== "object") {
+    throw new Error(`${fieldPrefix} is required`);
+  }
+
+  const candidate = geometryInput as Record<string, any>;
+  const geometryType = requiredString(
+    candidate.type,
+    `${fieldPrefix}.type`,
+  ).toLowerCase();
+
+  if (geometryType === "circle") {
+    return {
+      type: "circle",
+      centerLat: requiredCoordinate(
+        candidate.centerLat,
+        `${fieldPrefix}.centerLat`,
+      ),
+      centerLng: requiredCoordinate(
+        candidate.centerLng,
+        `${fieldPrefix}.centerLng`,
+      ),
+      radiusMeters: requiredNumber(
+        candidate.radiusMeters,
+        `${fieldPrefix}.radiusMeters`,
+      ),
+      altitudeFloorFt: optionalNumber(
+        candidate.altitudeFloorFt,
+        `${fieldPrefix}.altitudeFloorFt`,
+      ),
+      altitudeCeilingFt: optionalNumber(
+        candidate.altitudeCeilingFt,
+        `${fieldPrefix}.altitudeCeilingFt`,
+      ),
+    };
+  }
+
+  if (geometryType === "polygon") {
+    if (!Array.isArray(candidate.points) || candidate.points.length < 3) {
+      throw new Error(`${fieldPrefix}.points must contain at least three points`);
+    }
+
+    return {
+      type: "polygon",
+      points: candidate.points.map((point: unknown, index: number) => {
+        if (!point || typeof point !== "object") {
+          throw new Error(`${fieldPrefix}.points[${index}] must be an object`);
+        }
+
+        const value = point as Record<string, unknown>;
+        return {
+          lat: requiredCoordinate(value.lat, `${fieldPrefix}.points[${index}].lat`),
+          lng: requiredCoordinate(value.lng, `${fieldPrefix}.points[${index}].lng`),
+        };
+      }),
+      altitudeFloorFt: optionalNumber(
+        candidate.altitudeFloorFt,
+        `${fieldPrefix}.altitudeFloorFt`,
+      ),
+      altitudeCeilingFt: optionalNumber(
+        candidate.altitudeCeilingFt,
+        `${fieldPrefix}.altitudeCeilingFt`,
+      ),
+    };
+  }
+
+  throw new Error(`${fieldPrefix}.type must be 'circle' or 'polygon'`);
+};
+
+const parseQLineIndex = (
+  input: unknown,
+  fieldPrefix: string,
+): { centerLat: number; centerLng: number; radiusNm: number } => {
+  if (!input || typeof input !== "object") {
+    throw new Error(`${fieldPrefix} must be an object`);
+  }
+
+  const candidate = input as Record<string, unknown>;
+  return {
+    centerLat: requiredCoordinate(candidate.centerLat, `${fieldPrefix}.centerLat`),
+    centerLng: requiredCoordinate(candidate.centerLng, `${fieldPrefix}.centerLng`),
+    radiusNm: requiredNumber(candidate.radiusNm, `${fieldPrefix}.radiusNm`),
+  };
+};
+
+const qLineIndexToCircleGeometry = (
+  qLineIndex: { centerLat: number; centerLng: number; radiusNm: number },
+  altitudeFloorFt: unknown,
+  altitudeCeilingFt: unknown,
+  fieldPrefix: string,
+): CreateAreaConflictExternalOverlayInput["geometry"] => ({
+  type: "circle",
+  centerLat: qLineIndex.centerLat,
+  centerLng: qLineIndex.centerLng,
+  radiusMeters: qLineIndex.radiusNm * 1852,
+  altitudeFloorFt: optionalNumber(altitudeFloorFt, `${fieldPrefix}.altitudeFloorFt`),
+  altitudeCeilingFt: optionalNumber(
+    altitudeCeilingFt,
+    `${fieldPrefix}.altitudeCeilingFt`,
+  ),
+});
+
 const optionalNumber = (value: unknown, fieldName: string): number | null => {
   if (value == null) {
     return null;
@@ -150,8 +312,8 @@ export const validateCreateWeatherExternalOverlayInput = (
     validTo: optionalTimestamp(candidate.validTo, "validTo"),
     geometry: {
       type: "point",
-      lat: requiredNumber(candidate.geometry.lat, "geometry.lat"),
-      lng: requiredNumber(candidate.geometry.lng, "geometry.lng"),
+      lat: requiredCoordinate(candidate.geometry.lat, "geometry.lat"),
+      lng: requiredCoordinate(candidate.geometry.lng, "geometry.lng"),
       altitudeMslFt: optionalNumber(
         candidate.geometry.altitudeMslFt,
         "geometry.altitudeMslFt",
@@ -221,8 +383,8 @@ export const validateCreateCrewedTrafficExternalOverlayInput = (
     validTo: optionalTimestamp(candidate.validTo, "validTo"),
     geometry: {
       type: "point",
-      lat: requiredNumber(candidate.geometry.lat, "geometry.lat"),
-      lng: requiredNumber(candidate.geometry.lng, "geometry.lng"),
+      lat: requiredCoordinate(candidate.geometry.lat, "geometry.lat"),
+      lng: requiredCoordinate(candidate.geometry.lng, "geometry.lng"),
       altitudeMslFt: optionalNumber(
         candidate.geometry.altitudeMslFt,
         "geometry.altitudeMslFt",
@@ -292,8 +454,8 @@ export const validateCreateDroneTrafficExternalOverlayInput = (
     validTo: optionalTimestamp(candidate.validTo, "validTo"),
     geometry: {
       type: "point",
-      lat: requiredNumber(candidate.geometry.lat, "geometry.lat"),
-      lng: requiredNumber(candidate.geometry.lng, "geometry.lng"),
+      lat: requiredCoordinate(candidate.geometry.lat, "geometry.lat"),
+      lng: requiredCoordinate(candidate.geometry.lng, "geometry.lng"),
       altitudeMslFt: optionalNumber(
         candidate.geometry.altitudeMslFt,
         "geometry.altitudeMslFt",
@@ -347,63 +509,7 @@ export const validateCreateAreaConflictExternalOverlayInput = (
     throw new Error("metadata is required");
   }
 
-  const geometryType = requiredString(
-    candidate.geometry.type,
-    "geometry.type",
-  ).toLowerCase();
-
-  let geometry: CreateAreaConflictExternalOverlayInput["geometry"];
-  if (geometryType === "circle") {
-    geometry = {
-      type: "circle",
-      centerLat: requiredNumber(candidate.geometry.centerLat, "geometry.centerLat"),
-      centerLng: requiredNumber(candidate.geometry.centerLng, "geometry.centerLng"),
-      radiusMeters: requiredNumber(
-        candidate.geometry.radiusMeters,
-        "geometry.radiusMeters",
-      ),
-      altitudeFloorFt: optionalNumber(
-        candidate.geometry.altitudeFloorFt,
-        "geometry.altitudeFloorFt",
-      ),
-      altitudeCeilingFt: optionalNumber(
-        candidate.geometry.altitudeCeilingFt,
-        "geometry.altitudeCeilingFt",
-      ),
-    };
-  } else if (geometryType === "polygon") {
-    if (
-      !Array.isArray(candidate.geometry.points) ||
-      candidate.geometry.points.length < 3
-    ) {
-      throw new Error("geometry.points must contain at least three points");
-    }
-
-    geometry = {
-      type: "polygon",
-      points: candidate.geometry.points.map((point: unknown, index: number) => {
-        if (!point || typeof point !== "object") {
-          throw new Error(`geometry.points[${index}] must be an object`);
-        }
-
-        const value = point as Record<string, unknown>;
-        return {
-          lat: requiredNumber(value.lat, `geometry.points[${index}].lat`),
-          lng: requiredNumber(value.lng, `geometry.points[${index}].lng`),
-        };
-      }),
-      altitudeFloorFt: optionalNumber(
-        candidate.geometry.altitudeFloorFt,
-        "geometry.altitudeFloorFt",
-      ),
-      altitudeCeilingFt: optionalNumber(
-        candidate.geometry.altitudeCeilingFt,
-        "geometry.altitudeCeilingFt",
-      ),
-    };
-  } else {
-    throw new Error("geometry.type must be 'circle' or 'polygon'");
-  }
+  const geometry = normalizeAreaGeometry(candidate.geometry, "geometry");
 
   return {
     kind: "area_conflict",
@@ -430,6 +536,11 @@ export const validateCreateAreaConflictExternalOverlayInput = (
       authorityName: optionalString(candidate.metadata.authorityName),
       notamNumber: optionalString(candidate.metadata.notamNumber),
       sourceReference: optionalString(candidate.metadata.sourceReference),
+      notamGeometryContext:
+        candidate.metadata.notamGeometryContext &&
+        typeof candidate.metadata.notamGeometryContext === "object"
+          ? (candidate.metadata.notamGeometryContext as CreateAreaConflictExternalOverlayInput["metadata"]["notamGeometryContext"])
+          : null,
     },
   };
 };
@@ -482,10 +593,6 @@ export const validateNormalizeAreaOverlaySourcesInput = (
       if (!value.area || typeof value.area !== "object") {
         throw new Error(`records[${index}].area is required`);
       }
-      if (!value.geometry || typeof value.geometry !== "object") {
-        throw new Error(`records[${index}].geometry is required`);
-      }
-
       const sourceType = requiredString(
         value.source.sourceType,
         `records[${index}].source.sourceType`,
@@ -514,6 +621,52 @@ export const validateNormalizeAreaOverlaySourcesInput = (
         );
       }
 
+      const qLineIndex =
+        value.notamGeometry &&
+        typeof value.notamGeometry === "object" &&
+        (value.notamGeometry as Record<string, unknown>).qLine
+          ? parseQLineIndex(
+              (value.notamGeometry as Record<string, unknown>).qLine,
+              `records[${index}].notamGeometry.qLine`,
+            )
+          : null;
+
+      const eFieldGeometry =
+        value.notamGeometry &&
+        typeof value.notamGeometry === "object" &&
+        (value.notamGeometry as Record<string, unknown>).eFieldGeometry
+          ? normalizeAreaGeometry(
+              (value.notamGeometry as Record<string, unknown>).eFieldGeometry,
+              `records[${index}].notamGeometry.eFieldGeometry`,
+            )
+          : null;
+
+      const selectedGeometry =
+        eFieldGeometry ??
+        (value.geometry
+          ? normalizeAreaGeometry(value.geometry, `records[${index}].geometry`)
+          : qLineIndex
+            ? qLineIndexToCircleGeometry(
+                qLineIndex,
+                value.altitudeFloorFt,
+                value.altitudeCeilingFt,
+                `records[${index}].notamGeometry.qLine`,
+              )
+            : null);
+
+      if (!selectedGeometry) {
+        throw new Error(
+          `records[${index}].geometry is required unless records[${index}].notamGeometry.qLine is provided`,
+        );
+      }
+
+      const geometrySource =
+        eFieldGeometry != null
+          ? "e_field"
+          : qLineIndex != null && value.geometry == null
+            ? "q_line"
+            : "provided_geometry";
+
       const normalized = validateCreateAreaConflictExternalOverlayInput({
         kind: "area_conflict",
         source: {
@@ -524,7 +677,7 @@ export const validateNormalizeAreaOverlaySourcesInput = (
         observedAt: value.observedAt,
         validFrom: value.validFrom,
         validTo: value.validTo,
-        geometry: value.geometry,
+        geometry: selectedGeometry,
         severity: value.severity,
         confidence: value.confidence,
         freshnessSeconds: value.freshnessSeconds,
@@ -536,6 +689,10 @@ export const validateNormalizeAreaOverlaySourcesInput = (
           authorityName: value.area.authorityName,
           notamNumber: value.area.notamNumber,
           sourceReference: value.area.sourceReference,
+          notamGeometryContext: {
+            geometrySource,
+            qLineIndex,
+          },
         },
       });
 
@@ -566,6 +723,7 @@ export const validateNormalizeAreaOverlaySourcesInput = (
           authorityName: normalized.metadata.authorityName ?? null,
           notamNumber: normalized.metadata.notamNumber ?? null,
           sourceReference: normalized.metadata.sourceReference ?? null,
+          notamGeometryContext: normalized.metadata.notamGeometryContext ?? null,
         },
       };
     }),
