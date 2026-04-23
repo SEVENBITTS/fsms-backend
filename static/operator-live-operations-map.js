@@ -122,6 +122,36 @@ const areaConflictOverlays = () =>
 const areaOverlaySourceRefreshState = (overlay) =>
   overlay?.metadata?.sourceRefresh ?? null;
 
+const areaOverlayNotamGeometryContext = (overlay) =>
+  overlay?.metadata?.notamGeometryContext ?? null;
+
+const formatCoordinate = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : Number(value).toFixed(5);
+
+const areaOverlayNotamGeometryDetail = (overlay) => {
+  const geometryContext = areaOverlayNotamGeometryContext(overlay);
+  if (!geometryContext) {
+    return null;
+  }
+
+  const detailParts = [
+    geometryContext.geometrySource === "e_field"
+      ? "NOTAM geometry: E-field"
+      : geometryContext.geometrySource === "q_line"
+        ? "NOTAM geometry: Q-line fallback"
+        : "NOTAM geometry: provided geometry",
+  ];
+
+  if (geometryContext.qLineIndex) {
+    detailParts.push(
+      `Q-line center ${formatCoordinate(geometryContext.qLineIndex.centerLat)}, ${formatCoordinate(geometryContext.qLineIndex.centerLng)}`,
+    );
+    detailParts.push(`Q-line radius ${geometryContext.qLineIndex.radiusNm} NM`);
+  }
+
+  return detailParts.join(" | ");
+};
+
 const areaOverlaySourceRefreshDetail = (overlay) => {
   const refreshState = areaOverlaySourceRefreshState(overlay);
   if (!refreshState) {
@@ -190,7 +220,8 @@ const areaOverlaySourceRefreshCardContext = (overlay) => {
     return `${label} | carried forward after partial refresh`;
   }
 
-  return label;
+  const notamGeometryDetail = areaOverlayNotamGeometryDetail(overlay);
+  return [label, notamGeometryDetail].filter(Boolean).join(" | ");
 };
 
 const areaSourceRefreshSummary = () => {
@@ -2261,6 +2292,10 @@ const renderStatus = () => {
           <div>${renderBadge(areaSourceState.label)}</div>
           <div class="k">Area refresh detail</div>
           <div>${escapeHtml(areaSourceState.detail)}</div>
+          <div class="k">NOTAM geometry</div>
+          <div>${escapeHtml(
+            primaryConflictOverlay ? areaOverlayNotamGeometryDetail(primaryConflictOverlay) ?? "Not recorded" : "Not recorded",
+          )}</div>
           <div class="k">Conflict assessment</div>
           <div>${renderBadge(conflictState.label)}</div>
           <div class="k">Primary conflict</div>
@@ -2475,6 +2510,8 @@ const renderConflictAssessment = () => {
                   ${
                     primaryConflict.overlayKind === "area_conflict"
                       ? `Area source refresh: ${escapeHtml(areaOverlaySourceRefreshDetail(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)))}
+                  <br />
+                  NOTAM geometry: ${escapeHtml(areaOverlayNotamGeometryDetail(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)) ?? "Not recorded")}
                   <br />`
                       : ""
                   }
