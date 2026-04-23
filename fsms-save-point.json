@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add operator-facing NOTAM geometry source summary context so geometry provenance is visible at a glance in live operations review.",
+  "nextBuildStep": "Add operator-facing Q-line index review visibility so coarse NOTAM index metadata is clearer in live operations review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
