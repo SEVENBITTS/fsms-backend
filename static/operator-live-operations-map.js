@@ -2164,6 +2164,9 @@ const renderStatus = () => {
   const advisoryState = conflictAdvisorySummary();
   const replayConflictRelation = currentConflictReplayRelation();
   const primaryConflict = primaryConflictAssessmentItem();
+  const primaryConflictOverlay = primaryConflict
+    ? conflictOverlayForItem(primaryConflict)
+    : null;
   const primaryAdvisory = primaryConflictAdvisory();
   const secondaryAdvisories = secondaryConflictAdvisories();
   const approvalPosture = isPostLaunchMission()
