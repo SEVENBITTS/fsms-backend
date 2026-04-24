@@ -47,6 +47,7 @@ const uiState = {
     timerId: null,
     speed: 1,
   },
+  areaFreshnessFilter: "all",
 };
 
 const toneClass = (value) => {
@@ -426,6 +427,37 @@ const areaOverlayCoordinatePoints = (overlay) => {
 
   return [];
 };
+
+const areaOverlayIsDegraded = (overlay) => {
+  const tone = areaOverlayFreshnessTone(overlay);
+  return tone !== "fresh";
+};
+
+const filteredAreaFreshnessOverlays = () => {
+  if (uiState.areaFreshnessFilter === "hidden") {
+    return [];
+  }
+
+  const overlays = areaConflictOverlays();
+  if (uiState.areaFreshnessFilter === "degraded") {
+    return overlays.filter(areaOverlayIsDegraded);
+  }
+
+  return overlays;
+};
+
+const areaFreshnessFilterLabel = () =>
+  uiState.areaFreshnessFilter === "hidden"
+    ? "Area freshness hidden"
+    : uiState.areaFreshnessFilter === "degraded"
+      ? "Area freshness degraded-only"
+      : "Area freshness all";
+
+const areaFreshnessFilterOptions = [
+  { value: "all", label: "All area freshness" },
+  { value: "degraded", label: "Degraded only" },
+  { value: "hidden", label: "Hide freshness" },
+];
 
 const areaRefreshChronology = () =>
   uiState.areaRefreshChronology?.chronology ?? null;
@@ -2176,7 +2208,7 @@ const buildMapMarkup = () => {
       Number.isFinite(latestTelemetry.lng)
       ? [latestTelemetry]
       : [],
-    ...areaConflictOverlays().flatMap(areaOverlayCoordinatePoints),
+    ...filteredAreaFreshnessOverlays().flatMap(areaOverlayCoordinatePoints),
   );
 
   if (points.length === 0) {
@@ -2248,7 +2280,7 @@ const buildMapMarkup = () => {
     weatherOverlays().length > 0 ? `Weather overlays ${weatherOverlays().length}` : "Weather overlays 0",
     crewedTrafficOverlays().length > 0 ? `Crewed traffic ${crewedTrafficOverlays().length}` : "Crewed traffic 0",
     droneTrafficOverlays().length > 0 ? `Drone traffic ${droneTrafficOverlays().length}` : "Drone traffic 0",
-    areaConflictOverlays().length > 0 ? `Area freshness ${areaConflictOverlays().length}` : "Area freshness 0",
+    `${areaFreshnessFilterLabel()} (${filteredAreaFreshnessOverlays().length}/${areaConflictOverlays().length})`,
   ];
 
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
@@ -2428,7 +2460,7 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
-  const areaFreshnessOverlays = areaConflictOverlays()
+  const areaFreshnessOverlays = filteredAreaFreshnessOverlays()
     .map((overlay) => {
       const geometry = overlay?.geometry ?? {};
       const stroke = areaOverlayFreshnessStroke(overlay);
@@ -2493,6 +2525,19 @@ const buildMapMarkup = () => {
 
       return "";
     })
+    .join("");
+  const areaFreshnessFilterControls = areaFreshnessFilterOptions
+    .map(
+      (option) => `
+        <button
+          type="button"
+          class="control-button ${uiState.areaFreshnessFilter === option.value ? "tone-ok" : "tone-muted"}"
+          data-area-freshness-filter="${escapeHtml(option.value)}"
+        >
+          ${escapeHtml(option.label)}
+        </button>
+      `,
+    )
     .join("");
   const conflictSeverityBands = conflictEnvelopeTargets
     .map((target) =>
@@ -2599,6 +2644,10 @@ const buildMapMarkup = () => {
     </div>
     <div class="map-overlay">
       ${overlays.map((item) => `<div class="overlay-pill">${escapeHtml(item)}</div>`).join("")}
+    </div>
+    <div class="map-overlay map-area-freshness-controls">
+      <div class="overlay-pill">Read-only area freshness filter</div>
+      ${areaFreshnessFilterControls}
     </div>
     <div class="map-compass">N</div>
   `;
@@ -3579,6 +3628,26 @@ jumpControlsPanel.addEventListener("click", (event) => {
   stopReplayPlayback();
   setReplayIndex(nextIndex);
   renderLiveOperations();
+});
+
+mapPanel.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("[data-area-freshness-filter]");
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+
+  const nextFilter = button.dataset.areaFreshnessFilter;
+  if (!["all", "degraded", "hidden"].includes(nextFilter)) {
+    return;
+  }
+
+  uiState.areaFreshnessFilter = nextFilter;
+  renderMap();
 });
 
 conflictAdvisoryPanel.addEventListener("click", (event) => {
