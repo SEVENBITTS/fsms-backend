@@ -344,6 +344,11 @@ export class AuditEvidenceService {
       const safetyActionClosureEvidence =
         await this.auditEvidenceRepository
           .listSafetyActionClosureEvidenceForMissionExport(client, missionId);
+      const conflictGuidanceAcknowledgements =
+        await this.auditEvidenceRepository.listConflictGuidanceAcknowledgements(
+          client,
+          missionId,
+        );
 
       return {
         exportType: "post_operation_completion_evidence",
@@ -356,6 +361,7 @@ export class AuditEvidenceService {
         createdBy: snapshot.createdBy,
         createdAt: snapshot.createdAt,
         completionSnapshot: snapshot.completionSnapshot,
+        conflictGuidanceAcknowledgements,
         safetyActionClosureEvidence,
       };
     } finally {
@@ -732,6 +738,61 @@ export class AuditEvidenceService {
             value: signoff?.createdAt ?? pendingSignoff,
           },
         ],
+      },
+      {
+        heading: "Live conflict guidance acknowledgements",
+        fields:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0
+            ? evidenceExport.conflictGuidanceAcknowledgements.flatMap(
+                (acknowledgement, index) => [
+                  {
+                    label: `Conflict acknowledgement ${index + 1} ID`,
+                    value: acknowledgement.id,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} conflict ID`,
+                    value: acknowledgement.conflictId,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} overlay ID`,
+                    value: acknowledgement.overlayId,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} action code`,
+                    value: acknowledgement.guidanceActionCode,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} evidence action`,
+                    value: acknowledgement.evidenceAction,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} role`,
+                    value: acknowledgement.acknowledgementRole,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} acknowledged by`,
+                    value: acknowledgement.acknowledgedBy,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} recorded at`,
+                    value: acknowledgement.createdAt,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} pilot instruction status`,
+                    value: acknowledgement.pilotInstructionStatus,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} note`,
+                    value: acknowledgement.acknowledgementNote,
+                  },
+                ],
+              )
+            : [
+                {
+                  label: "Live conflict guidance acknowledgements",
+                  value: "No live conflict guidance acknowledgements recorded",
+                },
+              ],
       },
       {
         heading: "Safety action closure evidence",

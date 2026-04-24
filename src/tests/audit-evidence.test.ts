@@ -201,6 +201,47 @@ const createConflictOverlay = async (missionId: string) => {
   return overlayId;
 };
 
+const createConflictGuidanceAcknowledgement = async (
+  missionId: string,
+  params?: {
+    conflictId?: string;
+    guidanceActionCode?: string;
+    evidenceAction?: string;
+    acknowledgementRole?: string;
+    acknowledgedBy?: string;
+    acknowledgementNote?: string;
+  },
+) => {
+  const overlayId = await createConflictOverlay(missionId);
+  const response = await request(app)
+    .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+    .send({
+      conflictId: params?.conflictId ?? "conflict-critical-export",
+      overlayId,
+      guidanceActionCode: params?.guidanceActionCode ?? "hold_or_suspend",
+      evidenceAction: params?.evidenceAction ?? "record_supervisor_review",
+      acknowledgementRole: params?.acknowledgementRole ?? "supervisor",
+      acknowledgedBy: params?.acknowledgedBy ?? "ops-supervisor",
+      acknowledgementNote:
+        params?.acknowledgementNote ??
+        "Reviewed for post-operation evidence export.",
+      guidanceSummary: "Critical live-ops conflict advisory reviewed.",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.acknowledgement as {
+    id: string;
+    conflictId: string;
+    overlayId: string;
+    guidanceActionCode: string;
+    evidenceAction: string;
+    acknowledgementRole: string;
+    acknowledgedBy: string;
+    acknowledgementNote: string | null;
+    pilotInstructionStatus: string;
+  };
+};
+
 const createDecisionEvidenceLink = async (
   missionId: string,
   decisionType: "approval" | "dispatch",
@@ -1215,7 +1256,46 @@ describe("audit evidence snapshots", () => {
     expect(response.body.export.completionSnapshot).toEqual(
       snapshotResponse.body.snapshot.completionSnapshot,
     );
+    expect(response.body.export.conflictGuidanceAcknowledgements).toEqual([]);
     expect(response.body.export.safetyActionClosureEvidence).toEqual([]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("exports live conflict guidance acknowledgements in post-operation evidence", async () => {
+    const { missionId } = await createCompletedMission();
+    const acknowledgement = await createConflictGuidanceAcknowledgement(
+      missionId,
+      {
+        conflictId: "conflict-export-1",
+        acknowledgedBy: "night-ops-supervisor",
+        acknowledgementNote: "Supervisor acknowledged the live-ops advisory.",
+      },
+    );
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.conflictGuidanceAcknowledgements).toHaveLength(1);
+    expect(response.body.export.conflictGuidanceAcknowledgements[0]).toMatchObject({
+      id: acknowledgement.id,
+      missionId,
+      conflictId: "conflict-export-1",
+      overlayId: acknowledgement.overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "night-ops-supervisor",
+      acknowledgementNote: "Supervisor acknowledged the live-ops advisory.",
+      pilotInstructionStatus: "not_a_pilot_command",
+    });
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -1434,6 +1514,15 @@ describe("audit evidence snapshots", () => {
             ]),
           },
           {
+            heading: "Live conflict guidance acknowledgements",
+            fields: [
+              {
+                label: "Live conflict guidance acknowledgements",
+                value: "No live conflict guidance acknowledgements recorded",
+              },
+            ],
+          },
+          {
             heading: "Safety action closure evidence",
             fields: [
               {
@@ -1474,6 +1563,9 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
+      "Live conflict guidance acknowledgements: No live conflict guidance acknowledgements recorded",
+    );
+    expect(response.body.report.report.plainText).toContain(
       "Safety action closure evidence: No safety action closure evidence recorded",
     );
     expect(response.body.report.report.plainText).toContain(
@@ -1484,6 +1576,61 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Post-operation report and sign-off controls",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders live conflict guidance acknowledgements in post-operation reports", async () => {
+    const { missionId } = await createCompletedMission();
+    const acknowledgement = await createConflictGuidanceAcknowledgement(
+      missionId,
+      {
+        conflictId: "conflict-report-1",
+        acknowledgedBy: "report-supervisor",
+        acknowledgementNote: "Included in post-operation report.",
+      },
+    );
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Live conflict guidance acknowledgements",
+      fields: expect.arrayContaining([
+        {
+          label: "Conflict acknowledgement 1 ID",
+          value: acknowledgement.id,
+        },
+        {
+          label: "Conflict acknowledgement 1 conflict ID",
+          value: "conflict-report-1",
+        },
+        {
+          label: "Conflict acknowledgement 1 action code",
+          value: "hold_or_suspend",
+        },
+        {
+          label: "Conflict acknowledgement 1 pilot instruction status",
+          value: "not_a_pilot_command",
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Live conflict guidance acknowledgements",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Conflict acknowledgement 1 acknowledged by: report-supervisor",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Conflict acknowledgement 1 pilot instruction status: not_a_pilot_command",
     );
     expect(await countRows(missionId)).toEqual(before);
   });
@@ -1806,6 +1953,12 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
+      "Live conflict guidance acknowledgements",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "No live conflict guidance acknowledgements recorded",
+    );
+    expect(response.body.toString("latin1")).toContain(
       "Safety action closure evidence",
     );
     expect(response.body.toString("latin1")).toContain(
@@ -1818,6 +1971,42 @@ describe("audit evidence snapshots", () => {
       "Mission readiness gate controls",
     );
     expect(response.body.toString("latin1")).toContain("1.5 SMS documentation");
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("includes live conflict guidance acknowledgements in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    await createConflictGuidanceAcknowledgement(missionId, {
+      conflictId: "conflict-pdf-1",
+      acknowledgedBy: "pdf-supervisor",
+      acknowledgementNote: "PDF export should include this review.",
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    const pdfText = response.body.toString("latin1");
+    expect(pdfText).toContain("Live conflict guidance acknowledgements");
+    expect(pdfText).toContain(
+      "Conflict acknowledgement 1 conflict ID: conflict-pdf-1",
+    );
+    expect(pdfText).toContain(
+      "Conflict acknowledgement 1 acknowledged by: pdf-supervisor",
+    );
+    expect(pdfText).toContain(
+      "Conflict acknowledgement 1 pilot instruction status: not_a_pilot_command",
+    );
     expect(await countRows(missionId)).toEqual(before);
   });
 

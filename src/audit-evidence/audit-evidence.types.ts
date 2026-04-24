@@ -203,6 +203,7 @@ export interface PostOperationEvidenceExportPackage {
   createdBy: string | null;
   createdAt: string;
   completionSnapshot: PostOperationCompletionSnapshot;
+  conflictGuidanceAcknowledgements: ConflictGuidanceAcknowledgement[];
   safetyActionClosureEvidence: SafetyActionClosureEvidenceExportContext[];
 }
 
