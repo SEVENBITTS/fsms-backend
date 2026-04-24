@@ -11,7 +11,8 @@ const countFrameworkRows = async () => {
       (select count(*)::int from sms_pillars) as pillar_count,
       (select count(*)::int from sms_elements) as element_count,
       (select count(*)::int from sms_controls) as control_count,
-      (select count(*)::int from sms_control_element_mappings) as mapping_count
+      (select count(*)::int from sms_control_element_mappings) as mapping_count,
+      (select count(*)::int from regulatory_requirement_mappings) as regulatory_mapping_count
     `,
   );
 
@@ -21,6 +22,7 @@ const countFrameworkRows = async () => {
     element_count: number;
     control_count: number;
     mapping_count: number;
+    regulatory_mapping_count: number;
   };
 };
 
@@ -39,7 +41,7 @@ describe("SMS framework reference data", () => {
     const response = await request(app).get("/sms/framework");
 
     expect(response.status).toBe(200);
-    expect(response.body.framework.sources).toEqual([
+    expect(response.body.framework.sources).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: "UAV_SMS_WORKBOOK",
         sourceType: "internal_reference",
@@ -50,7 +52,16 @@ describe("SMS framework reference data", () => {
         sourceType: "external_guidance_reference",
         versionLabel: "Version 2, 07-Dec-2022",
       }),
-    ]);
+      expect.objectContaining({
+        code: "CAA_CAP_722_2024",
+        sourceType: "external_guidance_reference",
+        versionLabel: "Version 9.2, 16-Apr-2024",
+      }),
+      expect.objectContaining({
+        code: "UK_UAS_REGULATIONS",
+        sourceType: "external_regulatory_reference",
+      }),
+    ]));
     expect(
       response.body.framework.pillars.map(
         (pillar: { code: string }) => pillar.code,
@@ -266,6 +277,93 @@ describe("SMS framework reference data", () => {
           "PLATFORM_READINESS_MAINTENANCE",
           "UNKNOWN_SMS_ELEMENT",
           "This should fail because the SMS element does not exist.",
+          99,
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23503",
+    });
+    expect(await countFrameworkRows()).toEqual(before);
+  });
+
+  it("lists regulatory requirement mappings to platform controls without making compliance claims", async () => {
+    const before = await countFrameworkRows();
+
+    const response = await request(app).get(
+      "/sms/regulatory-requirement-mappings",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.mappings).toEqual([
+      expect.objectContaining({
+        requirementCode: "REG_UAS_OPERATING_SOURCE_BASIS",
+        sourceCode: "CAA_CAP_722_2024",
+        controlCode: "MISSION_RISK_ASSESSMENT",
+        assuranceOwner: "compliance_owner",
+        reviewStatus: "needs_clause_review",
+      }),
+      expect.objectContaining({
+        requirementCode: "REG_AIRSPACE_PERMISSION_EVIDENCE",
+        sourceCode: "CAA_CAP_722_2024",
+        controlCode: "AIRSPACE_COMPLIANCE",
+        evidenceType: "airspace compliance input and evidence reference",
+      }),
+      expect.objectContaining({
+        requirementCode: "REG_OPERATING_SAFETY_CASE_CONTEXT",
+        sourceCode: "CAA_CAP_722A_2022",
+        controlCode: "AUDIT_EVIDENCE_SNAPSHOTS",
+      }),
+      expect.objectContaining({
+        requirementCode: "REG_CHANGE_MANAGEMENT_AMENDMENTS",
+        sourceCode: "UK_UAS_REGULATIONS",
+        controlCode: "MISSION_READINESS_GATE",
+        reviewStatus: "source_mapped",
+      }),
+      expect.objectContaining({
+        requirementCode: "REG_POST_OPERATION_RECORDS",
+        sourceCode: "CAA_CAP_722_2024",
+        controlCode: "POST_OPERATION_REPORT_SIGNOFF",
+      }),
+    ]);
+    expect(
+      response.body.mappings.every(
+        (mapping: { reviewStatus: string }) =>
+          mapping.reviewStatus !== "accepted",
+      ),
+    ).toBe(true);
+    expect(await countFrameworkRows()).toEqual(before);
+  });
+
+  it("rejects regulatory mappings to unknown platform controls", async () => {
+    const before = await countFrameworkRows();
+
+    await expect(
+      pool.query(
+        `
+        insert into regulatory_requirement_mappings (
+          requirement_code,
+          source_code,
+          requirement_ref,
+          requirement_summary,
+          compliance_intent,
+          control_code,
+          evidence_type,
+          assurance_owner,
+          review_status,
+          display_order
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `,
+        [
+          "REG_BROKEN_CONTROL_LINK",
+          "CAA_CAP_722_2024",
+          "Broken test ref",
+          "This should fail because the platform control does not exist.",
+          "Prevent untraceable compliance mappings.",
+          "UNKNOWN_CONTROL",
+          "test evidence",
+          "compliance_owner",
+          "source_mapped",
           99,
         ],
       ),

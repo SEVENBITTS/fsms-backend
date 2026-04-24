@@ -1,40 +1,41 @@
 # NEXT STEP
 
 ## Goal
-Show regulatory amendment review context in live operations.
+Add the first read-only regulatory requirement matrix.
 
 ---
 
 ## Build
 
-### 1. UI behavior
-- recognize open regulatory amendment alerts in live operations
-- show source document, version change, summary, impact, affected references, effective date, and review action
-- keep existing mission alert loading unchanged
-- keep regulatory context read-only for operators
+### 1. API behavior
+- add a regulatory requirement mapping endpoint under the SMS framework
+- seed source-level CAA/CAP rows for CAP 722, CAP 722A, and UK UAS regulatory context
+- map each source-level requirement to an existing platform control and evidence type
+- mark mappings as source-level or needing clause review rather than accepted compliance
 
 ### 2. Operator clarity
-- make regulatory amendments visible beside operational alerts
-- distinguish review-required compliance alerts from telemetry threshold alerts
-- avoid automatic legal interpretation, dispatch approval, or direct-control behavior
+- make CAA/CAP traceability visible before claiming formal compliance
+- show assurance owner, evidence type, review status, and platform control per requirement
+- keep the matrix read-only until formal clause-level review exists
 
 ### 3. Tests
-- parse-check the live-ops static script
-- run TypeScript build
-- run diff whitespace check
+- add API coverage for regulatory requirement mappings
+- confirm broken control links are rejected by database constraints
+- run focused SMS framework tests
+- run build
 
 ---
 
 ## Do NOT do
+- No legal compliance certification claim
 - No direct aircraft control
-- No automated avoidance execution
-- No pilot command transmission
+- No automated dispatch approval
 - No BVLOS command authority yet
-- No claim that the system has legally interpreted an amendment
 
 ---
 
 ## Done When
-- Live operations can display regulatory amendment alert details
-- Alert status panels include amendment impact and review action
+- Regulatory source mappings can be listed through the API
+- CAP/CAA rows are tied to existing controls and evidence types
+- Review status makes unresolved clause-level work explicit
 - No operational authority, approval, or direct-control behavior changes

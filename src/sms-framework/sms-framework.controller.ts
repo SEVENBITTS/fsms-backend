@@ -29,4 +29,18 @@ export class SmsFrameworkController {
       next(error);
     }
   };
+
+  listRegulatoryRequirementMappings = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const mappings =
+        await this.smsFrameworkService.listRegulatoryRequirementMappings();
+      res.status(200).json({ mappings });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

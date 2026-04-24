@@ -48,3 +48,21 @@ export interface SmsControlMapping {
   displayOrder: number;
   elements: SmsControlMappedElement[];
 }
+
+export interface RegulatoryRequirementMapping {
+  requirementCode: string;
+  sourceCode: string;
+  sourceTitle: string;
+  sourceVersionLabel: string | null;
+  requirementRef: string;
+  requirementSummary: string;
+  complianceIntent: string;
+  controlCode: string;
+  controlTitle: string;
+  controlArea: string;
+  evidenceType: string;
+  assuranceOwner: string;
+  reviewStatus: string;
+  notes: string | null;
+  displayOrder: number;
+}
