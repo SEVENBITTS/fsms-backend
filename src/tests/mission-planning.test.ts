@@ -2130,7 +2130,12 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("filteredAreaFreshnessOverlays");
     expect(response.text).toContain("areaFreshnessFilterLabel");
     expect(response.text).toContain("areaFreshnessFilterOptions");
+    expect(response.text).toContain("normalizeAreaFreshnessFilter");
     expect(response.text).toContain("areaFreshnessFilterSummary");
+    expect(response.text).toContain("getAreaFreshnessFilterFromLocation");
+    expect(response.text).toContain("areaFreshnessFilter");
+    expect(response.text).toContain('next.searchParams.delete("areaFreshnessFilter")');
+    expect(response.text).toContain('next.searchParams.set("areaFreshnessFilter"');
     expect(response.text).toContain("areaFreshnessOverlays");
     expect(response.text).toContain("area-freshness-overlay");
     expect(response.text).toContain("data-area-freshness-filter");

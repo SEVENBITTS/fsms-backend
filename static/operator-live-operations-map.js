@@ -459,6 +459,9 @@ const areaFreshnessFilterOptions = [
   { value: "hidden", label: "Hide freshness" },
 ];
 
+const normalizeAreaFreshnessFilter = (value) =>
+  ["all", "degraded", "hidden"].includes(value) ? value : "all";
+
 const areaFreshnessFilterSummary = () => {
   const visibleCount = filteredAreaFreshnessOverlays().length;
   const totalCount = areaConflictOverlays().length;
@@ -1755,6 +1758,13 @@ const updateUrl = (missionId) => {
   } else {
     next.searchParams.delete("missionId");
   }
+
+  if (uiState.areaFreshnessFilter === "all") {
+    next.searchParams.delete("areaFreshnessFilter");
+  } else {
+    next.searchParams.set("areaFreshnessFilter", uiState.areaFreshnessFilter);
+  }
+
   window.history.replaceState({}, "", next);
 };
 
@@ -1767,6 +1777,11 @@ const getMissionIdFromLocation = () => {
   const queryMissionId = new URL(window.location.href).searchParams.get("missionId");
   return queryMissionId?.trim() || "";
 };
+
+const getAreaFreshnessFilterFromLocation = () =>
+  normalizeAreaFreshnessFilter(
+    new URL(window.location.href).searchParams.get("areaFreshnessFilter")?.trim(),
+  );
 
 const renderList = (items, title) => {
   if (!items || items.length === 0) {
@@ -3669,6 +3684,7 @@ mapPanel.addEventListener("click", (event) => {
   }
 
   uiState.areaFreshnessFilter = nextFilter;
+  updateUrl(normalizeMissionId(uiState.missionId));
   renderMap();
   renderStatus();
 });
@@ -3710,6 +3726,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 const initialMissionId = normalizeMissionId(getMissionIdFromLocation());
+uiState.areaFreshnessFilter = getAreaFreshnessFilterFromLocation();
 if (initialMissionId) {
   missionIdInput.value = initialMissionId;
 }
