@@ -1,28 +1,27 @@
 # NEXT STEP
 
 ## Goal
-Expose regulatory amendment alerts through the mission API.
+Show regulatory amendment review context in live operations.
 
 ---
 
 ## Build
 
-### 1. API behavior
-- add a mission endpoint for regulatory amendment alerts
-- validate source document, versions, dates, change summary, impact, affected references, and review action
-- return duplicate status when the same open amendment alert already exists
-- return clear validation and mission-not-found errors
-- keep the existing alert list endpoint unchanged
+### 1. UI behavior
+- recognize open regulatory amendment alerts in live operations
+- show source document, version change, summary, impact, affected references, effective date, and review action
+- keep existing mission alert loading unchanged
+- keep regulatory context read-only for operators
 
 ### 2. Operator clarity
-- make amendment alerts usable by future regulatory-monitoring automation
-- keep the payload explicit about what changed and what needs review
-- avoid any automatic legal interpretation, dispatch approval, or direct-control behavior
+- make regulatory amendments visible beside operational alerts
+- distinguish review-required compliance alerts from telemetry threshold alerts
+- avoid automatic legal interpretation, dispatch approval, or direct-control behavior
 
 ### 3. Tests
-- add API coverage for create, duplicate suppression, validation, and missing mission
-- run focused alert API tests
-- run build
+- parse-check the live-ops static script
+- run TypeScript build
+- run diff whitespace check
 
 ---
 
@@ -36,7 +35,6 @@ Expose regulatory amendment alerts through the mission API.
 ---
 
 ## Done When
-- Regulatory amendment alerts can be created through the API
-- Invalid amendment requests fail safely
-- Duplicate open amendment alerts are suppressed through the API
+- Live operations can display regulatory amendment alert details
+- Alert status panels include amendment impact and review action
 - No operational authority, approval, or direct-control behavior changes

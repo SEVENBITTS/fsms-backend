@@ -102,6 +102,42 @@ const renderBadge = (value) =>
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
 
+const alertDisplayLabel = (alert) =>
+  String(alert?.alertType ?? "Alert").replaceAll("_", " ");
+
+const regulatoryAmendmentAlerts = () =>
+  (uiState.alerts ?? []).filter(
+    (alert) =>
+      alert.alertType === "REGULATORY_AMENDMENT" &&
+      alert.status !== "resolved",
+  );
+
+const formatRegulatoryAmendmentDetail = (alert) => {
+  const metadata = alert?.metadata ?? {};
+  const affectedRefs = Array.isArray(metadata.affectedRequirementRefs)
+    ? metadata.affectedRequirementRefs.join(", ")
+    : null;
+
+  return [
+    metadata.sourceDocument,
+    metadata.previousVersion && metadata.currentVersion
+      ? `${metadata.previousVersion} -> ${metadata.currentVersion}`
+      : null,
+    metadata.amendmentSummary,
+    metadata.changeImpact ? `Impact: ${metadata.changeImpact}` : null,
+    affectedRefs ? `Affected refs: ${affectedRefs}` : null,
+    metadata.reviewAction ? `Review: ${metadata.reviewAction}` : null,
+    metadata.effectiveFrom ? `Effective: ${formatDateTime(metadata.effectiveFrom)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+};
+
+const alertDisplayDetail = (alert) =>
+  alert?.alertType === "REGULATORY_AMENDMENT"
+    ? formatRegulatoryAmendmentDetail(alert) || alert.message
+    : alert?.message;
+
 const weatherOverlays = () =>
   (uiState.externalOverlays ?? []).filter((overlay) => overlay.kind === "weather");
 
@@ -1544,9 +1580,9 @@ const summarizeTelemetryAlerts = (alerts) => {
   const openAlerts = (alerts ?? []).filter((alert) => alert.status !== "resolved");
   if (openAlerts.length === 0) {
     return {
-      label: "Telemetry alerts clear",
+      label: "Mission alerts clear",
       tone: "pass",
-      detail: "No open telemetry alerts are currently reported.",
+      detail: "No open mission alerts are currently reported.",
     };
   }
 
@@ -1558,7 +1594,29 @@ const summarizeTelemetryAlerts = (alerts) => {
   return {
     label: `${openAlerts.length} active alert${openAlerts.length === 1 ? "" : "s"}`,
     tone: highest?.severity ?? "warning",
-    detail: highest?.message ?? "Telemetry alerts are present.",
+    detail: alertDisplayDetail(highest) ?? "Mission alerts are present.",
+  };
+};
+
+const summarizeRegulatoryAmendments = () => {
+  const amendments = regulatoryAmendmentAlerts();
+  if (amendments.length === 0) {
+    return {
+      label: "Regulatory amendments clear",
+      tone: "pass",
+      detail: "No open regulatory amendment review alerts are recorded.",
+    };
+  }
+
+  const latest = [...amendments].sort(
+    (left, right) =>
+      Date.parse(right.triggeredAt ?? "") - Date.parse(left.triggeredAt ?? ""),
+  )[0];
+
+  return {
+    label: `${amendments.length} regulatory review alert${amendments.length === 1 ? "" : "s"}`,
+    tone: latest?.severity ?? "warning",
+    detail: alertDisplayDetail(latest),
   };
 };
 
@@ -1615,6 +1673,7 @@ const buildOverlayCards = () => {
     crewedTrafficSummary(),
     droneTrafficSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
+    summarizeRegulatoryAmendments(),
     primaryConflict
       ? {
           label: "Primary conflict",
@@ -2265,8 +2324,8 @@ const renderStatus = () => {
       ? "Allowed"
       : "Blocked";
   const alertSignals = (uiState.alerts ?? []).map((alert) => ({
-    label: `${alert.alertType} - ${alert.severity}`,
-    value: `${alert.status}: ${alert.message}`,
+    label: `${alertDisplayLabel(alert)} - ${alert.severity}`,
+    value: `${alert.status}: ${alertDisplayDetail(alert)}`,
   }));
   const conflictSignals = primaryConflict
     ? [
@@ -2538,8 +2597,8 @@ const renderAlertCorrelation = () => {
     .map(
       (alert) => `
         <article class="alert-window ${toneClass(alert.severity)}">
-          <strong>${escapeHtml(alert.alertType.replaceAll("_", " "))} ${escapeHtml(alert.status)}</strong>
-          <div>${escapeHtml(alert.message)}</div>
+          <strong>${escapeHtml(alertDisplayLabel(alert))} ${escapeHtml(alert.status)}</strong>
+          <div>${escapeHtml(alertDisplayDetail(alert))}</div>
           <div class="alert-window-meta">
             Triggered: ${escapeHtml(formatDateTime(alert.triggeredAt))}<br />
             Resolved: ${escapeHtml(formatDateTime(alert.resolvedAt))}<br />
@@ -2564,7 +2623,7 @@ const renderAlertCorrelation = () => {
           <div class="k">Window state</div>
           <div>${escapeHtml(
             currentAlerts[0]
-              ? `${currentAlerts[0].alertType} ${currentAlerts[0].status}`
+              ? `${alertDisplayLabel(currentAlerts[0])} ${currentAlerts[0].status}`
               : "No alert window intersects the current replay point",
           )}</div>
         </div>
