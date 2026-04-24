@@ -2300,6 +2300,47 @@ describe("audit evidence snapshots", () => {
     expect(await countRows(missionId)).toEqual(before);
   });
 
+  it("includes regulatory amendment alert reviews in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+      resolve: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    const pdfText = response.body.toString("latin1");
+    expect(pdfText).toContain("Regulatory amendment alert review");
+    expect(pdfText).toContain("Regulatory amendment alert 1 status: resolved");
+    expect(pdfText).toContain("Regulatory amendment alert 1 source: CAA CAP 722");
+    expect(pdfText).toContain(
+      "Regulatory amendment alert 1 version change: 9.1 -> 9.2",
+    );
+    expect(pdfText).toContain("Regulatory amendment alert 1 affected references");
+    expect(pdfText).toContain("CAP722-OSC, CAP722-Records");
+    expect(pdfText).toContain("Regulatory amendment alert 1 review action");
+    expect(pdfText).toContain(
+      "Accountable manager to confirm mission evidence",
+    );
+    expect(pdfText).toContain("remains current.");
+    expect(pdfText).toContain(
+      "Regulatory amendment alert 1 resolved at: 2026-04-18T11:00:00.000Z",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
   it("includes stored accountable-manager sign-offs in post-operation audit PDFs", async () => {
     const { missionId } = await createCompletedMission();
     const snapshotResponse = await request(app)
