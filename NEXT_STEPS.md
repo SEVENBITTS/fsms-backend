@@ -1,38 +1,30 @@
 # NEXT STEP
 
 ## Goal
-Link platform instances to curated aircraft capability specifications.
+Show linked aircraft capability source context in the operator mission workspace.
 
 ---
 
 ## Build
 
-### 1. Data link
-- add an optional aircraft type/specification reference to platforms
-- expose the linked spec when reading platform records
-- keep existing platform creation working without a spec reference
+### 1. UI visibility
+- surface the assigned platform's linked aircraft capability spec in the operator mission workspace
+- show source reference/version fields so operators can see where the capability data came from
+- keep the display informational only
 
-### 2. Future analysis path
-- prepare mission planning to select a platform with known capability limits
-- do not yet automate weather/environment suitability decisions
-- keep aircraft spec source evidence visible for later audit review
+### 2. Safe boundary
+- do not make automated weather/environment suitability decisions yet
+- do not block approval or dispatch based on aircraft spec limits yet
+- do not add external aircraft-spec scraping or live manufacturer sync
 
 ### 3. Tests
-- add focused platform tests for linked/unlinked specs
-- run targeted platform tests
+- add focused workspace bundle/API assertions for the visible aircraft capability source context
+- run the mission-planning workspace tests
 - run TypeScript build and diff whitespace check
 
 ---
 
-## Do NOT do
-- No external scraping or unlicensed spec ingestion
-- No automated aircraft suitability decision yet
-- No direct aircraft control
-- No BVLOS command authority yet
-
----
-
 ## Done When
-- Platforms can optionally reference a curated aircraft capability spec
-- Existing platform flows remain backwards compatible
-- Mission/platform UI can use this link in a later select-box step
+- A mission with a linked platform spec shows that aircraft capability source context in the operator workspace
+- Missions without a linked spec still render cleanly
+- The capability display remains advisory/contextual only

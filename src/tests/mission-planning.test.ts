@@ -7,6 +7,7 @@ import { runMigrations } from "../migrations/runMigrations";
 const clearTables = async () => {
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
+  await pool.query("delete from conflict_guidance_acknowledgements");
   await pool.query("delete from mission_external_overlays");
   await pool.query("delete from audit_evidence_snapshots");
   await pool.query("delete from airspace_compliance_inputs");
@@ -18,12 +19,31 @@ const clearTables = async () => {
   await pool.query("delete from maintenance_records");
   await pool.query("delete from maintenance_schedules");
   await pool.query("delete from platforms");
+  await pool.query("delete from aircraft_type_specs");
 };
 
-const createPlatform = async () => {
+const createAircraftTypeSpec = async () => {
+  const response = await request(app)
+    .post("/platforms/aircraft-type-specs")
+    .send({
+      displayName: "Planning UAV capability profile",
+      manufacturer: "VerityAir Test",
+      model: "Atlas Scout",
+      aircraftType: "multi-rotor",
+      maxWindMps: 11,
+      sourceType: "operator",
+      sourceReference: "Operator-maintained planning spec",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.spec as { id: string };
+};
+
+const createPlatform = async (aircraftTypeSpecId?: string) => {
   const response = await request(app).post("/platforms").send({
     name: "Planning UAV",
     status: "active",
+    aircraftTypeSpecId,
   });
 
   expect(response.status).toBe(201);
@@ -1062,7 +1082,8 @@ describe("mission planning drafts", () => {
   });
 
   it("returns a populated planning workspace with readiness and evidence status", async () => {
-    const platform = await createPlatform();
+    const aircraftSpec = await createAircraftTypeSpec();
+    const platform = await createPlatform(aircraftSpec.id);
     const pilot = await createPilot();
     await createPilotReadinessEvidence(pilot.id);
 
@@ -1109,6 +1130,13 @@ describe("mission planning drafts", () => {
           id: platform.id,
           name: "Planning UAV",
           status: "active",
+          aircraftTypeSpecId: aircraftSpec.id,
+          aircraftTypeSpec: expect.objectContaining({
+            id: aircraftSpec.id,
+            displayName: "Planning UAV capability profile",
+            maxWindMps: 11,
+            sourceReference: "Operator-maintained planning spec",
+          }),
         }),
       },
       pilot: {

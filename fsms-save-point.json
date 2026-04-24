@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add operator-facing Q-line index summary context so coarse NOTAM index metadata is clearer at a glance in live operations review.",
+  "nextBuildStep": "Show linked aircraft capability source context in the operator mission workspace.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
