@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show acknowledgement review role in live operations.
+Show secondary advisory audit record IDs in live operations.
 
 ---
 
@@ -9,14 +9,14 @@ Show acknowledgement review role in live operations.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- keep using existing acknowledgement `acknowledgementRole` data
-- enrich live-ops acknowledgement status text with review role
-- show the review role in the recorded audit block
+- keep using existing acknowledgement ID data
+- enrich secondary advisory rows with the recorded audit record ID
+- leave primary acknowledgement rendering unchanged
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- show who recorded the acknowledgement, in what role, and when
-- keep the same status text available in primary and secondary advisory summaries
+- make secondary acknowledged advisories traceable to the evidence record
+- keep the existing summary, role, and timing context visible
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -35,7 +35,7 @@ Show acknowledgement review role in live operations.
 ---
 
 ## Done When
-- Acknowledged advisories show recorded actor, role, and timestamp in status text
-- Recorded primary acknowledgement blocks show the stored review role
+- Secondary acknowledged advisories show their audit record ID
+- Unacknowledged secondary advisory rows remain unchanged
 - Unacknowledged advisory status remains unchanged
 - No operational authority or direct-control behavior changes
