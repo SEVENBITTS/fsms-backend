@@ -2820,8 +2820,12 @@ const recordConflictGuidanceAcknowledgement = async (button) => {
   }
 
   button.disabled = true;
+  const acknowledgementRole = button.dataset.acknowledgementRole ?? "operator";
   const acknowledgedBy =
-    window.prompt("Record acknowledgement by", "operator")?.trim() ?? "";
+    window.prompt(
+      `Record ${acknowledgementRole} acknowledgement by`,
+      acknowledgementRole,
+    )?.trim() ?? "";
 
   if (!acknowledgedBy) {
     button.disabled = false;
@@ -2846,7 +2850,7 @@ const recordConflictGuidanceAcknowledgement = async (button) => {
         overlayId: button.dataset.overlayId,
         guidanceActionCode: button.dataset.actionCode,
         evidenceAction: button.dataset.evidenceAction,
-        acknowledgementRole: button.dataset.acknowledgementRole,
+        acknowledgementRole,
         acknowledgedBy,
         acknowledgementNote,
         guidanceSummary: button.dataset.guidanceSummary,

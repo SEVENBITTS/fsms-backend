@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Store richer live-ops guidance context in acknowledgements.
+Align live-ops acknowledgement prompt with required review role.
 
 ---
 
@@ -9,13 +9,13 @@ Store richer live-ops guidance context in acknowledgements.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- send a richer guidance summary from live ops when recording an acknowledgement
-- include recommendation, rationale, prohibited action warning, and pilot-instruction boundary
+- keep sending the acknowledgement role required by the advisory
+- default the acknowledgement prompt to the required role
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- preserve what the operator/supervisor actually reviewed
-- make the stored summary explicitly say `not_a_pilot_command`
+- make supervisor-required acknowledgements visibly ask for supervisor acknowledgement
+- make operator-required acknowledgements visibly ask for operator acknowledgement
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -34,6 +34,6 @@ Store richer live-ops guidance context in acknowledgements.
 ---
 
 ## Done When
-- New live-ops acknowledgement summaries include recommendation and rationale
-- New live-ops acknowledgement summaries include prohibited action and pilot-instruction boundary
+- Live-ops acknowledgement prompts reflect the required role
+- Posted acknowledgements still send the same validated role to the backend
 - No operational authority or direct-control behavior changes
