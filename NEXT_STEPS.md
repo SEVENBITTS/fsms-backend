@@ -1,33 +1,33 @@
 # NEXT STEP
 
 ## Goal
-Wire the live-ops map UI to record backend map view-state audit snapshots.
+Show recent live-ops map view-state audit snapshots in the operator UI.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- add a "Record map view-state evidence" action to the live-ops metadata panel
-- post replay cursor, area freshness filter, overlay counts, alerts, and conflicts to the backend snapshot endpoint
-- show success/failure status without creating screenshots or local files
-- keep the map read-only and separate from pilot command guidance
+- fetch recent map view-state evidence snapshots after loading live ops
+- show the latest recorded snapshot ID, timestamp, replay cursor, area freshness filter, overlay counts, alerts, and conflicts
+- refresh the recent snapshot list after the operator records a new snapshot
+- keep the display as audit metadata only, not screenshot/export evidence
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- keep the new UI action labelled as metadata capture only
+- keep snapshot history separate from pilot command guidance
 
 ### 3. Tests
-- add static/UI tests for the capture button, request payload, and safe status copy
-- run mission-planning/live-ops focused tests
+- add focused API/static tests for listing map view-state snapshot history in live ops
+- run mission-planning and audit-evidence focused tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Operators can trigger a map view-state evidence snapshot from the live-ops page
-- The UI sends replay cursor, freshness filter, overlay counts, alerts, and conflicts
-- Success/failure feedback is visible without implying a screenshot/export happened
+- Operators can see the most recent backend-recorded map view-state evidence snapshots
+- Recording a new snapshot updates the visible recent snapshot history
+- Snapshot history shows metadata fields without implying screenshot/file capture
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation

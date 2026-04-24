@@ -48,6 +48,12 @@ const uiState = {
     speed: 1,
   },
   areaFreshnessFilter: "all",
+  mapViewStateEvidenceCapture: {
+    status: "idle",
+    message: "No map view-state evidence snapshot has been recorded in this browser session.",
+    snapshotId: null,
+    createdAt: null,
+  },
 };
 
 const toneClass = (value) => {
@@ -863,6 +869,12 @@ const resetLiveOperationsState = () => {
   uiState.conflictAssessment = null;
   uiState.conflictGuidanceAcknowledgements = [];
   uiState.replayPlayback.index = 0;
+  uiState.mapViewStateEvidenceCapture = {
+    status: "idle",
+    message: "No map view-state evidence snapshot has been recorded in this browser session.",
+    snapshotId: null,
+    createdAt: null,
+  };
 };
 
 const renderMissionBrowser = () => {
@@ -1801,11 +1813,90 @@ const mapViewStateMetadata = () => {
     areaFreshnessFilter: areaFilter.label,
     visibleAreaOverlays: areaFilter.visibleCount,
     totalAreaOverlays: areaFilter.totalCount,
+    degradedAreaOverlays: areaFilter.degradedCount,
     openAlertCount: openAlerts.length,
     activeConflictCount: conflicts.length,
     areaRefreshRunCount: refreshRuns.length,
     exportStatus: "View-state metadata only; no evidence export has been generated.",
   };
+};
+
+const mapViewStateEvidencePayload = () => {
+  const replayPoints = replayTrack();
+  const activePoint = activeReplayPoint();
+  const areaFilter = areaFreshnessFilterSummary();
+  const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
+  const conflicts = activeConflictAssessmentItems();
+  const refreshRuns = areaRefreshChronology()?.refreshRuns ?? [];
+
+  return {
+    replayCursor:
+      replayPoints.length === 0
+        ? "0 / 0"
+        : `${uiState.replayPlayback.index + 1} / ${replayPoints.length}`,
+    replayTimestamp: activePoint?.timestamp ?? null,
+    areaFreshnessFilter: uiState.areaFreshnessFilter,
+    visibleAreaOverlayCount: areaFilter.visibleCount,
+    totalAreaOverlayCount: areaFilter.totalCount,
+    degradedAreaOverlayCount: areaFilter.degradedCount,
+    openAlertCount: openAlerts.length,
+    activeConflictCount: conflicts.length,
+    areaRefreshRunCount: refreshRuns.length,
+    viewStateUrl: `${window.location.pathname}${window.location.search}`,
+    createdBy: "live-ops-ui",
+  };
+};
+
+const recordMapViewStateEvidenceSnapshot = async () => {
+  const missionId = normalizeMissionId(uiState.missionId);
+  if (!hasSelectedMissionId(missionId)) {
+    uiState.mapViewStateEvidenceCapture = {
+      status: "failed",
+      message: "Load a valid mission before recording map view-state evidence.",
+      snapshotId: null,
+      createdAt: null,
+    };
+    renderStatus();
+    return;
+  }
+
+  uiState.mapViewStateEvidenceCapture = {
+    status: "pending",
+    message: "Recording metadata-only map view-state evidence...",
+    snapshotId: null,
+    createdAt: null,
+  };
+  renderStatus();
+
+  try {
+    const response = await fetchJson(
+      `/missions/${encodeURIComponent(missionId)}/live-operations/map-view-state/audit-snapshots`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mapViewStateEvidencePayload()),
+      },
+    );
+
+    uiState.mapViewStateEvidenceCapture = {
+      status: "recorded",
+      message: "Metadata-only map view-state evidence snapshot recorded.",
+      snapshotId: response.snapshot?.id ?? null,
+      createdAt: response.snapshot?.createdAt ?? null,
+    };
+  } catch (error) {
+    uiState.mapViewStateEvidenceCapture = {
+      status: "failed",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to record map view-state evidence snapshot.",
+      snapshotId: null,
+      createdAt: null,
+    };
+  }
+
+  renderStatus();
 };
 
 const renderList = (items, title) => {
@@ -2839,8 +2930,26 @@ const renderStatus = () => {
           <div class="k">Export status</div>
           <div>${escapeHtml(viewStateMetadata.exportStatus)}</div>
         </div>
+        <div class="actions-row">
+          <button
+            type="button"
+            class="secondary-button"
+            data-record-map-view-state-evidence
+            ${uiState.mapViewStateEvidenceCapture.status === "pending" ? "disabled" : ""}
+          >
+            Record map view-state evidence
+          </button>
+        </div>
         <div class="alert-window-meta">
-          This metadata describes the current read-only map view for future evidence export work. It does not create files or transmit pilot instructions.
+          Capture status: ${escapeHtml(uiState.mapViewStateEvidenceCapture.message)}
+          ${
+            uiState.mapViewStateEvidenceCapture.snapshotId
+              ? ` Snapshot ID ${escapeHtml(uiState.mapViewStateEvidenceCapture.snapshotId)} recorded at ${escapeHtml(formatDateTime(uiState.mapViewStateEvidenceCapture.createdAt))}.`
+              : ""
+          }
+        </div>
+        <div class="alert-window-meta">
+          This records structured metadata only. It does not create screenshots, create local files, or transmit pilot instructions.
         </div>
       </section>
       <section class="summary-block">
@@ -3717,6 +3826,20 @@ jumpControlsPanel.addEventListener("click", (event) => {
   stopReplayPlayback();
   setReplayIndex(nextIndex);
   renderLiveOperations();
+});
+
+statusPanel.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("[data-record-map-view-state-evidence]");
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  recordMapViewStateEvidenceSnapshot();
 });
 
 mapPanel.addEventListener("click", (event) => {
