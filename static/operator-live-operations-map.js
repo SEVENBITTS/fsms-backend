@@ -303,6 +303,55 @@ const areaOverlaySourceRefreshCardContext = (overlay) => {
   return [label, notamGeometryContext, qLineIndexContext].filter(Boolean).join(" | ");
 };
 
+const areaOverlayRefreshProvenanceDetail = (overlay) => {
+  const metadata = overlay?.metadata ?? {};
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  const provenance = metadata.refreshProvenance ?? {};
+  const sourceLabel = [
+    overlay?.source?.provider,
+    overlay?.source?.sourceType,
+    overlay?.source?.sourceRecordId,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  const carryForwardState =
+    refreshState?.carriedForwardFromFailedRefresh === true
+      ? "carried forward after failed refresh"
+      : refreshState?.carriedForwardFromPartialRefresh === true
+        ? "carried forward after partial refresh"
+        : "not carried forward";
+
+  return [
+    sourceLabel || "source not recorded",
+    refreshState?.status ? `status ${refreshState.status}` : "refresh status missing",
+    carryForwardState,
+    provenance.createdByRunId ? `created run ${provenance.createdByRunId}` : null,
+    provenance.lastUpdatedByRunId ? `updated run ${provenance.lastUpdatedByRunId}` : null,
+    metadata.sourceReference ? `reference ${metadata.sourceReference}` : null,
+    areaOverlayNotamGeometrySummaryContext(overlay),
+  ]
+    .filter(Boolean)
+    .join(" | ");
+};
+
+const areaSourceProvenanceRows = () =>
+  areaConflictOverlays()
+    .map((overlay) => {
+      const metadata = overlay?.metadata ?? {};
+      const refreshState = areaOverlaySourceRefreshState(overlay);
+      const status = refreshState?.status ?? "missing";
+      const carriedForward =
+        refreshState?.carriedForwardFromFailedRefresh === true ||
+        refreshState?.carriedForwardFromPartialRefresh === true;
+
+      return {
+        label: `${metadata.label ?? metadata.areaId ?? "Area overlay"} | ${status}`,
+        tone: carriedForward ? "warning" : status,
+        value: areaOverlayRefreshProvenanceDetail(overlay),
+      };
+    })
+    .sort((left, right) => severityRank(right.tone) - severityRank(left.tone));
+
 const areaSourceRefreshSummary = () => {
   const overlays = areaConflictOverlays();
   if (overlays.length === 0) {
@@ -2302,6 +2351,7 @@ const renderStatus = () => {
   const conflictState = conflictAssessmentSummary();
   const advisoryState = conflictAdvisorySummary();
   const replayConflictRelation = currentConflictReplayRelation();
+  const areaProvenanceRows = areaSourceProvenanceRows();
   const primaryConflict = primaryConflictAssessmentItem();
   const primaryConflictOverlay = primaryConflict
     ? conflictOverlayForItem(primaryConflict)
@@ -2490,6 +2540,8 @@ const renderStatus = () => {
           <div>${escapeHtml(
             primaryConflictOverlay ? areaOverlayQLineIndexReviewContext(primaryConflictOverlay) ?? "Not recorded" : "Not recorded",
           )}</div>
+          <div class="k">Area provenance boundary</div>
+          <div>${escapeHtml("Synthetic/local demo provenance only; this is not live CAA or NOTAM connectivity.")}</div>
           <div class="k">Conflict assessment</div>
           <div>${renderBadge(conflictState.label)}</div>
           <div class="k">Primary conflict</div>
@@ -2544,6 +2596,17 @@ const renderStatus = () => {
               ? "None"
               : `${secondaryAdvisories.length} secondary item(s)`,
           )}</div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Area Source Provenance</h4>
+        ${
+          areaProvenanceRows.length === 0
+            ? '<div class="empty-state">No normalized area-source provenance is available for this mission.</div>'
+            : renderList(areaProvenanceRows, "area source provenance")
+        }
+        <div class="alert-window-meta">
+          Synthetic/local demo provenance only. Review against authoritative CAA, NOTAM, and airspace feeds before operational use.
         </div>
       </section>
     </div>

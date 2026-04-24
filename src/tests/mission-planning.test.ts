@@ -2119,6 +2119,13 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("carried forward after partial refresh");
     expect(response.text).toContain("carried forward after failed refresh");
     expect(response.text).toContain("areaOverlaySourceRefreshCardContext");
+    expect(response.text).toContain("areaOverlayRefreshProvenanceDetail");
+    expect(response.text).toContain("areaSourceProvenanceRows");
+    expect(response.text).toContain("Area Source Provenance");
+    expect(response.text).toContain("Area provenance boundary");
+    expect(response.text).toContain("Synthetic/local demo provenance only");
+    expect(response.text).toContain("not live CAA or NOTAM connectivity");
+    expect(response.text).toContain("Review against authoritative CAA, NOTAM, and airspace feeds");
     expect(response.text).toContain("Area source failed");
     expect(response.text).toContain("Area source partial");
     expect(response.text).toContain("Area source stale");
