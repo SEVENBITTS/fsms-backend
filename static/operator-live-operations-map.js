@@ -2688,10 +2688,7 @@ const formatSecondaryAdvisoryValue = (advisory) =>
     `Acknowledgement: ${advisory.acknowledgementStatus}`,
     `Pilot instruction: ${advisory.pilotInstructionStatus}`,
     `Rationale: ${advisory.guidanceRationale}`,
-    `Do not: ${
-      advisory.prohibitedActions.join(" | ") ||
-      "No additional constraints recorded"
-    }`,
+    `Do not: ${prohibitedActionText(advisory)}`,
     advisory.acknowledgement
       ? `Audit record: ${advisory.acknowledgement.id}`
       : null,
@@ -2703,14 +2700,14 @@ const formatSecondaryAdvisoryValue = (advisory) =>
     .filter(Boolean)
     .join(" | ");
 
+const prohibitedActionText = (advisory) =>
+  advisory.prohibitedActions.join(" | ") || "No additional constraints recorded";
+
 const auditGuidanceSummary = (advisory) =>
   [
     `Recommended attention: ${advisory.recommendation}`,
     `Rationale: ${advisory.guidanceRationale}`,
-    `Do not: ${
-      advisory.prohibitedActions.join(" | ") ||
-      "No additional constraints recorded"
-    }`,
+    `Do not: ${prohibitedActionText(advisory)}`,
     `Pilot instruction status: ${advisory.pilotInstructionStatus}`,
   ].join(" | ");
 
@@ -2762,7 +2759,7 @@ const renderConflictAdvisory = () => {
                   Guidance rationale: ${escapeHtml(primary.guidanceRationale)}
                 </div>
                 <div class="alert-window-meta">
-                  Do not: ${escapeHtml(primary.prohibitedActions.join(" | ") || "No additional constraints recorded")}
+                  Do not: ${escapeHtml(prohibitedActionText(primary))}
                 </div>
                 ${
                   primary.acknowledgement

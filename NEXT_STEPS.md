@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show secondary advisory prohibited-action context in live operations.
+Centralize live-ops prohibited-action wording.
 
 ---
 
@@ -10,13 +10,13 @@ Show secondary advisory prohibited-action context in live operations.
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
 - keep using existing advisory prohibited-action data
-- enrich secondary advisory rows with the "do not" context
-- leave primary advisory rendering unchanged
+- use one formatter for "do not" text across primary, secondary, and audit summary displays
+- preserve existing rendered wording
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- show what operators should not treat the secondary advisory as authorising
-- keep the existing summary, role, timing, and audit context visible
+- keep prohibited-action wording consistent wherever advisory context is shown
+- avoid drift between displayed advisory warnings and stored audit summaries
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -35,6 +35,6 @@ Show secondary advisory prohibited-action context in live operations.
 ---
 
 ## Done When
-- Secondary advisory rows include prohibited-action context
-- Existing secondary acknowledgement/audit context remains visible
+- Primary advisory, secondary advisory, and audit summary use the same prohibited-action formatter
+- Existing live-ops advisory wording remains parse-safe
 - No operational authority or direct-control behavior changes
