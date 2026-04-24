@@ -1,21 +1,21 @@
 # NEXT STEP
 
 ## Goal
-Make the post-operation evidence pack easier to retrieve from the operator workspace.
+Let operators create the post-operation evidence snapshot from the workspace after mission completion.
 
 ---
 
 ## Build
 
-### 1. Workspace access
-- show a post-operation evidence export area for completed missions
-- link to the rendered audit report and PDF export endpoints
-- keep export access read-only and separate from mission approval or sign-off
+### 1. Workspace action
+- add a post-operation snapshot helper for completed missions
+- call the existing `POST /missions/:missionId/post-operation/evidence-snapshots` endpoint
+- refresh the evidence pack links after snapshot creation
 
 ### 2. Operator clarity
-- explain that the export is an evidence pack, not a compliance certificate
-- surface whether accountable-manager sign-off is pending or recorded
-- make regulatory amendment review records visible as part of the export context
+- show the action only as evidence capture, not sign-off or certification
+- keep accountable-manager sign-off as a separate workflow
+- explain that the snapshot freezes current post-operation evidence for later audit review
 
 ### 3. Tests
 - parse-check the mission workspace script
@@ -25,14 +25,14 @@ Make the post-operation evidence pack easier to retrieve from the operator works
 ---
 
 ## Do NOT do
-- No legal compliance certification claim
 - No automated accountable-manager sign-off
+- No legal compliance certification claim
 - No direct aircraft control
 - No BVLOS command authority yet
 
 ---
 
 ## Done When
-- Completed missions expose report/PDF evidence pack links in the workspace
-- Pending vs recorded sign-off state is clear to the operator
-- Regulatory amendment review evidence remains audit/export-only
+- Completed missions can capture a post-operation evidence snapshot from the workspace
+- The workspace refreshes and exposes report/PDF links for the new snapshot
+- Evidence capture remains separate from sign-off and compliance acceptance

@@ -107,6 +107,9 @@ const uiState = {
   timeline: null,
   regulatoryMatrix: [],
   regulatoryReviewImpact: null,
+  postOperationSnapshots: [],
+  postOperationEvidenceReport: null,
+  postOperationEvidenceReportError: "",
   missionList: [],
   missionQuery: "",
   transitionChecks: {},
@@ -229,6 +232,32 @@ const regulatoryImpactByRequirement = () => {
 };
 
 const alertActionKey = (action, alertId) => `${action}:${alertId}`;
+
+const latestPostOperationSnapshot = () => uiState.postOperationSnapshots?.[0] ?? null;
+
+const reportSection = (heading) =>
+  uiState.postOperationEvidenceReport?.report?.sections?.find(
+    (section) => section.heading === heading,
+  ) ?? null;
+
+const reportFieldValue = (heading, label) =>
+  reportSection(heading)?.fields?.find((field) => field.label === label)?.value ??
+  null;
+
+const postOperationExportLinks = (snapshotId) => {
+  if (!uiState.missionId || !snapshotId) {
+    return { renderUrl: "", pdfUrl: "" };
+  }
+
+  const base = `/missions/${encodeURIComponent(
+    uiState.missionId,
+  )}/post-operation/evidence-snapshots/${encodeURIComponent(snapshotId)}/export/render`;
+
+  return {
+    renderUrl: base,
+    pdfUrl: `${base}/pdf`,
+  };
+};
 
 const renderAlertActionButtons = (impact) => {
   const alertIds = impact?.alertIds ?? [];
@@ -568,6 +597,25 @@ const renderEvidenceHelpers = () => {
   const latestApprovalLink = planningWorkspace.evidence.latestApprovalEvidenceLink;
   const latestDispatchLink = dispatchWorkspace.dispatch.latestDispatchEvidenceLink;
   const latestHandoff = planningWorkspace.approval.latestApprovalHandoff;
+  const missionStatus = planningWorkspace.mission?.status ?? "Unknown";
+  const postOperationSnapshot = latestPostOperationSnapshot();
+  const signoffDecision = reportFieldValue(
+    "Accountable manager sign-off",
+    "Review decision/status",
+  );
+  const signoffRecordId = reportFieldValue(
+    "Accountable manager sign-off",
+    "Sign-off record ID",
+  );
+  const regulatoryAlertCount =
+    uiState.postOperationEvidenceReport?.sourceExport?.regulatoryAmendmentAlerts
+      ?.length ?? 0;
+  const exportLinks = postOperationExportLinks(postOperationSnapshot?.id);
+  const signoffState =
+    signoffDecision && signoffDecision !== "Pending sign-off"
+      ? `Recorded: ${signoffDecision}`
+      : "Pending sign-off";
+  const postOperationReady = missionStatus === "completed";
 
   evidencePanel.innerHTML = `
     <div class="summary-grid" style="margin-bottom: 14px;">
@@ -597,6 +645,50 @@ const renderEvidenceHelpers = () => {
           <div>${escapeHtml(dispatchWorkspace.dispatch.blockingReasons.join("; ") || "None")}</div>
           <div class="k">Dispatch missing requirements</div>
           <div>${escapeHtml(dispatchWorkspace.dispatch.missingRequirements.join("; ") || "None")}</div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Post-operation Evidence Pack</h4>
+        <div class="kv">
+          <div class="k">Mission state</div>
+          <div>${renderBadge(missionStatus)}</div>
+          <div class="k">Latest post-op snapshot</div>
+          <div>${escapeHtml(postOperationSnapshot?.id ?? "Not captured")}</div>
+          <div class="k">Captured at</div>
+          <div>${escapeHtml(formatDateTime(postOperationSnapshot?.createdAt))}</div>
+          <div class="k">Accountable-manager sign-off</div>
+          <div>${renderBadge(signoffState)}</div>
+          <div class="k">Sign-off record</div>
+          <div>${escapeHtml(signoffRecordId ?? "Not recorded")}</div>
+          <div class="k">Regulatory review records</div>
+          <div>${escapeHtml(String(regulatoryAlertCount))}</div>
+        </div>
+        <div class="action-meta" style="margin-top: 12px;">
+          Read-only evidence export for audit review. This is not a legal compliance certificate and does not approve dispatch or flight.
+          ${
+            postOperationReady
+              ? ""
+              : "Complete the mission before relying on a post-operation evidence pack."
+          }
+          ${
+            uiState.postOperationEvidenceReportError
+              ? `<br />Report status: ${escapeHtml(uiState.postOperationEvidenceReportError)}`
+              : ""
+          }
+        </div>
+        <div class="action-footer" style="justify-content: flex-start; margin-top: 12px;">
+          ${
+            postOperationSnapshot
+              ? `
+                <a class="action-button link-button" href="${escapeHtml(exportLinks.renderUrl)}" target="_blank" rel="noopener">
+                  Open audit report
+                </a>
+                <a class="action-button link-button" href="${escapeHtml(exportLinks.pdfUrl)}" target="_blank" rel="noopener">
+                  Download PDF evidence pack
+                </a>
+              `
+              : `<div class="action-status tone-warn">No post-operation snapshot is available yet.</div>`
+          }
         </div>
       </section>
     </div>
@@ -1197,6 +1289,9 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.dispatchWorkspace = null;
     uiState.timeline = null;
     uiState.regulatoryReviewImpact = null;
+    uiState.postOperationSnapshots = [];
+    uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReportError = "";
     renderMissionBrowser();
     uiState.transitionChecks = {};
     uiState.actionStatus = {};
@@ -1231,17 +1326,36 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
       dispatchResponse,
       timelineResponse,
       regulatoryReviewImpactResponse,
+      postOperationSnapshotsResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${missionId}/planning-workspace`),
       fetchJson(`/missions/${missionId}/dispatch-workspace`),
       fetchJson(`/missions/${missionId}/operations-timeline`),
       fetchJson(`/missions/${missionId}/regulatory-review-impact`),
+      fetchJson(`/missions/${missionId}/post-operation/evidence-snapshots`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
     uiState.dispatchWorkspace = dispatchResponse.workspace;
     uiState.timeline = timelineResponse.timeline;
     uiState.regulatoryReviewImpact = regulatoryReviewImpactResponse;
+    uiState.postOperationSnapshots = postOperationSnapshotsResponse.snapshots ?? [];
+    uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReportError = "";
+    const postOperationSnapshot = latestPostOperationSnapshot();
+
+    if (postOperationSnapshot) {
+      try {
+        const reportResponse = await fetchJson(
+          postOperationExportLinks(postOperationSnapshot.id).renderUrl,
+        );
+        uiState.postOperationEvidenceReport = reportResponse.report;
+      } catch (error) {
+        uiState.postOperationEvidenceReportError =
+          error instanceof Error ? error.message : "Report unavailable";
+      }
+    }
+
     await refreshTransitionChecks(missionId);
 
     renderMissionBrowser();
@@ -1259,6 +1373,9 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.dispatchWorkspace = null;
     uiState.timeline = null;
     uiState.regulatoryReviewImpact = null;
+    uiState.postOperationSnapshots = [];
+    uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReportError = "";
     uiState.transitionChecks = {};
     renderMissionBrowser();
     uiState.helperStatus = {};
