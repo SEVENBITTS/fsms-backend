@@ -1011,9 +1011,31 @@ describe("audit evidence snapshots", () => {
         acknowledgementRole: "operator",
         acknowledgedBy: "operator-a",
       });
+    const supervisorEvidenceByOperatorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-c",
+        overlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+      });
+    const operatorEvidenceBySupervisorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-d",
+        overlayId,
+        guidanceActionCode: "review_separation",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: "supervisor-a",
+      });
 
     expect(missingActorResponse.status).toBe(400);
     expect(monitorResponse.status).toBe(400);
+    expect(supervisorEvidenceByOperatorResponse.status).toBe(400);
+    expect(operatorEvidenceBySupervisorResponse.status).toBe(400);
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -2441,6 +2463,44 @@ describe("audit evidence snapshots", () => {
 
     expect(await countRows(first.missionId)).toEqual(firstBefore);
     expect(await countRows(second.missionId)).toEqual(secondBefore);
+  });
+
+  it("rejects direct conflict guidance acknowledgement records with mismatched evidence roles", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into conflict_guidance_acknowledgements (
+          id,
+          mission_id,
+          conflict_id,
+          overlay_id,
+          guidance_action_code,
+          evidence_action,
+          acknowledgement_role,
+          acknowledged_by
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        `,
+        [
+          randomUUID(),
+          missionId,
+          "conflict-db-mismatch",
+          overlayId,
+          "hold_or_suspend",
+          "record_supervisor_review",
+          "operator",
+          "operator-a",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23514",
+    });
+
+    expect(await countRows(missionId)).toEqual(before);
   });
 
   it("rejects unsupported accountable-manager sign-off review decisions", async () => {

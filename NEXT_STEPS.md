@@ -1,26 +1,25 @@
 # NEXT STEP
 
 ## Goal
-Add operator-facing Q-line index summary context for normalized NOTAM overlays.
+Constrain conflict acknowledgement evidence roles for audit integrity.
 
 ---
 
 ## Build
 
-### 1. Normalized overlay metadata
-- derive a Q-line index summary during area-source normalization
-- mark Q-line data as coarse index metadata only
-- preserve the normalized geometry as the operational review source
+### 1. API validation
+- require operator review evidence to be acknowledged by an operator
+- require supervisor review evidence to be acknowledged by a supervisor
+- reject mismatched evidence-action/role combinations before writing records
 
-### 2. Live-ops presentation
-- show Q-line center and radius as an operator-facing summary
-- show the coarse-index warning beside NOTAM geometry context
-- keep Q-line fallback distinct from E-field/provided geometry
+### 2. Database constraint
+- add a check constraint so direct writes cannot bypass the role/evidence rule
+- keep existing acknowledgement records and pilot-command guard intact
 
 ### 3. Tests
-- normalized NOTAM overlays include Q-line summary metadata
-- Q-line fallback overlays keep the same summary context
-- live-ops bundle parses after the display update
+- API rejects mismatched supervisor/operator acknowledgement roles
+- database rejects direct mismatched acknowledgement records
+- valid acknowledgement and export paths continue to work
 
 ---
 
@@ -33,7 +32,6 @@ Add operator-facing Q-line index summary context for normalized NOTAM overlays.
 ---
 
 ## Done When
-- Normalized area overlays expose Q-line index summary context
-- Live ops displays the Q-line summary clearly
-- Q-line data is clearly labelled as coarse index metadata only
-- Build and focused external-overlay tests pass
+- Conflict acknowledgement evidence action and role cannot disagree
+- The rule is enforced in both validation and database constraints
+- Build and focused audit tests pass

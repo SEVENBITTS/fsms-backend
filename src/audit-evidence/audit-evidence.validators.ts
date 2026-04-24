@@ -142,6 +142,20 @@ function requiredAcknowledgementRole(
   return value as TrafficConflictGuidanceAuthority;
 }
 
+function assertConflictGuidanceEvidenceRole(
+  evidenceAction: Exclude<TrafficConflictGuidanceEvidenceAction, "none">,
+  acknowledgementRole: TrafficConflictGuidanceAuthority,
+): void {
+  const expectedRole =
+    evidenceAction === "record_supervisor_review" ? "supervisor" : "operator";
+
+  if (acknowledgementRole !== expectedRole) {
+    throw new AuditEvidenceValidationError(
+      `${evidenceAction} must be acknowledged by ${expectedRole}`,
+    );
+  }
+}
+
 function requiredSignoffDecision(value: unknown): PostOperationAuditSignoffDecision {
   if (
     typeof value !== "string" ||
@@ -188,14 +202,22 @@ export function validateCreateConflictGuidanceAcknowledgementInput(
     throw new AuditEvidenceValidationError("Request body must be an object");
   }
 
+  const evidenceAction = requiredConflictGuidanceEvidenceAction(
+    input.evidenceAction,
+  );
+  const acknowledgementRole = requiredAcknowledgementRole(
+    input.acknowledgementRole,
+  );
+  assertConflictGuidanceEvidenceRole(evidenceAction, acknowledgementRole);
+
   return {
     conflictId: requiredString(input.conflictId, "conflictId"),
     overlayId: requiredString(input.overlayId, "overlayId"),
     guidanceActionCode: requiredConflictGuidanceActionCode(
       input.guidanceActionCode,
     ),
-    evidenceAction: requiredConflictGuidanceEvidenceAction(input.evidenceAction),
-    acknowledgementRole: requiredAcknowledgementRole(input.acknowledgementRole),
+    evidenceAction,
+    acknowledgementRole,
     acknowledgedBy: requiredString(input.acknowledgedBy, "acknowledgedBy"),
     acknowledgementNote: optionalTrimmed(
       input.acknowledgementNote,
