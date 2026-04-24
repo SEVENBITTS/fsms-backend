@@ -1,21 +1,21 @@
 # NEXT STEP
 
 ## Goal
-Expose accountable-manager sign-off status and creation from the post-operation evidence workspace.
+Add a compact operator view of post-operation evidence pack contents before sign-off.
 
 ---
 
 ## Build
 
-### 1. Workspace action
-- add a sign-off helper beside the post-operation evidence pack
-- call the existing `POST /missions/:missionId/post-operation/evidence-snapshots/:snapshotId/signoffs` endpoint
-- disable sign-off until a post-operation evidence snapshot exists
+### 1. Workspace visibility
+- show report section summaries from the rendered post-operation evidence pack
+- surface regulatory amendment review count, conflict acknowledgement count, and safety action closure count together
+- keep report/PDF links as the source of full detail
 
 ### 2. Operator clarity
-- keep sign-off separate from evidence capture
-- make clear that sign-off records internal review acceptance, not legal certification
-- show the latest sign-off state after the workspace refreshes
+- explain what evidence is present before accountable-manager sign-off
+- keep missing evidence warnings informational, not automatic rejection
+- avoid presenting summaries as formal compliance certification
 
 ### 3. Tests
 - parse-check the mission workspace script
@@ -25,14 +25,14 @@ Expose accountable-manager sign-off status and creation from the post-operation 
 ---
 
 ## Do NOT do
+- No automatic sign-off decision
 - No legal compliance certification claim
-- No automatic approval/signature generation
 - No direct aircraft control
 - No BVLOS command authority yet
 
 ---
 
 ## Done When
-- Operators can create one accountable-manager sign-off for a captured post-operation snapshot
-- Duplicate sign-off attempts remain blocked by the backend
-- Evidence capture, sign-off, and compliance acceptance stay visibly separate
+- Operators can see key evidence-pack counts before signing off
+- Missing/empty evidence categories are visible but non-authoritative
+- Full report/PDF remains available for audit detail

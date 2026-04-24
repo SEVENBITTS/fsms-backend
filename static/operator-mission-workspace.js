@@ -107,6 +107,50 @@ const EVIDENCE_HELPERS = {
     requiresCompletedMission: true,
     fields: [{ key: "createdBy", label: "Created by", type: "text", required: true }],
   },
+  postOperationSignoff: {
+    title: "Accountable-manager Sign-off",
+    description:
+      "Record internal accountable-manager review of the captured evidence pack. This is separate from legal compliance certification.",
+    endpoint: (missionId) =>
+      `/missions/${missionId}/post-operation/evidence-snapshots/${
+        latestPostOperationSnapshot()?.id ?? ""
+      }/signoffs`,
+    method: "POST",
+    requiresPostOperationSnapshot: true,
+    fields: [
+      {
+        key: "accountableManagerName",
+        label: "Accountable manager name",
+        type: "text",
+        required: true,
+      },
+      {
+        key: "accountableManagerRole",
+        label: "Accountable manager role",
+        type: "text",
+        required: true,
+      },
+      {
+        key: "reviewDecision",
+        label: "Review decision",
+        type: "select",
+        required: true,
+        options: [
+          { value: "approved", label: "Approved" },
+          { value: "requires_follow_up", label: "Requires follow-up" },
+          { value: "rejected", label: "Rejected" },
+        ],
+      },
+      { key: "signedAt", label: "Signed at", type: "datetime-local", required: true },
+      {
+        key: "signatureReference",
+        label: "Signature reference",
+        type: "text",
+        required: false,
+      },
+      { key: "createdBy", label: "Recorded by", type: "text", required: false },
+    ],
+  },
 };
 
 const uiState = {
@@ -447,6 +491,14 @@ const applyEvidenceHelperDefaults = () => {
     postOperationSnapshot: {
       createdBy: "post-ops-reviewer-1",
     },
+    postOperationSignoff: {
+      accountableManagerName: "Accountable Manager",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: new Date().toISOString().slice(0, 16),
+      signatureReference: "",
+      createdBy: "audit-admin-1",
+    },
   };
 
   for (const helper of Object.keys(EVIDENCE_HELPERS)) {
@@ -458,7 +510,7 @@ const applyEvidenceHelperDefaults = () => {
         continue;
       }
 
-      if (!input.value || key === "snapshotId") {
+      if (!input.value || key === "snapshotId" || key === "signedAt") {
         input.value = value;
       }
     }
@@ -487,6 +539,10 @@ const collectEvidenceHelperPayload = (helper) => {
 
   if (helper === "dispatchEvidence") {
     payload.decisionType = "dispatch";
+  }
+
+  if (helper === "postOperationSignoff" && payload.signedAt) {
+    payload.signedAt = new Date(payload.signedAt).toISOString();
   }
 
   return payload;
@@ -719,21 +775,49 @@ const renderEvidenceHelperCard = (helper, definition) => {
   const helperBusy = uiState.busyHelper === helper;
   const helperStatus = uiState.helperStatus[helper];
   const missionStatus = uiState.planningWorkspace?.mission?.status ?? "Unknown";
+  const postOperationSnapshot = latestPostOperationSnapshot();
+  const signoffRecordId = reportFieldValue(
+    "Accountable manager sign-off",
+    "Sign-off record ID",
+  );
+  const signoffRecorded =
+    Boolean(signoffRecordId) && signoffRecordId !== "Pending sign-off";
   const helperBlocked =
-    definition.requiresCompletedMission && missionStatus !== "completed";
+    (definition.requiresCompletedMission && missionStatus !== "completed") ||
+    (definition.requiresPostOperationSnapshot && !postOperationSnapshot) ||
+    (definition.requiresPostOperationSnapshot && signoffRecorded);
   const helperMessage =
     helperStatus?.message ??
-    (helperBlocked
+    (definition.requiresCompletedMission && missionStatus !== "completed"
       ? "Available after mission completion"
-      : "Ready");
+      : definition.requiresPostOperationSnapshot && !postOperationSnapshot
+        ? "Capture post-operation evidence first"
+        : definition.requiresPostOperationSnapshot && signoffRecorded
+          ? "Sign-off already recorded"
+          : "Ready");
 
   const fieldMarkup = definition.fields
     .map((field) => {
       const inputId = `helper-${helper}-${field.key}`;
+      const fieldInput =
+        field.type === "select"
+          ? `
+            <select id="${inputId}" ${field.required ? "required" : ""}>
+              ${(field.options ?? [])
+                .map(
+                  (option) => `
+                    <option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>
+                  `,
+                )
+                .join("")}
+            </select>
+          `
+          : `<input id="${inputId}" type="${field.type}" ${field.required ? "required" : ""} />`;
+
       return `
         <div class="action-field">
           <label for="${inputId}">${escapeHtml(field.label)}</label>
-          <input id="${inputId}" type="${field.type}" ${field.required ? "required" : ""} />
+          ${fieldInput}
         </div>
       `;
     })
@@ -1422,6 +1506,29 @@ const executeEvidenceHelper = async (helper) => {
   if (definition.requiresCompletedMission && missionStatus !== "completed") {
     uiState.helperStatus[helper] = {
       message: "Complete the mission before capturing post-operation evidence",
+    };
+    renderEvidenceHelpers();
+    return;
+  }
+  const postOperationSnapshot = latestPostOperationSnapshot();
+  const signoffRecordId = reportFieldValue(
+    "Accountable manager sign-off",
+    "Sign-off record ID",
+  );
+  const signoffRecorded =
+    Boolean(signoffRecordId) && signoffRecordId !== "Pending sign-off";
+
+  if (definition.requiresPostOperationSnapshot && !postOperationSnapshot) {
+    uiState.helperStatus[helper] = {
+      message: "Capture post-operation evidence before sign-off",
+    };
+    renderEvidenceHelpers();
+    return;
+  }
+
+  if (definition.requiresPostOperationSnapshot && signoffRecorded) {
+    uiState.helperStatus[helper] = {
+      message: "Accountable-manager sign-off is already recorded",
     };
     renderEvidenceHelpers();
     return;
