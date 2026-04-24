@@ -263,6 +263,7 @@ export interface PostOperationEvidenceExportPackage {
   createdBy: string | null;
   createdAt: string;
   completionSnapshot: PostOperationCompletionSnapshot;
+  liveOpsMapViewStateSnapshots: LiveOpsMapViewStateSnapshot[];
   conflictGuidanceAcknowledgements: ConflictGuidanceAcknowledgement[];
   safetyActionClosureEvidence: SafetyActionClosureEvidenceExportContext[];
   regulatoryAmendmentAlerts: RegulatoryAmendmentAlertAuditRecord[];

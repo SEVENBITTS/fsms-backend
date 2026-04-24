@@ -1570,9 +1570,68 @@ describe("audit evidence snapshots", () => {
     expect(response.body.export.completionSnapshot).toEqual(
       snapshotResponse.body.snapshot.completionSnapshot,
     );
+    expect(response.body.export.liveOpsMapViewStateSnapshots).toEqual([]);
     expect(response.body.export.conflictGuidanceAcknowledgements).toEqual([]);
     expect(response.body.export.safetyActionClosureEvidence).toEqual([]);
     expect(response.body.export.regulatoryAmendmentAlerts).toEqual([]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("exports live-ops map view-state snapshots in post-operation evidence", async () => {
+    const { missionId } = await createCompletedMission();
+    const mapSnapshotResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 5",
+        replayTimestamp: "2026-04-18T12:03:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        createdBy: "live-ops-ui",
+      });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(mapSnapshotResponse.status).toBe(201);
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.liveOpsMapViewStateSnapshots).toHaveLength(1);
+    expect(response.body.export.liveOpsMapViewStateSnapshots[0]).toMatchObject({
+      id: mapSnapshotResponse.body.snapshot.id,
+      missionId,
+      evidenceType: "live_ops_map_view_state",
+      replayCursor: "3 / 5",
+      replayTimestamp: "2026-04-18T12:03:00.000Z",
+      areaFreshnessFilter: "degraded",
+      visibleAreaOverlayCount: 2,
+      totalAreaOverlayCount: 4,
+      degradedAreaOverlayCount: 2,
+      openAlertCount: 3,
+      activeConflictCount: 1,
+      areaRefreshRunCount: 5,
+      captureScope: "metadata_only",
+      pilotInstructionStatus: "not_a_pilot_command",
+      createdBy: "live-ops-ui",
+      snapshotMetadata: {
+        screenshotStatus: "not_captured",
+        fileGenerationStatus: "not_requested",
+      },
+    });
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -2000,6 +2059,20 @@ describe("audit evidence snapshots", () => {
             ]),
           },
           {
+            heading: "Live-ops map view-state evidence",
+            fields: [
+              {
+                label: "Live-ops map view-state evidence",
+                value: "No live-ops map view-state snapshots recorded",
+              },
+              {
+                label: "Map view-state evidence boundary",
+                value:
+                  "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+              },
+            ],
+          },
+          {
             heading: "Live conflict guidance acknowledgements",
             fields: [
               {
@@ -2058,6 +2131,12 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state evidence: No live-ops map view-state snapshots recorded",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state evidence boundary: Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+    );
+    expect(response.body.report.report.plainText).toContain(
       "Live conflict guidance acknowledgements: No live conflict guidance acknowledgements recorded",
     );
     expect(response.body.report.report.plainText).toContain(
@@ -2071,6 +2150,94 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Post-operation report and sign-off controls",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders live-ops map view-state snapshots in post-operation reports", async () => {
+    const { missionId } = await createCompletedMission();
+    const mapSnapshotResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 5",
+        replayTimestamp: "2026-04-18T12:03:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+      });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(mapSnapshotResponse.status).toBe(201);
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Live-ops map view-state evidence",
+      fields: expect.arrayContaining([
+        {
+          label: "Map view-state snapshot 1 ID",
+          value: mapSnapshotResponse.body.snapshot.id,
+        },
+        {
+          label: "Map view-state snapshot 1 replay cursor",
+          value: "3 / 5",
+        },
+        {
+          label: "Map view-state snapshot 1 area freshness filter",
+          value: "degraded",
+        },
+        {
+          label: "Map view-state snapshot 1 area overlays",
+          value: "2/4 visible; 2 degraded",
+        },
+        {
+          label: "Map view-state snapshot 1 alerts and conflicts",
+          value: "3 open alerts; 1 active conflicts",
+        },
+        {
+          label: "Map view-state snapshot 1 capture scope",
+          value: "metadata_only",
+        },
+        {
+          label: "Map view-state snapshot 1 pilot instruction status",
+          value: "not_a_pilot_command",
+        },
+        {
+          label: "Map view-state snapshot 1 evidence boundary",
+          value:
+            "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state evidence",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 replay cursor: 3 / 5",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 area overlays: 2/4 visible; 2 degraded",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 pilot instruction status: not_a_pilot_command",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 evidence boundary: Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
     );
     expect(await countRows(missionId)).toEqual(before);
   });
@@ -2516,6 +2683,12 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
+      "Live-ops map view-state evidence",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "No live-ops map view-state snapshots recorded",
+    );
+    expect(response.body.toString("latin1")).toContain(
       "Live conflict guidance acknowledgements",
     );
     expect(response.body.toString("latin1")).toContain(
@@ -2534,6 +2707,55 @@ describe("audit evidence snapshots", () => {
       "Mission readiness gate controls",
     );
     expect(response.body.toString("latin1")).toContain("1.5 SMS documentation");
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("includes live-ops map view-state evidence boundaries in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 5",
+        replayTimestamp: "2026-04-18T12:03:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+      });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    const pdfText = response.body.toString("latin1");
+    expect(pdfText).toContain("Live-ops map view-state evidence");
+    expect(pdfText).toContain("Map view-state snapshot 1 replay cursor: 3 / 5");
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 capture scope: metadata_only",
+    );
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 pilot instruction status",
+    );
+    expect(pdfText).toContain("not_a_pilot_command");
+    expect(pdfText).toContain("Metadata-only evidence; no screenshot/file");
+    expect(pdfText).toContain("not pilot command guidance.");
     expect(await countRows(missionId)).toEqual(before);
   });
 

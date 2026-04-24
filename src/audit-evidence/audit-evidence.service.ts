@@ -417,6 +417,11 @@ export class AuditEvidenceService {
       const safetyActionClosureEvidence =
         await this.auditEvidenceRepository
           .listSafetyActionClosureEvidenceForMissionExport(client, missionId);
+      const liveOpsMapViewStateSnapshots =
+        await this.auditEvidenceRepository.listLiveOpsMapViewStateSnapshots(
+          client,
+          missionId,
+        );
       const conflictGuidanceAcknowledgements =
         await this.auditEvidenceRepository.listConflictGuidanceAcknowledgements(
           client,
@@ -437,6 +442,7 @@ export class AuditEvidenceService {
         createdBy: snapshot.createdBy,
         createdAt: snapshot.createdAt,
         completionSnapshot: snapshot.completionSnapshot,
+        liveOpsMapViewStateSnapshots,
         conflictGuidanceAcknowledgements,
         safetyActionClosureEvidence,
         regulatoryAmendmentAlerts,
@@ -949,6 +955,75 @@ export class AuditEvidenceService {
             value: signoff?.createdAt ?? pendingSignoff,
           },
         ],
+      },
+      {
+        heading: "Live-ops map view-state evidence",
+        fields:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0
+            ? evidenceExport.liveOpsMapViewStateSnapshots.flatMap(
+                (snapshot, index) => [
+                  {
+                    label: `Map view-state snapshot ${index + 1} ID`,
+                    value: snapshot.id,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} replay cursor`,
+                    value: snapshot.replayCursor,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} replay timestamp`,
+                    value: snapshot.replayTimestamp,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} area freshness filter`,
+                    value: snapshot.areaFreshnessFilter,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} area overlays`,
+                    value: `${snapshot.visibleAreaOverlayCount}/${snapshot.totalAreaOverlayCount} visible; ${snapshot.degradedAreaOverlayCount} degraded`,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} alerts and conflicts`,
+                    value: `${snapshot.openAlertCount} open alerts; ${snapshot.activeConflictCount} active conflicts`,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} refresh runs`,
+                    value: snapshot.areaRefreshRunCount,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} capture scope`,
+                    value: snapshot.captureScope,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} pilot instruction status`,
+                    value: snapshot.pilotInstructionStatus,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} view state URL`,
+                    value: snapshot.viewStateUrl,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} recorded at`,
+                    value: snapshot.createdAt,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} evidence boundary`,
+                    value:
+                      "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+                  },
+                ],
+              )
+            : [
+                {
+                  label: "Live-ops map view-state evidence",
+                  value: "No live-ops map view-state snapshots recorded",
+                },
+                {
+                  label: "Map view-state evidence boundary",
+                  value:
+                    "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+                },
+              ],
       },
       {
         heading: "Live conflict guidance acknowledgements",
