@@ -5,6 +5,7 @@ import type {
   AuditEvidenceReadinessSnapshot,
   AuditReportSmsControlMapping,
   ConflictGuidanceAcknowledgement,
+  LiveOpsMapViewStateSnapshot,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PlanningApprovalHandoffEvidence,
@@ -49,6 +50,43 @@ interface CreateMissionDecisionEvidenceLinkRow {
   missionId: string;
   snapshotId: string;
   decisionType: MissionDecisionEvidenceLink["decisionType"];
+  createdBy: string | null;
+}
+
+interface LiveOpsMapViewStateSnapshotRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  evidence_type: LiveOpsMapViewStateSnapshot["evidenceType"];
+  replay_cursor: string;
+  replay_timestamp: Date | null;
+  area_freshness_filter: LiveOpsMapViewStateSnapshot["areaFreshnessFilter"];
+  visible_area_overlay_count: number;
+  total_area_overlay_count: number;
+  degraded_area_overlay_count: number;
+  open_alert_count: number;
+  active_conflict_count: number;
+  area_refresh_run_count: number;
+  view_state_url: string | null;
+  snapshot_metadata: Record<string, unknown>;
+  capture_scope: LiveOpsMapViewStateSnapshot["captureScope"];
+  pilot_instruction_status: LiveOpsMapViewStateSnapshot["pilotInstructionStatus"];
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface CreateLiveOpsMapViewStateSnapshotRow {
+  missionId: string;
+  replayCursor: string;
+  replayTimestamp: string | null;
+  areaFreshnessFilter: LiveOpsMapViewStateSnapshot["areaFreshnessFilter"];
+  visibleAreaOverlayCount: number;
+  totalAreaOverlayCount: number;
+  degradedAreaOverlayCount: number;
+  openAlertCount: number;
+  activeConflictCount: number;
+  areaRefreshRunCount: number;
+  viewStateUrl: string | null;
+  snapshotMetadata: Record<string, unknown>;
   createdBy: string | null;
 }
 
@@ -235,6 +273,29 @@ const toMissionDecisionEvidenceLink = (
   missionId: row.mission_id,
   auditEvidenceSnapshotId: row.audit_evidence_snapshot_id,
   decisionType: row.decision_type,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
+const toLiveOpsMapViewStateSnapshot = (
+  row: LiveOpsMapViewStateSnapshotRow,
+): LiveOpsMapViewStateSnapshot => ({
+  id: row.id,
+  missionId: row.mission_id,
+  evidenceType: row.evidence_type,
+  replayCursor: row.replay_cursor,
+  replayTimestamp: row.replay_timestamp?.toISOString() ?? null,
+  areaFreshnessFilter: row.area_freshness_filter,
+  visibleAreaOverlayCount: row.visible_area_overlay_count,
+  totalAreaOverlayCount: row.total_area_overlay_count,
+  degradedAreaOverlayCount: row.degraded_area_overlay_count,
+  openAlertCount: row.open_alert_count,
+  activeConflictCount: row.active_conflict_count,
+  areaRefreshRunCount: row.area_refresh_run_count,
+  viewStateUrl: row.view_state_url,
+  snapshotMetadata: row.snapshot_metadata,
+  captureScope: row.capture_scope,
+  pilotInstructionStatus: row.pilot_instruction_status,
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
 });
@@ -521,6 +582,91 @@ export class AuditEvidenceRepository {
     );
 
     return result.rows.map(toMissionDecisionEvidenceLink);
+  }
+
+  async insertLiveOpsMapViewStateSnapshot(
+    tx: PoolClient,
+    input: CreateLiveOpsMapViewStateSnapshotRow,
+  ): Promise<LiveOpsMapViewStateSnapshot> {
+    const result = await tx.query<LiveOpsMapViewStateSnapshotRow>(
+      `
+      insert into live_ops_map_view_state_snapshots (
+        id,
+        mission_id,
+        evidence_type,
+        replay_cursor,
+        replay_timestamp,
+        area_freshness_filter,
+        visible_area_overlay_count,
+        total_area_overlay_count,
+        degraded_area_overlay_count,
+        open_alert_count,
+        active_conflict_count,
+        area_refresh_run_count,
+        view_state_url,
+        snapshot_metadata,
+        capture_scope,
+        pilot_instruction_status,
+        created_by
+      )
+      values (
+        $1,
+        $2,
+        'live_ops_map_view_state',
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13::jsonb,
+        'metadata_only',
+        'not_a_pilot_command',
+        $14
+      )
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        input.replayCursor,
+        input.replayTimestamp,
+        input.areaFreshnessFilter,
+        input.visibleAreaOverlayCount,
+        input.totalAreaOverlayCount,
+        input.degradedAreaOverlayCount,
+        input.openAlertCount,
+        input.activeConflictCount,
+        input.areaRefreshRunCount,
+        input.viewStateUrl,
+        JSON.stringify(input.snapshotMetadata),
+        input.createdBy,
+      ],
+    );
+
+    return toLiveOpsMapViewStateSnapshot(result.rows[0]);
+  }
+
+  async listLiveOpsMapViewStateSnapshots(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<LiveOpsMapViewStateSnapshot[]> {
+    const result = await tx.query<LiveOpsMapViewStateSnapshotRow>(
+      `
+      select *
+      from live_ops_map_view_state_snapshots
+      where mission_id = $1
+        and evidence_type = 'live_ops_map_view_state'
+      order by created_at desc, id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toLiveOpsMapViewStateSnapshot);
   }
 
   async getDecisionEvidenceLinkForMission(

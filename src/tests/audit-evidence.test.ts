@@ -22,6 +22,7 @@ const clearTables = async () => {
   await pool.query("delete from air_safety_meetings");
   await pool.query("delete from post_operation_audit_signoffs");
   await pool.query("delete from post_operation_evidence_snapshots");
+  await pool.query("delete from live_ops_map_view_state_snapshots");
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
   await pool.query("delete from conflict_guidance_acknowledgements");
@@ -408,6 +409,7 @@ const countRows = async (missionId: string) => {
       (select count(*)::int from audit_evidence_snapshots where mission_id = $1) as snapshot_count,
       (select count(*)::int from conflict_guidance_acknowledgements where mission_id = $1) as conflict_guidance_acknowledgement_count,
       (select count(*)::int from post_operation_evidence_snapshots where mission_id = $1) as post_operation_snapshot_count,
+      (select count(*)::int from live_ops_map_view_state_snapshots where mission_id = $1) as live_ops_map_view_state_snapshot_count,
       (select count(*)::int from post_operation_audit_signoffs where mission_id = $1) as post_operation_signoff_count,
       (select count(*)::int from mission_decision_evidence_links where mission_id = $1) as decision_link_count,
       (select count(*)::int from mission_events where mission_id = $1) as mission_event_count,
@@ -427,6 +429,7 @@ const countRows = async (missionId: string) => {
     snapshot_count: number;
     conflict_guidance_acknowledgement_count: number;
     post_operation_snapshot_count: number;
+    live_ops_map_view_state_snapshot_count: number;
     post_operation_signoff_count: number;
     decision_link_count: number;
     mission_event_count: number;
@@ -777,6 +780,187 @@ describe("audit evidence snapshots", () => {
         type: "audit_evidence_validation_failed",
       },
     });
+  });
+
+  it("captures live-ops map view-state metadata as audit evidence", async () => {
+    const { missionId } = await createReadyMission();
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "2 / 4",
+        replayTimestamp: "2026-04-18T12:01:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        createdBy: " live-ops-controller ",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.snapshot).toMatchObject({
+      missionId,
+      evidenceType: "live_ops_map_view_state",
+      replayCursor: "2 / 4",
+      replayTimestamp: "2026-04-18T12:01:00.000Z",
+      areaFreshnessFilter: "degraded",
+      visibleAreaOverlayCount: 2,
+      totalAreaOverlayCount: 4,
+      degradedAreaOverlayCount: 2,
+      openAlertCount: 3,
+      activeConflictCount: 1,
+      areaRefreshRunCount: 5,
+      captureScope: "metadata_only",
+      pilotInstructionStatus: "not_a_pilot_command",
+      createdBy: "live-ops-controller",
+      snapshotMetadata: {
+        formatVersion: 1,
+        evidenceType: "live_ops_map_view_state",
+        captureScope: "metadata_only",
+        pilotInstructionStatus: "not_a_pilot_command",
+        screenshotStatus: "not_captured",
+        fileGenerationStatus: "not_requested",
+        viewState: {
+          replayCursor: "2 / 4",
+          areaFreshnessFilter: "degraded",
+          visibleAreaOverlayCount: 2,
+          totalAreaOverlayCount: 4,
+          degradedAreaOverlayCount: 2,
+          openAlertCount: 3,
+          activeConflictCount: 1,
+          areaRefreshRunCount: 5,
+        },
+      },
+    });
+    expect(response.body.snapshot.id).toEqual(expect.any(String));
+    expect(response.body.snapshot.createdAt).toEqual(expect.any(String));
+    expect(await countRows(missionId)).toEqual({
+      ...before,
+      live_ops_map_view_state_snapshot_count:
+        before.live_ops_map_view_state_snapshot_count + 1,
+    });
+  });
+
+  it("lists live-ops map view-state snapshots for the owning mission only", async () => {
+    const first = await createReadyMission();
+    const second = await createReadyMission();
+
+    const firstSnapshot = await request(app)
+      .post(
+        `/missions/${first.missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "1 / 3",
+        replayTimestamp: null,
+        areaFreshnessFilter: "all",
+        visibleAreaOverlayCount: 3,
+        totalAreaOverlayCount: 3,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 1,
+      });
+    const secondSnapshot = await request(app)
+      .post(
+        `/missions/${second.missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "2 / 3",
+        areaFreshnessFilter: "hidden",
+        visibleAreaOverlayCount: 0,
+        totalAreaOverlayCount: 3,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 1,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 1,
+      });
+
+    expect(firstSnapshot.status).toBe(201);
+    expect(secondSnapshot.status).toBe(201);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/live-operations/map-view-state/audit-snapshots`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.snapshots).toHaveLength(1);
+    expect(response.body.snapshots[0]).toMatchObject({
+      id: firstSnapshot.body.snapshot.id,
+      missionId: first.missionId,
+      replayCursor: "1 / 3",
+      areaFreshnessFilter: "all",
+    });
+  });
+
+  it("rejects invalid live-ops map view-state snapshot metadata", async () => {
+    const { missionId } = await createReadyMission();
+    const before = await countRows(missionId);
+
+    const unsupportedFilterResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "1 / 2",
+        areaFreshnessFilter: "stale",
+        visibleAreaOverlayCount: 1,
+        totalAreaOverlayCount: 2,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 0,
+      });
+    const impossibleCountsResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 2",
+        areaFreshnessFilter: "all",
+        visibleAreaOverlayCount: 3,
+        totalAreaOverlayCount: 2,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 0,
+      });
+
+    expect(unsupportedFilterResponse.status).toBe(400);
+    expect(impossibleCountsResponse.status).toBe(400);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("returns 404 for unknown live-ops map view-state snapshot missions", async () => {
+    const missingMissionId = randomUUID();
+
+    const createResponse = await request(app)
+      .post(
+        `/missions/${missingMissionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "1 / 1",
+        areaFreshnessFilter: "all",
+        visibleAreaOverlayCount: 0,
+        totalAreaOverlayCount: 0,
+        degradedAreaOverlayCount: 0,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 0,
+      });
+    const listResponse = await request(app).get(
+      `/missions/${missingMissionId}/live-operations/map-view-state/audit-snapshots`,
+    );
+
+    expect(createResponse.status).toBe(404);
+    expect(listResponse.status).toBe(404);
   });
 
   it("returns 404 for unknown missions", async () => {

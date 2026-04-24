@@ -19,9 +19,12 @@ import type {
   ConflictGuidanceAcknowledgement,
   CreateAuditEvidenceSnapshotInput,
   CreateConflictGuidanceAcknowledgementInput,
+  CreateLiveOpsMapViewStateSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
   CreatePostOperationAuditSignoffInput,
   CreatePostOperationEvidenceSnapshotInput,
+  LiveOpsMapAreaFreshnessFilter,
+  LiveOpsMapViewStateSnapshot,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PostOperationAuditSignoff,
@@ -36,6 +39,7 @@ import type {
 import {
   validateCreateAuditEvidenceSnapshotInput,
   validateCreateConflictGuidanceAcknowledgementInput,
+  validateCreateLiveOpsMapViewStateSnapshotInput,
   validateCreateMissionDecisionEvidenceLinkInput,
   validateCreatePostOperationAuditSignoffInput,
   validateCreatePostOperationEvidenceSnapshotInput,
@@ -160,6 +164,63 @@ export class AuditEvidenceService {
       }
 
       return await this.auditEvidenceRepository.listDecisionEvidenceLinks(
+        client,
+        missionId,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async createLiveOpsMapViewStateSnapshot(
+    missionId: string,
+    input: CreateLiveOpsMapViewStateSnapshotInput | undefined,
+  ): Promise<LiveOpsMapViewStateSnapshot> {
+    const validated = validateCreateLiveOpsMapViewStateSnapshotInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      return await this.auditEvidenceRepository.insertLiveOpsMapViewStateSnapshot(
+        client,
+        {
+          missionId,
+          ...validated,
+          snapshotMetadata: this.buildLiveOpsMapViewStateSnapshotMetadata(
+            missionId,
+            validated,
+          ),
+        },
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async listLiveOpsMapViewStateSnapshots(
+    missionId: string,
+  ): Promise<LiveOpsMapViewStateSnapshot[]> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      return await this.auditEvidenceRepository.listLiveOpsMapViewStateSnapshots(
         client,
         missionId,
       );
@@ -648,6 +709,46 @@ export class AuditEvidenceService {
     return {
       ...readinessCheck,
       smsControlMappings,
+    };
+  }
+
+  private buildLiveOpsMapViewStateSnapshotMetadata(
+    missionId: string,
+    input: {
+      replayCursor: string;
+      replayTimestamp: string | null;
+      areaFreshnessFilter: LiveOpsMapAreaFreshnessFilter;
+      visibleAreaOverlayCount: number;
+      totalAreaOverlayCount: number;
+      degradedAreaOverlayCount: number;
+      openAlertCount: number;
+      activeConflictCount: number;
+      areaRefreshRunCount: number;
+      viewStateUrl: string | null;
+    },
+  ): Record<string, unknown> {
+    return {
+      formatVersion: 1,
+      missionId,
+      evidenceType: "live_ops_map_view_state",
+      captureScope: "metadata_only",
+      pilotInstructionStatus: "not_a_pilot_command",
+      screenshotStatus: "not_captured",
+      fileGenerationStatus: "not_requested",
+      viewState: {
+        replayCursor: input.replayCursor,
+        replayTimestamp: input.replayTimestamp,
+        areaFreshnessFilter: input.areaFreshnessFilter,
+        visibleAreaOverlayCount: input.visibleAreaOverlayCount,
+        totalAreaOverlayCount: input.totalAreaOverlayCount,
+        degradedAreaOverlayCount: input.degradedAreaOverlayCount,
+        openAlertCount: input.openAlertCount,
+        activeConflictCount: input.activeConflictCount,
+        areaRefreshRunCount: input.areaRefreshRunCount,
+        viewStateUrl: input.viewStateUrl,
+      },
+      assuranceBoundary:
+        "Live-ops map view-state capture is audit metadata only and does not issue pilot instructions or certify live regulatory compliance.",
     };
   }
 

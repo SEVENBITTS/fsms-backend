@@ -1,32 +1,33 @@
 # NEXT STEP
 
 ## Goal
-Add backend audit snapshot capture for live-ops map view-state metadata.
+Wire the live-ops map UI to record backend map view-state audit snapshots.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- add a backend endpoint to record live-ops map view-state metadata as audit evidence
-- capture mission, replay cursor, area freshness filter, overlay counts, alerts, and conflicts
-- keep screenshot/file generation out of scope for this step
+- add a "Record map view-state evidence" action to the live-ops metadata panel
+- post replay cursor, area freshness filter, overlay counts, alerts, and conflicts to the backend snapshot endpoint
+- show success/failure status without creating screenshots or local files
 - keep the map read-only and separate from pilot command guidance
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- keep provenance review informational and auditable
+- keep the new UI action labelled as metadata capture only
 
 ### 3. Tests
-- add focused API tests for live-ops view-state evidence capture
-- run audit/live-ops focused tests
+- add static/UI tests for the capture button, request payload, and safe status copy
+- run mission-planning/live-ops focused tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Operators can record a map view-state evidence snapshot without creating files
-- Evidence includes replay cursor, freshness filter, overlay counts, alerts, and conflicts
+- Operators can trigger a map view-state evidence snapshot from the live-ops page
+- The UI sends replay cursor, freshness filter, overlay counts, alerts, and conflicts
+- Success/failure feedback is visible without implying a screenshot/export happened
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation

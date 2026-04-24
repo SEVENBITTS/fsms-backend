@@ -8,6 +8,10 @@ import type {
 
 export type AuditEvidenceType = "mission_readiness_gate";
 
+export type LiveOpsMapViewStateEvidenceType = "live_ops_map_view_state";
+
+export type LiveOpsMapAreaFreshnessFilter = "all" | "degraded" | "hidden";
+
 export type PostOperationEvidenceType = "post_operation_completion";
 
 export type MissionDecisionType = "approval" | "dispatch";
@@ -18,6 +22,20 @@ export type PostOperationAuditSignoffDecision =
   | "requires_follow_up";
 
 export interface CreateAuditEvidenceSnapshotInput {
+  createdBy?: string | null;
+}
+
+export interface CreateLiveOpsMapViewStateSnapshotInput {
+  replayCursor?: string;
+  replayTimestamp?: string | null;
+  areaFreshnessFilter?: LiveOpsMapAreaFreshnessFilter;
+  visibleAreaOverlayCount?: number;
+  totalAreaOverlayCount?: number;
+  degradedAreaOverlayCount?: number;
+  openAlertCount?: number;
+  activeConflictCount?: number;
+  areaRefreshRunCount?: number;
+  viewStateUrl?: string | null;
   createdBy?: string | null;
 }
 
@@ -75,6 +93,27 @@ export interface MissionDecisionEvidenceLink {
   missionId: string;
   auditEvidenceSnapshotId: string;
   decisionType: MissionDecisionType;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface LiveOpsMapViewStateSnapshot {
+  id: string;
+  missionId: string;
+  evidenceType: LiveOpsMapViewStateEvidenceType;
+  replayCursor: string;
+  replayTimestamp: string | null;
+  areaFreshnessFilter: LiveOpsMapAreaFreshnessFilter;
+  visibleAreaOverlayCount: number;
+  totalAreaOverlayCount: number;
+  degradedAreaOverlayCount: number;
+  openAlertCount: number;
+  activeConflictCount: number;
+  areaRefreshRunCount: number;
+  viewStateUrl: string | null;
+  snapshotMetadata: Record<string, unknown>;
+  captureScope: "metadata_only";
+  pilotInstructionStatus: "not_a_pilot_command";
   createdBy: string | null;
   createdAt: string;
 }

@@ -23,6 +23,14 @@ export function createAuditEvidenceRouter(
     controller.listMissionDecisionEvidenceLinks,
   );
   router.post(
+    "/:missionId/live-operations/map-view-state/audit-snapshots",
+    controller.createLiveOpsMapViewStateSnapshot,
+  );
+  router.get(
+    "/:missionId/live-operations/map-view-state/audit-snapshots",
+    controller.listLiveOpsMapViewStateSnapshots,
+  );
+  router.post(
     "/:missionId/conflict-guidance-acknowledgements",
     controller.createConflictGuidanceAcknowledgement,
   );

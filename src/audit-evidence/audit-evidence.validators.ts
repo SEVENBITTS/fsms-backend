@@ -2,9 +2,11 @@ import { AuditEvidenceValidationError } from "./audit-evidence.errors";
 import type {
   CreateConflictGuidanceAcknowledgementInput,
   CreateAuditEvidenceSnapshotInput,
+  CreateLiveOpsMapViewStateSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
   CreatePostOperationAuditSignoffInput,
   CreatePostOperationEvidenceSnapshotInput,
+  LiveOpsMapAreaFreshnessFilter,
   MissionDecisionType,
   PostOperationAuditSignoffDecision,
 } from "./audit-evidence.types";
@@ -15,6 +17,8 @@ import type {
 } from "../conflict-assessment/traffic-conflict-assessment.types";
 
 const DECISION_TYPES = new Set<MissionDecisionType>(["approval", "dispatch"]);
+const LIVE_OPS_AREA_FRESHNESS_FILTERS =
+  new Set<LiveOpsMapAreaFreshnessFilter>(["all", "degraded", "hidden"]);
 const CONFLICT_GUIDANCE_ACTION_CODES =
   new Set<TrafficConflictGuidanceActionCode>([
     "review_separation",
@@ -91,12 +95,37 @@ function requiredString(value: unknown, fieldName: string): string {
   return value.trim();
 }
 
+function requiredNonNegativeInteger(value: unknown, fieldName: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new AuditEvidenceValidationError(
+      `${fieldName} must be a non-negative integer`,
+    );
+  }
+
+  return value;
+}
+
 function requiredDecisionType(value: unknown): MissionDecisionType {
   if (typeof value !== "string" || !DECISION_TYPES.has(value as MissionDecisionType)) {
     throw new AuditEvidenceValidationError("decisionType is not supported");
   }
 
   return value as MissionDecisionType;
+}
+
+function requiredAreaFreshnessFilter(
+  value: unknown,
+): LiveOpsMapAreaFreshnessFilter {
+  if (
+    typeof value !== "string" ||
+    !LIVE_OPS_AREA_FRESHNESS_FILTERS.has(value as LiveOpsMapAreaFreshnessFilter)
+  ) {
+    throw new AuditEvidenceValidationError(
+      "areaFreshnessFilter is not supported",
+    );
+  }
+
+  return value as LiveOpsMapAreaFreshnessFilter;
 }
 
 function requiredConflictGuidanceActionCode(
@@ -191,6 +220,67 @@ export function validateCreateMissionDecisionEvidenceLinkInput(
   return {
     snapshotId: requiredString(input.snapshotId, "snapshotId"),
     decisionType: requiredDecisionType(input.decisionType),
+    createdBy: optionalTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+export function validateCreateLiveOpsMapViewStateSnapshotInput(
+  input: CreateLiveOpsMapViewStateSnapshotInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new AuditEvidenceValidationError("Request body must be an object");
+  }
+
+  const visibleAreaOverlayCount = requiredNonNegativeInteger(
+    input.visibleAreaOverlayCount,
+    "visibleAreaOverlayCount",
+  );
+  const totalAreaOverlayCount = requiredNonNegativeInteger(
+    input.totalAreaOverlayCount,
+    "totalAreaOverlayCount",
+  );
+  const degradedAreaOverlayCount = requiredNonNegativeInteger(
+    input.degradedAreaOverlayCount,
+    "degradedAreaOverlayCount",
+  );
+
+  if (visibleAreaOverlayCount > totalAreaOverlayCount) {
+    throw new AuditEvidenceValidationError(
+      "visibleAreaOverlayCount cannot exceed totalAreaOverlayCount",
+    );
+  }
+
+  if (degradedAreaOverlayCount > totalAreaOverlayCount) {
+    throw new AuditEvidenceValidationError(
+      "degradedAreaOverlayCount cannot exceed totalAreaOverlayCount",
+    );
+  }
+
+  return {
+    replayCursor: requiredString(input.replayCursor, "replayCursor"),
+    replayTimestamp:
+      input.replayTimestamp === undefined || input.replayTimestamp === null
+        ? null
+        : requiredIsoDate(input.replayTimestamp, "replayTimestamp"),
+    areaFreshnessFilter: requiredAreaFreshnessFilter(
+      input.areaFreshnessFilter,
+    ),
+    visibleAreaOverlayCount,
+    totalAreaOverlayCount,
+    degradedAreaOverlayCount,
+    openAlertCount: requiredNonNegativeInteger(
+      input.openAlertCount,
+      "openAlertCount",
+    ),
+    activeConflictCount: requiredNonNegativeInteger(
+      input.activeConflictCount,
+      "activeConflictCount",
+    ),
+    areaRefreshRunCount: requiredNonNegativeInteger(
+      input.areaRefreshRunCount,
+      "areaRefreshRunCount",
+    ),
+    viewStateUrl: optionalTrimmed(input.viewStateUrl, "viewStateUrl"),
     createdBy: optionalTrimmed(input.createdBy, "createdBy"),
   };
 }
