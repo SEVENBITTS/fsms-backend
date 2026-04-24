@@ -477,7 +477,12 @@ const fetchJson = async (url, options = {}) => {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(payload?.error?.message || `Request failed with ${response.status}`);
+    const error = new Error(
+      payload?.error?.message || `Request failed with ${response.status}`,
+    );
+    error.type = payload?.error?.type;
+    error.status = response.status;
+    throw error;
   }
 
   return payload;
@@ -2873,7 +2878,11 @@ const recordConflictGuidanceAcknowledgement = async (button) => {
   } catch (error) {
     button.disabled = false;
     const message =
-      error instanceof Error ? error.message : "Failed to record acknowledgement";
+      error?.type === "conflict_guidance_acknowledgement_already_exists"
+        ? "Conflict guidance acknowledgement already recorded for this advisory"
+        : error instanceof Error
+          ? error.message
+          : "Failed to record acknowledgement";
     setConnectionState(message, "tone-bad");
   }
 };

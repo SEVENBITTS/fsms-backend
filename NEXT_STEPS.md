@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Guard live-ops acknowledgement capture when guidance summary is missing.
+Show friendly duplicate acknowledgement errors in live operations.
 
 ---
 
@@ -9,13 +9,13 @@ Guard live-ops acknowledgement capture when guidance summary is missing.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- only post acknowledgements when guidance summary evidence is present
-- show a clear local error before posting if the summary is missing
+- preserve backend error type/status in the live-ops fetch helper
+- detect duplicate acknowledgement conflict responses in the acknowledgement flow
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- prevent confusing backend validation failures for missing summary evidence
-- keep the operator in the same live-ops view when evidence capture is incomplete
+- show a clear "already recorded" message for duplicate acknowledgement attempts
+- avoid exposing raw backend conflict wording to operators
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -34,6 +34,6 @@ Guard live-ops acknowledgement capture when guidance summary is missing.
 ---
 
 ## Done When
-- Live ops does not submit acknowledgement requests without guidance summary evidence
-- Missing summary evidence produces a visible local error
+- Duplicate acknowledgement attempts display a clear live-ops message
+- Other fetch failures still show their original messages
 - No operational authority or direct-control behavior changes
