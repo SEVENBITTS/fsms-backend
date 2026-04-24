@@ -50,4 +50,19 @@ export class AlertController {
       return next(error);
     }
   };
+
+  getRegulatoryReviewImpact = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const missionId = req.params.id;
+      const impact = await this.alertService.getRegulatoryReviewImpact(missionId);
+
+      return res.status(200).json(impact);
+    } catch (error) {
+      return next(error);
+    }
+  };
 }

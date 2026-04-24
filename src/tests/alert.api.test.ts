@@ -138,4 +138,56 @@ describe("alert API", () => {
       },
     });
   });
+
+  it("summarizes regulatory matrix rows impacted by open amendment alerts", async () => {
+    const missionId = await insertMission();
+
+    await request(app)
+      .post(`/missions/${missionId}/regulatory-amendments`)
+      .send(amendmentBody);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/regulatory-review-impact`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      missionId,
+      openAmendmentAlertCount: 1,
+      impactedMappingCount: 4,
+      needsClauseReviewCount: 4,
+    });
+    expect(
+      response.body.impactedMappings.map(
+        (item: { mapping: { requirementCode: string } }) =>
+          item.mapping.requirementCode,
+      ),
+    ).toEqual([
+      "REG_UAS_OPERATING_SOURCE_BASIS",
+      "REG_AIRSPACE_PERMISSION_EVIDENCE",
+      "REG_OPERATING_SAFETY_CASE_CONTEXT",
+      "REG_POST_OPERATION_RECORDS",
+    ]);
+    expect(response.body.impactedMappings[0]).toMatchObject({
+      reviewReason:
+        "Open regulatory amendment matches this source mapping or affected reference context.",
+    });
+  });
+
+  it("returns an empty regulatory review impact summary when no amendment alerts are open", async () => {
+    const missionId = await insertMission();
+
+    const response = await request(app).get(
+      `/missions/${missionId}/regulatory-review-impact`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      missionId,
+      openAmendmentAlertCount: 0,
+      impactedMappingCount: 0,
+      needsClauseReviewCount: 0,
+      impactedMappings: [],
+    });
+  });
 });

@@ -1,3 +1,5 @@
+import type { RegulatoryRequirementMapping } from "../sms-framework/sms-framework.types";
+
 export type AlertType =
   | "ALTITUDE_HIGH"
   | "SPEED_HIGH"
@@ -81,4 +83,18 @@ export interface RegulatoryAmendmentAlertInput {
 export interface RegulatoryAmendmentAlertResult {
   created: Alert[];
   duplicate: boolean;
+}
+
+export interface RegulatoryReviewImpactedMapping {
+  mapping: RegulatoryRequirementMapping;
+  alertIds: string[];
+  reviewReason: string;
+}
+
+export interface RegulatoryReviewImpactSummary {
+  missionId: string;
+  openAmendmentAlertCount: number;
+  impactedMappingCount: number;
+  needsClauseReviewCount: number;
+  impactedMappings: RegulatoryReviewImpactedMapping[];
 }

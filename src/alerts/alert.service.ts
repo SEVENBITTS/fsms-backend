@@ -6,8 +6,11 @@ import type {
   CreateAlertInput,
   RegulatoryAmendmentAlertInput,
   RegulatoryAmendmentAlertResult,
+  RegulatoryReviewImpactSummary,
 } from "./alert.types";
 import { AlertMissionNotFoundError } from "./alert.errors";
+import { SmsFrameworkRepository } from "../sms-framework/sms-framework.repository";
+import type { RegulatoryRequirementMapping } from "../sms-framework/sms-framework.types";
 
 export interface AlertThresholdConfig {
   altitudeHighM: number;
@@ -40,6 +43,7 @@ export class AlertService {
     private readonly pool: Pool,
     private readonly alertRepository: AlertRepository,
     private readonly thresholds: AlertThresholdConfig = DEFAULT_THRESHOLDS,
+    private readonly smsFrameworkRepository?: SmsFrameworkRepository,
   ) {}
 
   async listAlertsForMission(missionId: string): Promise<Alert[]> {
@@ -190,6 +194,59 @@ export class AlertService {
     }
   }
 
+  async getRegulatoryReviewImpact(
+    missionId: string,
+  ): Promise<RegulatoryReviewImpactSummary> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.alertRepository.missionExists(client, missionId);
+      if (!exists) {
+        throw new AlertMissionNotFoundError(missionId);
+      }
+
+      const amendmentAlerts = await this.alertRepository.list(client, {
+        missionId,
+        alertType: "REGULATORY_AMENDMENT",
+        status: "open",
+        limit: 100,
+      });
+      const mappings = this.smsFrameworkRepository
+        ? await this.smsFrameworkRepository.listRegulatoryRequirementMappings(
+            client,
+          )
+        : [];
+      const impactedMappings = mappings
+        .map((mapping) => {
+          const matchingAlerts = amendmentAlerts.filter((alert) =>
+            this.amendmentAffectsMapping(alert.metadata, mapping),
+          );
+
+          return {
+            mapping,
+            alertIds: matchingAlerts.map((alert) => alert.id),
+            reviewReason:
+              matchingAlerts.length > 0
+                ? "Open regulatory amendment matches this source mapping or affected reference context."
+                : "",
+          };
+        })
+        .filter((item) => item.alertIds.length > 0);
+
+      return {
+        missionId,
+        openAmendmentAlertCount: amendmentAlerts.length,
+        impactedMappingCount: impactedMappings.length,
+        needsClauseReviewCount: impactedMappings.filter((item) =>
+          item.mapping.reviewStatus.includes("needs"),
+        ).length,
+        impactedMappings,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   private async syncThresholdAlert(
     client: PoolClient,
     missionId: string,
@@ -271,5 +328,55 @@ export class AlertService {
       affectedRequirementRefs: input.affectedRequirementRefs ?? [],
       reviewAction,
     };
+  }
+
+  private amendmentAffectsMapping(
+    metadata: Record<string, unknown>,
+    mapping: RegulatoryRequirementMapping,
+  ): boolean {
+    const sourceText = [
+      metadata.sourceDocument,
+      metadata.previousVersion,
+      metadata.currentVersion,
+      metadata.amendmentSummary,
+      metadata.changeImpact,
+      ...(Array.isArray(metadata.affectedRequirementRefs)
+        ? metadata.affectedRequirementRefs
+        : []),
+    ]
+      .filter(Boolean)
+      .map((value) => String(value))
+      .join(" ");
+    const normalizedSourceText = this.normalizeRegulatoryText(sourceText);
+    const mappingTokens = this.regulatoryMappingTokens(mapping);
+
+    return mappingTokens.some((token) => normalizedSourceText.includes(token));
+  }
+
+  private regulatoryMappingTokens(mapping: RegulatoryRequirementMapping): string[] {
+    const sourceSpecific =
+      mapping.sourceCode === "CAA_CAP_722_2024"
+        ? ["cap722", "caa cap722"]
+        : mapping.sourceCode === "CAA_CAP_722A_2022"
+          ? ["cap722a", "caa cap722a"]
+          : mapping.sourceCode === "UK_UAS_REGULATIONS"
+            ? ["ukuas", "2019947", "2019945", "amc", "gm", "cs"]
+            : [];
+
+    return [
+      mapping.sourceCode,
+      mapping.sourceTitle,
+      mapping.requirementRef,
+      mapping.requirementCode,
+      ...sourceSpecific,
+    ]
+      .map((value) => this.normalizeRegulatoryText(value))
+      .filter(Boolean);
+  }
+
+  private normalizeRegulatoryText(value: unknown): string {
+    return String(value ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
   }
 }

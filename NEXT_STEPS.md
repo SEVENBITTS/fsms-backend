@@ -1,27 +1,28 @@
 # NEXT STEP
 
 ## Goal
-Show the regulatory requirement matrix in the operator mission workspace.
+Summarize regulatory matrix rows impacted by open amendment alerts.
 
 ---
 
 ## Build
 
-### 1. UI behavior
-- add a read-only regulatory requirement matrix panel
-- fetch the existing SMS regulatory mapping endpoint
-- summarize mapped requirements, source-mapped count, and clause-review count
-- show source, requirement summary, platform control, evidence type, assurance owner, and review status
+### 1. API behavior
+- add a read-only mission endpoint for regulatory review impact
+- compare open regulatory amendment alerts with regulatory requirement mappings
+- return impacted matrix rows, open amendment count, and clause-review count
+- keep the result advisory/review-only, not approval logic
 
 ### 2. Operator clarity
-- make CAA/CAP traceability visible without leaving the workspace
-- keep unresolved clause review explicit
-- avoid presenting the matrix as a legal compliance certification
+- show which CAA/CAP mappings need attention after an amendment
+- link amendment source context to impacted controls and evidence types
+- keep unresolved review work explicit before any compliance claim
 
 ### 3. Tests
-- parse-check the mission workspace script
-- run TypeScript build
-- run diff whitespace check
+- add API coverage for impacted mappings
+- confirm empty impact when no amendment alerts are open
+- run focused alert API tests
+- run build
 
 ---
 
@@ -34,6 +35,6 @@ Show the regulatory requirement matrix in the operator mission workspace.
 ---
 
 ## Done When
-- Operator workspace displays the regulatory matrix
-- Review status and evidence type are visible per mapped requirement
+- Open regulatory amendments produce an impacted-matrix summary
+- Unaffected missions return an empty review-impact summary
 - No operational authority, approval, or direct-control behavior changes

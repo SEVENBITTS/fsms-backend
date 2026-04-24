@@ -119,7 +119,13 @@ const missionEventRepo = new MissionEventRepository();
 const missionLifecyclePolicy = new MissionLifecyclePolicy();
 const missionTelemetryRepo = new MissionTelemetryRepository();
 const alertRepository = new AlertRepository();
-const alertService = new AlertService(pool, alertRepository);
+const smsFrameworkRepository = new SmsFrameworkRepository();
+const alertService = new AlertService(
+  pool,
+  alertRepository,
+  undefined,
+  smsFrameworkRepository,
+);
 const alertController = new AlertController(alertService);
 
 const missionTelemetryService = new MissionTelemetryService(
@@ -193,7 +199,6 @@ const missionController = new MissionController(
 const missionPlanningController = new MissionPlanningController(
   missionPlanningService,
 );
-const smsFrameworkRepository = new SmsFrameworkRepository();
 const smsFrameworkService = new SmsFrameworkService(
   pool,
   smsFrameworkRepository,

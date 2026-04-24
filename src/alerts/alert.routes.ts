@@ -9,6 +9,10 @@ export function createAlertRouter(controller: AlertController): Router {
     "/:id/regulatory-amendments",
     controller.createRegulatoryAmendmentAlert,
   );
+  router.get(
+    "/:id/regulatory-review-impact",
+    controller.getRegulatoryReviewImpact,
+  );
 
   return router;
 }
