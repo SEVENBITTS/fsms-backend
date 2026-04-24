@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Centralize live-ops prohibited-action wording.
+Show secondary advisory source and replay relevance in live operations.
 
 ---
 
@@ -9,14 +9,14 @@ Centralize live-ops prohibited-action wording.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- keep using existing advisory prohibited-action data
-- use one formatter for "do not" text across primary, secondary, and audit summary displays
-- preserve existing rendered wording
+- keep using existing advisory related-source and replay-relevance data
+- enrich secondary advisory rows with source and relevance context
+- leave primary advisory rendering unchanged
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- keep prohibited-action wording consistent wherever advisory context is shown
-- avoid drift between displayed advisory warnings and stored audit summaries
+- make secondary advisory context traceable back to the source layer
+- show whether the advisory is current or near the replay window
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -35,6 +35,6 @@ Centralize live-ops prohibited-action wording.
 ---
 
 ## Done When
-- Primary advisory, secondary advisory, and audit summary use the same prohibited-action formatter
-- Existing live-ops advisory wording remains parse-safe
+- Secondary advisory rows include related source
+- Secondary advisory rows include replay relevance
 - No operational authority or direct-control behavior changes

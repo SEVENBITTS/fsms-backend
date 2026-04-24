@@ -2687,6 +2687,8 @@ const formatSecondaryAdvisoryValue = (advisory) =>
     `Evidence: ${advisory.evidenceAction}`,
     `Acknowledgement: ${advisory.acknowledgementStatus}`,
     `Pilot instruction: ${advisory.pilotInstructionStatus}`,
+    `Related source: ${advisory.relatedSource}`,
+    `Relevance: ${advisory.relevance}`,
     `Rationale: ${advisory.guidanceRationale}`,
     `Do not: ${prohibitedActionText(advisory)}`,
     advisory.acknowledgement
