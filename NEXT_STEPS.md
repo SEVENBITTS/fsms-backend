@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Refresh live-ops acknowledgement state after duplicate conflicts.
+Show recorded acknowledgement time in live operations.
 
 ---
 
@@ -9,14 +9,13 @@ Refresh live-ops acknowledgement state after duplicate conflicts.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- detect duplicate acknowledgement conflict responses in the acknowledgement flow
-- reload recorded acknowledgements after a duplicate conflict response
-- re-render live operations so the recorded audit state is shown
+- keep using existing acknowledgement `createdAt` data
+- enrich live-ops acknowledgement status text with recorded time
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- keep the clear "already recorded" message for duplicate attempts
-- replace stale buttons with the current recorded acknowledgement state
+- show who recorded the acknowledgement and when
+- keep the same status text available in primary and secondary advisory summaries
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -35,6 +34,6 @@ Refresh live-ops acknowledgement state after duplicate conflicts.
 ---
 
 ## Done When
-- Duplicate acknowledgement attempts refresh the local acknowledgement list
-- The live-ops panel re-renders to show the existing audit record
+- Acknowledged advisories show recorded actor and timestamp in status text
+- Unacknowledged advisory status remains unchanged
 - No operational authority or direct-control behavior changes

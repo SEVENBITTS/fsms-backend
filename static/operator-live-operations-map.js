@@ -1052,7 +1052,9 @@ const deriveConflictAdvisories = () =>
       ...advisory,
       acknowledgement,
       acknowledgementStatus: acknowledgement
-        ? `Recorded by ${acknowledgement.acknowledgedBy}`
+        ? `Recorded by ${acknowledgement.acknowledgedBy} at ${formatDateTime(
+            acknowledgement.createdAt,
+          )}`
         : advisory.acknowledgementRequired
           ? "Required"
           : "Not required",
