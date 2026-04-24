@@ -1,21 +1,21 @@
 # NEXT STEP
 
 ## Goal
-Let operators create the post-operation evidence snapshot from the workspace after mission completion.
+Expose accountable-manager sign-off status and creation from the post-operation evidence workspace.
 
 ---
 
 ## Build
 
 ### 1. Workspace action
-- add a post-operation snapshot helper for completed missions
-- call the existing `POST /missions/:missionId/post-operation/evidence-snapshots` endpoint
-- refresh the evidence pack links after snapshot creation
+- add a sign-off helper beside the post-operation evidence pack
+- call the existing `POST /missions/:missionId/post-operation/evidence-snapshots/:snapshotId/signoffs` endpoint
+- disable sign-off until a post-operation evidence snapshot exists
 
 ### 2. Operator clarity
-- show the action only as evidence capture, not sign-off or certification
-- keep accountable-manager sign-off as a separate workflow
-- explain that the snapshot freezes current post-operation evidence for later audit review
+- keep sign-off separate from evidence capture
+- make clear that sign-off records internal review acceptance, not legal certification
+- show the latest sign-off state after the workspace refreshes
 
 ### 3. Tests
 - parse-check the mission workspace script
@@ -25,14 +25,14 @@ Let operators create the post-operation evidence snapshot from the workspace aft
 ---
 
 ## Do NOT do
-- No automated accountable-manager sign-off
 - No legal compliance certification claim
+- No automatic approval/signature generation
 - No direct aircraft control
 - No BVLOS command authority yet
 
 ---
 
 ## Done When
-- Completed missions can capture a post-operation evidence snapshot from the workspace
-- The workspace refreshes and exposes report/PDF links for the new snapshot
-- Evidence capture remains separate from sign-off and compliance acceptance
+- Operators can create one accountable-manager sign-off for a captured post-operation snapshot
+- Duplicate sign-off attempts remain blocked by the backend
+- Evidence capture, sign-off, and compliance acceptance stay visibly separate

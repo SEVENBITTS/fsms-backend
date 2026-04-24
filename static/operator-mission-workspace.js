@@ -98,6 +98,15 @@ const EVIDENCE_HELPERS = {
       { key: "snapshotId", label: "Snapshot ID", type: "text", required: true },
     ],
   },
+  postOperationSnapshot: {
+    title: "Post-operation Snapshot",
+    description:
+      "Freeze the completed mission evidence pack for later audit review. This does not sign off, certify, or approve compliance.",
+    endpoint: (missionId) => `/missions/${missionId}/post-operation/evidence-snapshots`,
+    method: "POST",
+    requiresCompletedMission: true,
+    fields: [{ key: "createdBy", label: "Created by", type: "text", required: true }],
+  },
 };
 
 const uiState = {
@@ -435,6 +444,9 @@ const applyEvidenceHelperDefaults = () => {
       createdBy: "dispatcher-1",
       snapshotId: latestSnapshotId,
     },
+    postOperationSnapshot: {
+      createdBy: "post-ops-reviewer-1",
+    },
   };
 
   for (const helper of Object.keys(EVIDENCE_HELPERS)) {
@@ -706,6 +718,14 @@ const renderEvidenceHelpers = () => {
 const renderEvidenceHelperCard = (helper, definition) => {
   const helperBusy = uiState.busyHelper === helper;
   const helperStatus = uiState.helperStatus[helper];
+  const missionStatus = uiState.planningWorkspace?.mission?.status ?? "Unknown";
+  const helperBlocked =
+    definition.requiresCompletedMission && missionStatus !== "completed";
+  const helperMessage =
+    helperStatus?.message ??
+    (helperBlocked
+      ? "Available after mission completion"
+      : "Ready");
 
   const fieldMarkup = definition.fields
     .map((field) => {
@@ -728,12 +748,12 @@ const renderEvidenceHelperCard = (helper, definition) => {
           ${fieldMarkup}
         </div>
         <div class="action-footer">
-          <button class="action-button" type="submit" ${helperBusy ? "disabled" : ""}>
+          <button class="action-button" type="submit" ${
+            helperBusy || helperBlocked ? "disabled" : ""
+          }>
             ${helperBusy ? "Running..." : `Create ${escapeHtml(definition.title)}`}
           </button>
-          <div class="action-status ${toneClass(helperStatus?.message ?? "info")}">${escapeHtml(
-            helperStatus?.message ?? "Ready",
-          )}</div>
+          <div class="action-status ${toneClass(helperMessage)}">${escapeHtml(helperMessage)}</div>
         </div>
       </form>
     </section>
@@ -1397,6 +1417,16 @@ const executeEvidenceHelper = async (helper) => {
     return;
   }
 
+  const definition = EVIDENCE_HELPERS[helper];
+  const missionStatus = uiState.planningWorkspace?.mission?.status ?? "Unknown";
+  if (definition.requiresCompletedMission && missionStatus !== "completed") {
+    uiState.helperStatus[helper] = {
+      message: "Complete the mission before capturing post-operation evidence",
+    };
+    renderEvidenceHelpers();
+    return;
+  }
+
   let payload;
   try {
     payload = collectEvidenceHelperPayload(helper);
@@ -1413,7 +1443,6 @@ const executeEvidenceHelper = async (helper) => {
   renderEvidenceHelpers();
 
   try {
-    const definition = EVIDENCE_HELPERS[helper];
     await fetchJson(definition.endpoint(missionId), {
       method: definition.method,
       body: JSON.stringify(payload),
