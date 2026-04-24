@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show secondary advisory audit record IDs in live operations.
+Show secondary advisory rationale in live operations.
 
 ---
 
@@ -9,14 +9,14 @@ Show secondary advisory audit record IDs in live operations.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- keep using existing acknowledgement ID data
-- enrich secondary advisory rows with the recorded audit record ID
-- leave primary acknowledgement rendering unchanged
+- keep using existing advisory rationale data
+- enrich secondary advisory rows with the guidance rationale
+- leave primary advisory rendering unchanged
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- make secondary acknowledged advisories traceable to the evidence record
-- keep the existing summary, role, and timing context visible
+- show why secondary advisory guidance was generated
+- keep the existing summary, role, timing, and audit context visible
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -35,7 +35,6 @@ Show secondary advisory audit record IDs in live operations.
 ---
 
 ## Done When
-- Secondary acknowledged advisories show their audit record ID
-- Unacknowledged secondary advisory rows remain unchanged
-- Unacknowledged advisory status remains unchanged
+- Secondary advisory rows include rationale text
+- Existing secondary acknowledgement/audit context remains visible
 - No operational authority or direct-control behavior changes

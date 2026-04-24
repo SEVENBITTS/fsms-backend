@@ -2687,6 +2687,7 @@ const formatSecondaryAdvisoryValue = (advisory) =>
     `Evidence: ${advisory.evidenceAction}`,
     `Acknowledgement: ${advisory.acknowledgementStatus}`,
     `Pilot instruction: ${advisory.pilotInstructionStatus}`,
+    `Rationale: ${advisory.guidanceRationale}`,
     advisory.acknowledgement
       ? `Audit record: ${advisory.acknowledgement.id}`
       : null,
