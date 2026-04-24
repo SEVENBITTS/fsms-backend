@@ -1,28 +1,27 @@
 # NEXT STEP
 
 ## Goal
-Summarize regulatory matrix rows impacted by open amendment alerts.
+Show mission-specific regulatory review impact in the workspace.
 
 ---
 
 ## Build
 
-### 1. API behavior
-- add a read-only mission endpoint for regulatory review impact
-- compare open regulatory amendment alerts with regulatory requirement mappings
-- return impacted matrix rows, open amendment count, and clause-review count
-- keep the result advisory/review-only, not approval logic
+### 1. UI behavior
+- fetch regulatory review impact for the selected mission
+- summarize open amendment alerts, impacted matrix rows, and clause-review count
+- mark impacted regulatory matrix rows ahead of non-impacted rows
+- show review reason and alert IDs for impacted mappings
 
 ### 2. Operator clarity
-- show which CAA/CAP mappings need attention after an amendment
-- link amendment source context to impacted controls and evidence types
-- keep unresolved review work explicit before any compliance claim
+- connect amendment alerts to the rows they affect
+- make mission-specific review workload visible beside the global matrix
+- avoid presenting the matrix as a legal compliance certification
 
 ### 3. Tests
-- add API coverage for impacted mappings
-- confirm empty impact when no amendment alerts are open
-- run focused alert API tests
-- run build
+- parse-check the mission workspace script
+- run TypeScript build
+- run diff whitespace check
 
 ---
 
@@ -35,6 +34,6 @@ Summarize regulatory matrix rows impacted by open amendment alerts.
 ---
 
 ## Done When
-- Open regulatory amendments produce an impacted-matrix summary
-- Unaffected missions return an empty review-impact summary
+- Operator workspace displays mission-specific regulatory review impact
+- Impacted matrix rows are highlighted with review reason and alert IDs
 - No operational authority, approval, or direct-control behavior changes

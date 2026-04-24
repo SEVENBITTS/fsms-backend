@@ -106,6 +106,7 @@ const uiState = {
   dispatchWorkspace: null,
   timeline: null,
   regulatoryMatrix: [],
+  regulatoryReviewImpact: null,
   missionList: [],
   missionQuery: "",
   transitionChecks: {},
@@ -217,6 +218,14 @@ const formatMatrixSource = (mapping) =>
   ]
     .filter(Boolean)
     .join(" | ");
+
+const regulatoryImpactByRequirement = () => {
+  const impacted = uiState.regulatoryReviewImpact?.impactedMappings ?? [];
+
+  return new Map(
+    impacted.map((item) => [item.mapping.requirementCode, item]),
+  );
+};
 
 const setConnectionState = (message, tone = "tone-muted") => {
   connectionStatus.className = `status-pill ${tone}`;
@@ -615,6 +624,17 @@ const renderRegulatoryMatrix = () => {
   const needsReview = mappings.filter((mapping) =>
     String(mapping.reviewStatus ?? "").includes("needs"),
   ).length;
+  const reviewImpact = uiState.regulatoryReviewImpact;
+  const impactedByRequirement = regulatoryImpactByRequirement();
+  const displayedMappings = [...mappings].sort((left, right) => {
+    const leftImpacted = impactedByRequirement.has(left.requirementCode) ? 1 : 0;
+    const rightImpacted = impactedByRequirement.has(right.requirementCode) ? 1 : 0;
+
+    return (
+      rightImpacted - leftImpacted ||
+      (left.displayOrder ?? 0) - (right.displayOrder ?? 0)
+    );
+  });
 
   regulatoryMatrixPanel.innerHTML = `
     <div class="summary-grid" style="margin-bottom: 14px;">
@@ -627,27 +647,45 @@ const renderRegulatoryMatrix = () => {
           <div>${renderBadge(String(sourceMapped))}</div>
           <div class="k">Needs review</div>
           <div>${renderBadge(needsReview > 0 ? `${needsReview} needs review` : "Clear")}</div>
+          <div class="k">Mission amendment alerts</div>
+          <div>${renderBadge(
+            reviewImpact
+              ? `${reviewImpact.openAmendmentAlertCount} open`
+              : "Load mission",
+          )}</div>
         </div>
       </section>
       <section class="summary-block">
-        <h4>Compliance Posture</h4>
+        <h4>Mission Review Impact</h4>
         <div class="kv">
-          <div class="k">Authority</div>
-          <div>CAA / UK UAS source context</div>
-          <div class="k">Status</div>
-          <div>${renderBadge(needsReview > 0 ? "Clause review required" : "Source mapped")}</div>
+          <div class="k">Impacted rows</div>
+          <div>${renderBadge(
+            reviewImpact
+              ? `${reviewImpact.impactedMappingCount} impacted`
+              : "Mission not loaded",
+          )}</div>
+          <div class="k">Clause review count</div>
+          <div>${renderBadge(
+            reviewImpact
+              ? `${reviewImpact.needsClauseReviewCount} needs review`
+              : "Mission not loaded",
+          )}</div>
           <div class="k">Boundary</div>
           <div>Read-only traceability matrix; not a legal compliance certification.</div>
         </div>
       </section>
     </div>
     <ul class="list">
-      ${mappings
+      ${displayedMappings
         .map(
-          (mapping) => `
+          (mapping) => {
+            const impact = impactedByRequirement.get(mapping.requirementCode);
+
+            return `
             <li class="list-item">
               <strong>${escapeHtml(mapping.requirementCode)}</strong>
               <div>
+                ${impact ? renderBadge("Impacted by amendment") : ""}
                 ${renderBadge(mapping.reviewStatus)}
                 ${renderBadge(mapping.assuranceOwner)}
               </div>
@@ -659,9 +697,15 @@ const renderRegulatoryMatrix = () => {
                 Control: ${escapeHtml(mapping.controlCode)} - ${escapeHtml(mapping.controlTitle)}<br />
                 Evidence: ${escapeHtml(mapping.evidenceType)}<br />
                 Intent: ${escapeHtml(mapping.complianceIntent)}
+                ${
+                  impact
+                    ? `<br />Review impact: ${escapeHtml(impact.reviewReason)}<br />Alert IDs: ${escapeHtml(impact.alertIds.join(", "))}`
+                    : ""
+                }
               </div>
             </li>
-          `,
+          `;
+          },
         )
         .join("")}
     </ul>
@@ -1090,6 +1134,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.planningWorkspace = null;
     uiState.dispatchWorkspace = null;
     uiState.timeline = null;
+    uiState.regulatoryReviewImpact = null;
     renderMissionBrowser();
     uiState.transitionChecks = {};
     uiState.actionStatus = {};
@@ -1122,21 +1167,25 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
       planningResponse,
       dispatchResponse,
       timelineResponse,
+      regulatoryReviewImpactResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${missionId}/planning-workspace`),
       fetchJson(`/missions/${missionId}/dispatch-workspace`),
       fetchJson(`/missions/${missionId}/operations-timeline`),
+      fetchJson(`/missions/${missionId}/regulatory-review-impact`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
     uiState.dispatchWorkspace = dispatchResponse.workspace;
     uiState.timeline = timelineResponse.timeline;
+    uiState.regulatoryReviewImpact = regulatoryReviewImpactResponse;
     await refreshTransitionChecks(missionId);
 
     renderMissionBrowser();
     renderOverview();
     renderActions();
     renderEvidenceHelpers();
+    renderRegulatoryMatrix();
     renderPlanning();
     renderDispatch();
     renderTimeline();
@@ -1146,6 +1195,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.planningWorkspace = null;
     uiState.dispatchWorkspace = null;
     uiState.timeline = null;
+    uiState.regulatoryReviewImpact = null;
     uiState.transitionChecks = {};
     renderMissionBrowser();
     uiState.helperStatus = {};
@@ -1153,6 +1203,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     setConnectionState(message, "tone-bad");
     actionsPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     evidencePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    renderRegulatoryMatrix();
     planningPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     dispatchPanel.innerHTML = `<div class="empty-state">Dispatch view unavailable because the mission workspace did not load.</div>`;
     timelinePanel.innerHTML = `<div class="empty-state">Timeline view unavailable because the mission workspace did not load.</div>`;
