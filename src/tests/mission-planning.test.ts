@@ -2000,6 +2000,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/readiness/audit-snapshots");
     expect(response.text).toContain("/approval-handoff");
     expect(response.text).toContain('payload.decisionType = "dispatch"');
+    expect(response.text).toContain("Aircraft Capability and Maintenance");
+    expect(response.text).toContain("manufacturerMaintenanceScheduleRef");
+    expect(response.text).toContain("manufacturerMaintenanceAdvice");
+    expect(response.text).toContain("Informational only");
   });
 
   it("serves the operator live operations javascript bundle", async () => {

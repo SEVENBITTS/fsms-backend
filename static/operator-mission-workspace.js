@@ -241,6 +241,93 @@ const formatDateTime = (value) => {
   });
 };
 
+const formatOptionalNumber = (value, suffix) =>
+  value == null || Number.isNaN(Number(value))
+    ? "Not recorded"
+    : `${Number(value).toLocaleString("en-GB")} ${suffix}`;
+
+const renderAircraftCapabilityContext = (platform) => {
+  const spec = platform?.summary?.aircraftTypeSpec ?? null;
+
+  if (!spec) {
+    return `
+      <section class="summary-block">
+        <h4>Aircraft Capability and Maintenance</h4>
+        <div class="empty-state">
+          No linked aircraft capability specification is recorded for this platform yet.
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="summary-block">
+      <h4>Aircraft Capability and Maintenance</h4>
+      <div class="kv">
+        <div class="k">Aircraft spec</div>
+        <div>${escapeHtml(spec.displayName ?? "Not recorded")}</div>
+        <div class="k">Manufacturer / model</div>
+        <div>${escapeHtml(
+          [spec.manufacturer, spec.model].filter(Boolean).join(" / ") ||
+            "Not recorded",
+        )}</div>
+        <div class="k">Wind limit</div>
+        <div>${escapeHtml(formatOptionalNumber(spec.maxWindMps, "m/s"))}</div>
+        <div class="k">Gust limit</div>
+        <div>${escapeHtml(formatOptionalNumber(spec.maxGustMps, "m/s"))}</div>
+        <div class="k">Temperature range</div>
+        <div>${escapeHtml(
+          spec.minOperatingTempC == null && spec.maxOperatingTempC == null
+            ? "Not recorded"
+            : `${spec.minOperatingTempC ?? "?"} C to ${
+                spec.maxOperatingTempC ?? "?"
+              } C`,
+        )}</div>
+        <div class="k">Capability source</div>
+        <div>${escapeHtml(
+          [
+            spec.sourceReference,
+            spec.sourceVersion ? `version ${spec.sourceVersion}` : null,
+            spec.sourceType ? `type ${spec.sourceType}` : null,
+          ]
+            .filter(Boolean)
+            .join(" | ") || "Not recorded",
+        )}</div>
+        <div class="k">Maintenance source</div>
+        <div>${escapeHtml(
+          [
+            spec.manufacturerMaintenanceScheduleRef,
+            spec.manufacturerMaintenanceScheduleVersion
+              ? `version ${spec.manufacturerMaintenanceScheduleVersion}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" | ") || "Not recorded",
+        )}</div>
+        <div class="k">Inspection interval</div>
+        <div>${escapeHtml(
+          [
+            spec.recommendedInspectionIntervalDays
+              ? `${spec.recommendedInspectionIntervalDays} days`
+              : null,
+            spec.recommendedInspectionIntervalFlightHours
+              ? `${spec.recommendedInspectionIntervalFlightHours} flight hours`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" / ") || "Not recorded",
+        )}</div>
+        <div class="k">Maintenance advice</div>
+        <div>${escapeHtml(spec.manufacturerMaintenanceAdvice ?? "Not recorded")}</div>
+      </div>
+      <div class="action-meta" style="margin-top: 12px;">
+        Informational only. This display does not automate weather suitability,
+        dispatch blocking, or manufacturer maintenance compliance decisions.
+      </div>
+    </section>
+  `;
+};
+
 const renderList = (items, title) => {
   if (!items || items.length === 0) {
     return `<div class="empty-state">No ${escapeHtml(title).toLowerCase()} recorded.</div>`;
@@ -1189,6 +1276,7 @@ const renderPlanning = () => {
         <h4>Checklist</h4>
         ${renderList(checklist, "checklist items")}
       </section>
+      ${renderAircraftCapabilityContext(workspace.platform)}
       <section class="summary-block">
         <h4>Next Allowed Actions</h4>
         ${renderList(actions, "next allowed actions")}
