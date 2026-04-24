@@ -2,7 +2,7 @@
 
 VerityAtlas, formerly FSMS, is the backend for replaying flight telemetry, detecting airspace violations, and supporting operator-facing mission review workflows.
 
-The platform evaluates drone flight paths against airspace restrictions, provides mission replay and live-operations surfaces, and is evolving toward a fuller evidence-driven aviation operations platform.
+The platform evaluates drone flight paths against airspace restrictions, provides mission replay and live-operations surfaces, and is evolving toward a sharper evidence-driven aviation operations platform: an audit-ready operational assurance and BVLOS-readiness system for serious UAV operators, not a generic all-in-one drone business tool.
 
 ---
 
@@ -233,6 +233,8 @@ Planned improvements include:
 The current VerityAtlas product direction and prototype boundaries are documented in:
 
 - `docs/FSMS_DIRECTION.md`
+
+That document also captures the company ethos for VerityAir Systems Ltd: build around operational assurance, regulatory clarity, auditable evidence, and BVLOS readiness before secondary business-administration features.
 
 The filename remains unchanged for now to avoid unnecessary churn during the safe rename phase.
 
