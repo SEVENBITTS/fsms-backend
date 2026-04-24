@@ -1,25 +1,25 @@
 # NEXT STEP
 
 ## Goal
-Prevent duplicate conflict-guidance acknowledgement evidence records.
+Surface conflict-guidance summaries in post-operation audit outputs.
 
 ---
 
 ## Build
 
 ### 1. API behavior
-- return 409 when an acknowledgement already exists for the same mission, overlay, guidance action, and evidence action
-- keep valid acknowledgement, list, export, report, and PDF paths unchanged
-- preserve the decision-support boundary: acknowledge guidance only, do not issue pilot commands
+- keep storing guidance summaries on conflict acknowledgement records
+- include the stored guidance summary in post-operation rendered reports
+- include the stored guidance summary in post-operation audit PDFs
 
-### 2. Database integrity
-- add a unique constraint on the stable acknowledgement identity
-- prevent direct writes from bypassing the duplicate guard
-- keep existing role/evidence and not-pilot-command safeguards intact
+### 2. Audit clarity
+- make the audit pack show what was acknowledged, not only who acknowledged it
+- keep the pilot instruction status visible as `not_a_pilot_command`
+- do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
-- API rejects duplicate acknowledgement attempts with a clear conflict response
-- database rejects direct duplicate acknowledgement records
+- rendered report includes conflict acknowledgement guidance summary
+- PDF export includes conflict acknowledgement guidance summary
 - build and focused audit tests pass
 
 ---
@@ -33,6 +33,6 @@ Prevent duplicate conflict-guidance acknowledgement evidence records.
 ---
 
 ## Done When
-- Duplicate acknowledgement attempts cannot create extra audit rows
-- The API returns a clear 409 conflict response
-- The database enforces the same rule directly
+- Post-operation reports explain the conflict guidance summary that was acknowledged
+- Post-operation PDFs preserve the same summary for audit review
+- No operational authority or direct-control behavior changes

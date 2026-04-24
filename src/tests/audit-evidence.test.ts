@@ -210,6 +210,7 @@ const createConflictGuidanceAcknowledgement = async (
     acknowledgementRole?: string;
     acknowledgedBy?: string;
     acknowledgementNote?: string;
+    guidanceSummary?: string;
   },
 ) => {
   const overlayId = await createConflictOverlay(missionId);
@@ -225,7 +226,8 @@ const createConflictGuidanceAcknowledgement = async (
       acknowledgementNote:
         params?.acknowledgementNote ??
         "Reviewed for post-operation evidence export.",
-      guidanceSummary: "Critical live-ops conflict advisory reviewed.",
+      guidanceSummary:
+        params?.guidanceSummary ?? "Critical live-ops conflict advisory reviewed.",
     });
 
   expect(response.status).toBe(201);
@@ -1643,6 +1645,8 @@ describe("audit evidence snapshots", () => {
         conflictId: "conflict-report-1",
         acknowledgedBy: "report-supervisor",
         acknowledgementNote: "Included in post-operation report.",
+        guidanceSummary:
+          "Critical conflict advisory reviewed before accountable-manager sign-off.",
       },
     );
     const snapshotResponse = await request(app)
@@ -1673,6 +1677,11 @@ describe("audit evidence snapshots", () => {
           value: "hold_or_suspend",
         },
         {
+          label: "Conflict acknowledgement 1 guidance summary",
+          value:
+            "Critical conflict advisory reviewed before accountable-manager sign-off.",
+        },
+        {
           label: "Conflict acknowledgement 1 pilot instruction status",
           value: "not_a_pilot_command",
         },
@@ -1683,6 +1692,9 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Conflict acknowledgement 1 acknowledged by: report-supervisor",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Conflict acknowledgement 1 guidance summary: Critical conflict advisory reviewed before accountable-manager sign-off.",
     );
     expect(response.body.report.report.plainText).toContain(
       "Conflict acknowledgement 1 pilot instruction status: not_a_pilot_command",
@@ -2035,6 +2047,8 @@ describe("audit evidence snapshots", () => {
       conflictId: "conflict-pdf-1",
       acknowledgedBy: "pdf-supervisor",
       acknowledgementNote: "PDF export should include this review.",
+      guidanceSummary:
+        "PDF export should preserve the conflict advisory summary.",
     });
     const snapshotResponse = await request(app)
       .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
@@ -2059,6 +2073,11 @@ describe("audit evidence snapshots", () => {
     expect(pdfText).toContain(
       "Conflict acknowledgement 1 acknowledged by: pdf-supervisor",
     );
+    expect(pdfText).toContain("Conflict acknowledgement 1 guidance summary");
+    expect(pdfText).toContain(
+      "PDF export should preserve the conflict",
+    );
+    expect(pdfText).toContain("advisory summary.");
     expect(pdfText).toContain(
       "Conflict acknowledgement 1 pilot instruction status: not_a_pilot_command",
     );

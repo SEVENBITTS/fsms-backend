@@ -776,6 +776,10 @@ export class AuditEvidenceService {
                     value: acknowledgement.evidenceAction,
                   },
                   {
+                    label: `Conflict acknowledgement ${index + 1} guidance summary`,
+                    value: acknowledgement.guidanceSummary,
+                  },
+                  {
                     label: `Conflict acknowledgement ${index + 1} role`,
                     value: acknowledgement.acknowledgementRole,
                   },
