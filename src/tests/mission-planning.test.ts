@@ -2130,6 +2130,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("filteredAreaFreshnessOverlays");
     expect(response.text).toContain("areaFreshnessFilterLabel");
     expect(response.text).toContain("areaFreshnessFilterOptions");
+    expect(response.text).toContain("areaFreshnessFilterSummary");
     expect(response.text).toContain("areaFreshnessOverlays");
     expect(response.text).toContain("area-freshness-overlay");
     expect(response.text).toContain("data-area-freshness-filter");
@@ -2139,6 +2140,11 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Hide freshness");
     expect(response.text).toContain("Area freshness degraded-only");
     expect(response.text).toContain("Area freshness hidden");
+    expect(response.text).toContain("Area map filter");
+    expect(response.text).toContain("Filtered area overlays");
+    expect(response.text).toContain("visible of");
+    expect(response.text).toContain("degraded or carried-forward");
+    expect(response.text).toContain("Map filter:");
     expect(response.text).toContain("Area freshness: green fresh, amber partial, red failed");
     expect(response.text).toContain("failed carry-forward");
     expect(response.text).toContain("partial carry-forward");

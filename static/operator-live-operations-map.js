@@ -459,6 +459,20 @@ const areaFreshnessFilterOptions = [
   { value: "hidden", label: "Hide freshness" },
 ];
 
+const areaFreshnessFilterSummary = () => {
+  const visibleCount = filteredAreaFreshnessOverlays().length;
+  const totalCount = areaConflictOverlays().length;
+  const degradedCount = areaConflictOverlays().filter(areaOverlayIsDegraded).length;
+
+  return {
+    label: areaFreshnessFilterLabel(),
+    detail: `${visibleCount} visible of ${totalCount} area overlay${totalCount === 1 ? "" : "s"} | ${degradedCount} degraded or carried-forward`,
+    visibleCount,
+    totalCount,
+    degradedCount,
+  };
+};
+
 const areaRefreshChronology = () =>
   uiState.areaRefreshChronology?.chronology ?? null;
 
@@ -2676,6 +2690,7 @@ const renderStatus = () => {
   const advisoryState = conflictAdvisorySummary();
   const replayConflictRelation = currentConflictReplayRelation();
   const areaProvenanceRows = areaSourceProvenanceRows();
+  const areaFilterSummary = areaFreshnessFilterSummary();
   const primaryConflict = primaryConflictAssessmentItem();
   const primaryConflictOverlay = primaryConflict
     ? conflictOverlayForItem(primaryConflict)
@@ -2856,6 +2871,10 @@ const renderStatus = () => {
           <div>${renderBadge(areaSourceState.label)}</div>
           <div class="k">Area refresh detail</div>
           <div>${escapeHtml(areaSourceState.detail)}</div>
+          <div class="k">Area map filter</div>
+          <div>${renderBadge(areaFilterSummary.label)}</div>
+          <div class="k">Filtered area overlays</div>
+          <div>${escapeHtml(areaFilterSummary.detail)}</div>
           <div class="k">NOTAM geometry</div>
           <div>${escapeHtml(
             primaryConflictOverlay ? areaOverlayNotamGeometryDetail(primaryConflictOverlay) ?? "Not recorded" : "Not recorded",
@@ -2929,6 +2948,9 @@ const renderStatus = () => {
             ? '<div class="empty-state">No normalized area-source provenance is available for this mission.</div>'
             : renderList(areaProvenanceRows, "area source provenance")
         }
+        <div class="alert-window-meta">
+          Map filter: ${escapeHtml(areaFilterSummary.label)} | ${escapeHtml(areaFilterSummary.detail)}
+        </div>
         <div class="alert-window-meta">
           Synthetic/local demo provenance only. Review against authoritative CAA, NOTAM, and airspace feeds before operational use.
         </div>
@@ -3648,6 +3670,7 @@ mapPanel.addEventListener("click", (event) => {
 
   uiState.areaFreshnessFilter = nextFilter;
   renderMap();
+  renderStatus();
 });
 
 conflictAdvisoryPanel.addEventListener("click", (event) => {
