@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VerityAtlas Architecture Wire Diagram</title>
+    <style>
+      :root {
+        --ink: #17212b;
+        --muted: #5d6b78;
+        --line: #8aa0b4;
+        --panel: #f6f8fa;
+        --panel-strong: #e8eef4;
+        --accent: #0f766e;
+        --accent-soft: #d9f4ef;
+        --warn: #9a5b00;
+        --warn-soft: #fff1cc;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #eef2f5;
+        color: var(--ink);
+        font-family: "Segoe UI", Calibri, Arial, sans-serif;
+        line-height: 1.35;
+      }
+
+      .page {
+        width: 297mm;
+        min-height: 210mm;
+        margin: 16px auto;
+        padding: 16mm;
+        background: white;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        border-bottom: 3px solid var(--ink);
+        padding-bottom: 10px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: 0.02em;
+      }
+
+      .subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .repo {
+        text-align: right;
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .diagram {
+        display: grid;
+        grid-template-columns: 1.05fr 1.7fr 1.2fr;
+        gap: 18px;
+        align-items: stretch;
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .panel {
+        border: 2px solid var(--line);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      .panel h2 {
+        margin: 0 0 10px;
+        font-size: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .box {
+        border: 1.5px solid var(--line);
+        background: white;
+        border-radius: 9px;
+        padding: 9px 10px;
+        margin: 7px 0;
+        min-height: 44px;
+      }
+
+      .box strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .box span {
+        display: block;
+        color: var(--muted);
+        font-size: 11.5px;
+        margin-top: 2px;
+      }
+
+      .accent {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .warn {
+        border-color: var(--warn);
+        background: var(--warn-soft);
+      }
+
+      .arrow {
+        color: var(--muted);
+        font-size: 20px;
+        text-align: center;
+        margin: -2px 0;
+      }
+
+      .api-grid,
+      .db-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .api-grid .box,
+      .db-grid .box {
+        margin: 0;
+      }
+
+      .flow {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 7px;
+        align-items: center;
+      }
+
+      .flow .step {
+        border: 1.5px solid var(--accent);
+        background: var(--accent-soft);
+        border-radius: 999px;
+        padding: 8px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .notes {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .note {
+        border-left: 5px solid var(--accent);
+        background: var(--panel);
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+      }
+
+      .note.warn {
+        border-left-color: var(--warn);
+      }
+
+      .note h3 {
+        margin: 0 0 5px;
+        font-size: 13px;
+      }
+
+      .note p {
+        margin: 0;
+      }
+
+      footer {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 11px;
+        text-align: right;
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        .page {
+          width: auto;
+          min-height: auto;
+          margin: 0;
+          padding: 10mm;
+          box-shadow: none;
+        }
+
+        @page {
+          size: A4 landscape;
+          margin: 8mm;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <div>
+          <h1>VerityAtlas Architecture Wire Diagram</h1>
+          <div class="subtitle">
+            Current backend/UI architecture, audit evidence flow, and demo-data boundary
+          </div>
+        </div>
+        <div class="repo">
+          Active repo<br />
+          <strong>D:\Dev\fsms-backend</strong>
+        </div>
+      </header>
+
+      <section class="diagram" aria-label="Architecture diagram">
+        <div class="stack">
+          <div class="panel">
+            <h2>Users</h2>
+            <div class="box accent">
+              <strong>Operator</strong>
+              <span>Plans missions, monitors live operations, reviews alerts</span>
+            </div>
+            <div class="box accent">
+              <strong>Safety Manager</strong>
+              <span>Reviews risk, assurance, safety events, evidence</span>
+            </div>
+            <div class="box accent">
+              <strong>Accountable Manager</strong>
+              <span>Signs off post-operation evidence packs</span>
+            </div>
+          </div>
+
+          <div class="arrow">↓</div>
+
+          <div class="panel">
+            <h2>Operator Web UI</h2>
+            <div class="box">
+              <strong>Mission Workspace</strong>
+              <span>Planning, readiness, risk, compliance, dispatch</span>
+            </div>
+            <div class="box">
+              <strong>Live Operations Map</strong>
+              <span>Replay, overlays, alerts, conflicts, map snapshot capture</span>
+            </div>
+            <div class="box">
+              <strong>Reports / Audit Views</strong>
+              <span>Evidence packs, readiness prompts, sign-off views</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="panel">
+            <h2>Express Backend API</h2>
+            <div class="box accent">
+              <strong>src/app.ts</strong>
+              <span>Main API server, static UI host, router composition</span>
+            </div>
+            <div class="api-grid">
+              <div class="box">
+                <strong>Missions</strong>
+                <span>Lifecycle, approval, dispatch, completion</span>
+              </div>
+              <div class="box">
+                <strong>Mission Planning</strong>
+                <span>Drafts, workspace, approval handoff</span>
+              </div>
+              <div class="box">
+                <strong>Risk + Airspace</strong>
+                <span>Risk inputs, airspace checks, readiness gates</span>
+              </div>
+              <div class="box">
+                <strong>Telemetry + Replay</strong>
+                <span>Latest telemetry, history, mission replay</span>
+              </div>
+              <div class="box">
+                <strong>External Overlays</strong>
+                <span>Weather, traffic, area conflicts, freshness</span>
+              </div>
+              <div class="box">
+                <strong>Conflict Assessment</strong>
+                <span>Advisory context, not pilot command guidance</span>
+              </div>
+              <div class="box">
+                <strong>Alerts</strong>
+                <span>Operational and regulatory amendment alerts</span>
+              </div>
+              <div class="box">
+                <strong>Audit Evidence</strong>
+                <span>Readiness, decisions, live-ops map snapshots</span>
+              </div>
+              <div class="box">
+                <strong>Post-Operation Evidence</strong>
+                <span>Exports, reports, PDFs, accountable sign-off</span>
+              </div>
+              <div class="box">
+                <strong>Platforms + Pilots</strong>
+                <span>Aircraft specs, maintenance, authorisation readiness</span>
+              </div>
+              <div class="box">
+                <strong>SMS Framework</strong>
+                <span>Controls, mappings, assurance context</span>
+              </div>
+              <div class="box">
+                <strong>Safety Events</strong>
+                <span>Meetings, actions, closures, governance</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow">
+            <div class="step">Planning</div>
+            <div class="step">Readiness</div>
+            <div class="step">Approval</div>
+            <div class="step">Dispatch</div>
+            <div class="step">Live Ops</div>
+            <div class="step">Evidence</div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="panel">
+            <h2>PostgreSQL Data Layer</h2>
+            <div class="db-grid">
+              <div class="box">
+                <strong>Mission Tables</strong>
+                <span>missions, mission_events, planning handoffs</span>
+              </div>
+              <div class="box">
+                <strong>Risk Tables</strong>
+                <span>mission_risk_inputs, airspace_compliance_inputs</span>
+              </div>
+              <div class="box">
+                <strong>Telemetry Tables</strong>
+                <span>mission_telemetry, mission_external_overlays</span>
+              </div>
+              <div class="box">
+                <strong>Audit Tables</strong>
+                <span>audit_evidence_snapshots, live_ops_map_view_state_snapshots</span>
+              </div>
+              <div class="box">
+                <strong>Post-Ops Tables</strong>
+                <span>post_operation_evidence_snapshots, sign-offs</span>
+              </div>
+              <div class="box">
+                <strong>Reference Tables</strong>
+                <span>SMS controls, regulatory mappings, aircraft specs</span>
+              </div>
+              <div class="box">
+                <strong>Safety Tables</strong>
+                <span>safety events, meetings, proposals, closure evidence</span>
+              </div>
+              <div class="box">
+                <strong>People + Platforms</strong>
+                <span>pilots, readiness evidence, platforms, maintenance</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel warn">
+            <h2>Demo Data Boundary</h2>
+            <div class="box warn">
+              <strong>Synthetic/local demo data</strong>
+              <span>No live CAA, NOTAM, or manufacturer feed implied yet</span>
+            </div>
+            <div class="box warn">
+              <strong>Seed scripts</strong>
+              <span>Live-ops demo mission, overlays, replay, evidence records</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="notes">
+        <div class="note">
+          <h3>Current Build Shape</h3>
+          <p>
+            Planning → Readiness → Approval → Dispatch → Live Ops → Evidence →
+            Post-Operation Review.
+          </p>
+        </div>
+        <div class="note warn">
+          <h3>Safety Boundary</h3>
+          <p>
+            Live Ops provides awareness, replay, alerts, conflict context, and
+            auditable evidence capture. It does not yet provide certified live
+            regulatory feed assurance, BVLOS approval automation, or direct
+            aircraft control.
+          </p>
+        </div>
+      </section>
+
+      <footer>
+        Printable architecture view for VerityAtlas / VerityAir Systems Ltd.
+      </footer>
+    </main>
+  </body>
+</html>
