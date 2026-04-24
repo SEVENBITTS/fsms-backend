@@ -1,26 +1,26 @@
 # NEXT STEP
 
 ## Goal
-Carry live-ops conflict acknowledgements into post-operation audit exports.
+Add operator-facing Q-line index summary context for normalized NOTAM overlays.
 
 ---
 
 ## Build
 
-### 1. Conflict guidance model
-- include conflict guidance acknowledgements in post-operation evidence exports
-- preserve conflict ID, overlay ID, action code, evidence action, role, actor, note, and timestamp
-- keep guidance explicitly advisory, not a pilot command
+### 1. Normalized overlay metadata
+- derive a Q-line index summary during area-source normalization
+- mark Q-line data as coarse index metadata only
+- preserve the normalized geometry as the operational review source
 
 ### 2. Live-ops presentation
-- render acknowledgement evidence in the post-operation report
-- include acknowledgement evidence in the PDF export
-- keep the pilot instruction status visible in the exported audit trail
+- show Q-line center and radius as an operator-facing summary
+- show the coarse-index warning beside NOTAM geometry context
+- keep Q-line fallback distinct from E-field/provided geometry
 
 ### 3. Tests
-- post-operation JSON export includes live conflict acknowledgements
-- rendered report includes acknowledgement evidence
-- PDF export includes acknowledgement evidence
+- normalized NOTAM overlays include Q-line summary metadata
+- Q-line fallback overlays keep the same summary context
+- live-ops bundle parses after the display update
 
 ---
 
@@ -33,7 +33,7 @@ Carry live-ops conflict acknowledgements into post-operation audit exports.
 ---
 
 ## Done When
-- Post-operation evidence exports include live conflict acknowledgement records
-- Rendered reports and PDFs include the acknowledgement audit trail
-- Guidance remains decision support and cannot be mistaken for pilot command transmission
-- Build and focused audit tests pass
+- Normalized area overlays expose Q-line index summary context
+- Live ops displays the Q-line summary clearly
+- Q-line data is clearly labelled as coarse index metadata only
+- Build and focused external-overlay tests pass

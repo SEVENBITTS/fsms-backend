@@ -89,6 +89,34 @@ const buildAreaDedupeKey = (
 const areaSourcePriority = (sourceType: string): number =>
   AREA_SOURCE_PRIORITY[sourceType] ?? 0;
 
+const formatQLineCoordinate = (value: number): string => value.toFixed(5);
+
+const buildQLineIndexSummary = (
+  notamGeometryContext: AreaConflictOverlayMetadata["notamGeometryContext"],
+): AreaConflictOverlayMetadata["qLineIndexSummary"] => {
+  const qLineIndex = notamGeometryContext?.qLineIndex;
+
+  if (!qLineIndex) {
+    return {
+      available: false,
+      use: "coarse_index_only",
+      centerLabel: null,
+      radiusLabel: null,
+      operatorNote:
+        "No Q-line index metadata is available for this normalized NOTAM area.",
+    };
+  }
+
+  return {
+    available: true,
+    use: "coarse_index_only",
+    centerLabel: `${formatQLineCoordinate(qLineIndex.centerLat)}, ${formatQLineCoordinate(qLineIndex.centerLng)}`,
+    radiusLabel: `${qLineIndex.radiusNm} NM`,
+    operatorNote:
+      "Q-line index metadata is a coarse NOTAM index only; use the normalized area geometry for operational review.",
+  };
+};
+
 const normalizedAreaMetadata = (
   record: NormalizeAreaOverlaySourcesInput["records"][number],
   refreshRunId: string,
@@ -102,6 +130,9 @@ const normalizedAreaMetadata = (
   notamNumber: record.area.notamNumber ?? null,
   sourceReference: record.area.sourceReference ?? null,
   notamGeometryContext: record.area.notamGeometryContext ?? null,
+  qLineIndexSummary: buildQLineIndexSummary(
+    record.area.notamGeometryContext ?? null,
+  ),
   normalizedSourcePriority: areaSourcePriority(record.source.sourceType),
   dedupeKey: buildAreaDedupeKey(record),
   sourceTrace: [
@@ -1193,6 +1224,13 @@ export class ExternalOverlayService {
                 authorityName: existingMetadata.authorityName ?? null,
                 notamNumber: existingMetadata.notamNumber ?? null,
                 sourceReference: existingMetadata.sourceReference ?? null,
+                notamGeometryContext:
+                  existingMetadata.notamGeometryContext ?? null,
+                qLineIndexSummary:
+                  existingMetadata.qLineIndexSummary ??
+                  buildQLineIndexSummary(
+                    existingMetadata.notamGeometryContext ?? null,
+                  ),
                 normalizedSourcePriority:
                   existingMetadata.normalizedSourcePriority ??
                   areaSourcePriority(existing.source.sourceType),

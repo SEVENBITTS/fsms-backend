@@ -90,6 +90,13 @@ export interface AreaConflictOverlayMetadata {
       radiusNm: number;
     } | null;
   } | null;
+  qLineIndexSummary?: {
+    available: boolean;
+    use: "coarse_index_only";
+    centerLabel: string | null;
+    radiusLabel: string | null;
+    operatorNote: string;
+  } | null;
   normalizedSourcePriority?: number | null;
   dedupeKey?: string | null;
   sourceTrace?: Array<{

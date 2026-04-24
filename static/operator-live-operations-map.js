@@ -126,6 +126,9 @@ const areaOverlaySourceRefreshState = (overlay) =>
 const areaOverlayNotamGeometryContext = (overlay) =>
   overlay?.metadata?.notamGeometryContext ?? null;
 
+const areaOverlayQLineIndexSummary = (overlay) =>
+  overlay?.metadata?.qLineIndexSummary ?? null;
+
 const formatCoordinate = (value) =>
   value == null || Number.isNaN(value) ? "Not recorded" : Number(value).toFixed(5);
 
@@ -167,10 +170,20 @@ const areaOverlayNotamGeometrySummaryContext = (overlay) => {
 };
 
 const areaOverlayQLineIndexReviewContext = (overlay) => {
+  const summary = areaOverlayQLineIndexSummary(overlay);
+  if (summary?.available) {
+    return [
+      "Q-line index metadata",
+      `center ${summary.centerLabel ?? "Not recorded"}`,
+      `radius ${summary.radiusLabel ?? "Not recorded"}`,
+      summary.operatorNote,
+    ].join(" | ");
+  }
+
   const geometryContext = areaOverlayNotamGeometryContext(overlay);
   const qLineIndex = geometryContext?.qLineIndex;
   if (!qLineIndex) {
-    return null;
+    return summary?.operatorNote ?? null;
   }
 
   return [
@@ -2409,6 +2422,10 @@ const renderStatus = () => {
           <div>${escapeHtml(
             primaryConflictOverlay ? areaOverlayNotamGeometryDetail(primaryConflictOverlay) ?? "Not recorded" : "Not recorded",
           )}</div>
+          <div class="k">Q-line index summary</div>
+          <div>${escapeHtml(
+            primaryConflictOverlay ? areaOverlayQLineIndexReviewContext(primaryConflictOverlay) ?? "Not recorded" : "Not recorded",
+          )}</div>
           <div class="k">Conflict assessment</div>
           <div>${renderBadge(conflictState.label)}</div>
           <div class="k">Primary conflict</div>
@@ -2625,6 +2642,8 @@ const renderConflictAssessment = () => {
                       ? `Area source refresh: ${escapeHtml(areaOverlaySourceRefreshDetail(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)))}
                   <br />
                   NOTAM geometry: ${escapeHtml(areaOverlayNotamGeometryDetail(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)) ?? "Not recorded")}
+                  <br />
+                  Q-line index summary: ${escapeHtml(areaOverlayQLineIndexReviewContext(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)) ?? "Not recorded")}
                   <br />`
                       : ""
                   }

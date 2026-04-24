@@ -965,6 +965,14 @@ describe("mission external overlays integration", () => {
             radiusNm: 4,
           },
         },
+        qLineIndexSummary: {
+          available: true,
+          use: "coarse_index_only",
+          centerLabel: "52.08333, -0.31667",
+          radiusLabel: "4 NM",
+          operatorNote:
+            "Q-line index metadata is a coarse NOTAM index only; use the normalized area geometry for operational review.",
+        },
       }),
     });
   });
@@ -1027,6 +1035,14 @@ describe("mission external overlays integration", () => {
             centerLng: -0.31666666666666665,
             radiusNm: 4,
           },
+        },
+        qLineIndexSummary: {
+          available: true,
+          use: "coarse_index_only",
+          centerLabel: "52.08333, -0.31667",
+          radiusLabel: "4 NM",
+          operatorNote:
+            "Q-line index metadata is a coarse NOTAM index only; use the normalized area geometry for operational review.",
         },
       }),
     });
