@@ -11,10 +11,18 @@ export type TrafficConflictGuidanceUrgency =
 
 export type TrafficConflictGuidanceAuthority = "operator" | "supervisor";
 
+export type TrafficConflictGuidanceActionCode =
+  | "monitor_context"
+  | "review_separation"
+  | "prepare_deconfliction"
+  | "hold_or_suspend";
+
 export interface TrafficConflictResolutionGuidance {
   mode: "decision_support";
   urgency: TrafficConflictGuidanceUrgency;
+  actionCode: TrafficConflictGuidanceActionCode;
   recommendedAction: string;
+  prohibitedActions: string[];
   authorityRequired: TrafficConflictGuidanceAuthority;
   pilotInstructionStatus: "not_a_pilot_command";
   rationale: string;

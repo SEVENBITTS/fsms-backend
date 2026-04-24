@@ -950,6 +950,13 @@ const fallbackResolutionGuidance = (conflict) => ({
       : conflict?.severity === "caution"
         ? "Review conflict context"
         : "Monitor conflict context",
+  actionCode:
+    conflict?.severity === "critical"
+      ? "prepare_deconfliction"
+      : conflict?.severity === "caution"
+        ? "review_separation"
+        : "monitor_context",
+  prohibitedActions: ["Do not treat this guidance as an aircraft command"],
   authorityRequired: conflict?.severity === "critical" ? "supervisor" : "operator",
   pilotInstructionStatus: "not_a_pilot_command",
   rationale: conflict?.explanation ?? "No conflict rationale is currently available.",
@@ -979,7 +986,9 @@ const deriveConflictAdvisories = () =>
       id: conflict.id,
       tone: conflict.severity,
       headline,
+      actionCode: guidance.actionCode,
       recommendation: guidance.recommendedAction,
+      prohibitedActions: guidance.prohibitedActions ?? [],
       authorityRequired: guidance.authorityRequired,
       pilotInstructionStatus: guidance.pilotInstructionStatus,
       guidanceRationale: guidance.rationale,
@@ -2647,6 +2656,7 @@ const renderConflictAdvisory = () => {
                 <div>${escapeHtml(primary.reasoning)}</div>
                 <div class="alert-window-meta">
                   Recommended attention: ${escapeHtml(primary.recommendation)}<br />
+                  Action code: ${escapeHtml(primary.actionCode)}<br />
                   Authority required: ${escapeHtml(primary.authorityRequired)}<br />
                   Pilot instruction status: ${escapeHtml(primary.pilotInstructionStatus)}<br />
                   Related object: ${escapeHtml(primary.relatedObject)}<br />
@@ -2656,6 +2666,9 @@ const renderConflictAdvisory = () => {
                 </div>
                 <div class="alert-window-meta">
                   Guidance rationale: ${escapeHtml(primary.guidanceRationale)}
+                </div>
+                <div class="alert-window-meta">
+                  Do not: ${escapeHtml(primary.prohibitedActions.join(" | ") || "No additional constraints recorded")}
                 </div>
               </article>
             `
@@ -2669,8 +2682,8 @@ const renderConflictAdvisory = () => {
             ? '<div class="empty-state">No additional advisory items are currently derived.</div>'
             : renderList(
                 secondary.map((advisory) => ({
-                  label: `${advisory.recommendation} | ${advisory.relatedObject}`,
-                  value: `${advisory.authorityRequired} | ${advisory.summary}`,
+                  label: `${advisory.actionCode} | ${advisory.relatedObject}`,
+                  value: `${advisory.recommendation} | ${advisory.authorityRequired} | ${advisory.summary}`,
                 })),
                 "additional advisories",
               )

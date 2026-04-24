@@ -535,15 +535,24 @@ const buildResolutionGuidance = (
   explanation: string,
 ): TrafficConflictResolutionGuidance => {
   if (severity === "critical") {
+    const insideAreaConflict = overlayKind === "area_conflict" && insideArea;
     const recommendedAction =
-      overlayKind === "area_conflict" && insideArea
+      insideAreaConflict
         ? "Hold or suspend mission progress and escalate before continuing"
         : "Review immediately and prepare deconfliction, abort, or diversion options";
 
     return {
       mode: "decision_support",
       urgency: "immediate_review",
+      actionCode: insideAreaConflict
+        ? "hold_or_suspend"
+        : "prepare_deconfliction",
       recommendedAction,
+      prohibitedActions: [
+        "Do not treat this guidance as an aircraft command",
+        "Do not continue without reviewing separation and authority requirements",
+        "Do not transmit avoidance instructions from this advisory alone",
+      ],
       authorityRequired: "supervisor",
       pilotInstructionStatus: "not_a_pilot_command",
       rationale: `${explanation} This is decision-support guidance and does not directly command the pilot or aircraft.`,
@@ -554,7 +563,12 @@ const buildResolutionGuidance = (
     return {
       mode: "decision_support",
       urgency: "review",
+      actionCode: "review_separation",
       recommendedAction: "Review conflict context and confirm separation remains acceptable",
+      prohibitedActions: [
+        "Do not treat this guidance as an aircraft command",
+        "Do not ignore the conflict context without operator review",
+      ],
       authorityRequired: "operator",
       pilotInstructionStatus: "not_a_pilot_command",
       rationale: `${explanation} Operator review is recommended before continuing without further action.`,
@@ -564,7 +578,9 @@ const buildResolutionGuidance = (
   return {
     mode: "decision_support",
     urgency: "monitor",
+    actionCode: "monitor_context",
     recommendedAction: "Monitor conflict context",
+    prohibitedActions: ["Do not treat this guidance as an aircraft command"],
     authorityRequired: "operator",
     pilotInstructionStatus: "not_a_pilot_command",
     rationale: `${explanation} Continue monitoring unless the operational picture changes.`,
