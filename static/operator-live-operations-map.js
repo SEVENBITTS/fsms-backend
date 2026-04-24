@@ -2690,6 +2690,17 @@ const formatSecondaryAdvisoryValue = (advisory) =>
     .filter(Boolean)
     .join(" | ");
 
+const auditGuidanceSummary = (advisory) =>
+  [
+    `Recommended attention: ${advisory.recommendation}`,
+    `Rationale: ${advisory.guidanceRationale}`,
+    `Do not: ${
+      advisory.prohibitedActions.join(" | ") ||
+      "No additional constraints recorded"
+    }`,
+    `Pilot instruction status: ${advisory.pilotInstructionStatus}`,
+  ].join(" | ");
+
 const renderConflictAdvisory = () => {
   const advisories = deriveConflictAdvisories();
   const replayConflictRelation = currentConflictReplayRelation();
@@ -2761,7 +2772,7 @@ const renderConflictAdvisory = () => {
                           data-action-code="${escapeHtml(primary.actionCode)}"
                           data-evidence-action="${escapeHtml(primary.evidenceAction)}"
                           data-acknowledgement-role="${escapeHtml(primary.authorityRequired)}"
-                          data-guidance-summary="${escapeHtml(primary.recommendation)}"
+                          data-guidance-summary="${escapeHtml(auditGuidanceSummary(primary))}"
                         >
                           Record audit acknowledgement
                         </button>

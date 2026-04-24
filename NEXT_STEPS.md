@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show secondary advisory decision-support context in live operations.
+Store richer live-ops guidance context in acknowledgements.
 
 ---
 
@@ -9,12 +9,13 @@ Show secondary advisory decision-support context in live operations.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- keep secondary advisory rendering read-only
-- show existing acknowledgement context when a secondary advisory has been recorded
+- send a richer guidance summary from live ops when recording an acknowledgement
+- include recommendation, rationale, prohibited action warning, and pilot-instruction boundary
+- keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- show authority, evidence action, acknowledgement state, and pilot-instruction boundary in secondary advisory rows
-- show the recorded guidance summary for acknowledged secondary advisories
+- preserve what the operator/supervisor actually reviewed
+- make the stored summary explicitly say `not_a_pilot_command`
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -33,6 +34,6 @@ Show secondary advisory decision-support context in live operations.
 ---
 
 ## Done When
-- Secondary advisory rows display `not_a_pilot_command`
-- Secondary acknowledged advisories display the preserved guidance summary
+- New live-ops acknowledgement summaries include recommendation and rationale
+- New live-ops acknowledgement summaries include prohibited action and pilot-instruction boundary
 - No operational authority or direct-control behavior changes
