@@ -405,6 +405,11 @@ const postOperationExportLinks = (snapshotId) => {
   };
 };
 
+const liveOpsMapEvidenceUrl = () =>
+  uiState.missionId
+    ? `/operator/missions/${encodeURIComponent(uiState.missionId)}/live-operations`
+    : "/operator/live-operations-map";
+
 const renderAlertActionButtons = (impact) => {
   const alertIds = impact?.alertIds ?? [];
   if (!uiState.missionId || alertIds.length === 0) {
@@ -783,6 +788,7 @@ const renderEvidenceHelpers = () => {
     "Completion status",
   );
   const exportLinks = postOperationExportLinks(postOperationSnapshot?.id);
+  const mapEvidenceUrl = liveOpsMapEvidenceUrl();
   const signoffState =
     signoffDecision && signoffDecision !== "Pending sign-off"
       ? `Recorded: ${signoffDecision}`
@@ -885,6 +891,7 @@ const renderEvidenceHelpers = () => {
               "These counts are informational prompts for review before sign-off. Empty categories do not automatically reject the mission or certify compliance.",
           )}
           <br />Map view-state readiness is metadata-only evidence and not pilot command guidance.
+          <br />Capture metadata in live ops, then review it in this post-operation evidence pack.
           ${
             readiness?.categories?.length
               ? `<br />${readiness.categories
@@ -892,6 +899,14 @@ const renderEvidenceHelpers = () => {
                   .join("<br />")}`
               : ""
           }
+        </div>
+        <div class="action-footer" style="justify-content: flex-start; margin-top: 12px;">
+          <a class="action-button link-button" href="${escapeHtml(mapEvidenceUrl)}">
+            Open live-ops map evidence capture
+          </a>
+          <div class="action-status tone-info">
+            Opens the current mission live-ops map history and metadata-only evidence capture.
+          </div>
         </div>
       </section>
     </div>
@@ -1853,10 +1868,10 @@ openApiButton.addEventListener("click", () => {
 
 openLiveOpsButton?.addEventListener("click", () => {
   const missionId = missionIdInput.value.trim();
-  const target = missionId
-    ? `/operator/missions/${encodeURIComponent(missionId)}/live-operations`
-    : "/operator/live-operations-map";
-  window.location.assign(target);
+  const previousMissionId = uiState.missionId;
+  uiState.missionId = missionId;
+  window.location.assign(liveOpsMapEvidenceUrl());
+  uiState.missionId = previousMissionId;
 });
 
 const initialMissionId = getMissionIdFromLocation();

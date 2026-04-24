@@ -2007,6 +2007,11 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("These counts are informational prompts for review before sign-off");
     expect(response.text).toContain("Empty categories do not automatically reject the mission or certify compliance");
     expect(response.text).toContain("metadata-only evidence and not pilot command guidance");
+    expect(response.text).toContain("liveOpsMapEvidenceUrl");
+    expect(response.text).toContain("/operator/missions/${encodeURIComponent(uiState.missionId)}/live-operations");
+    expect(response.text).toContain("Capture metadata in live ops, then review it in this post-operation evidence pack.");
+    expect(response.text).toContain("Open live-ops map evidence capture");
+    expect(response.text).toContain("metadata-only evidence capture");
     expect(response.text).toContain('payload.decisionType = "dispatch"');
     expect(response.text).toContain("Aircraft Capability and Maintenance");
     expect(response.text).toContain("manufacturerMaintenanceScheduleRef");
