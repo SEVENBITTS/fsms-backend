@@ -390,6 +390,34 @@ const readinessCategory = (key) =>
     (category) => category.key === key,
   ) ?? null;
 
+const renderReportReadinessSummary = () => {
+  const section = reportSection("Evidence readiness summary");
+
+  if (!section) {
+    return `
+      <div class="empty-state">
+        Rendered report readiness summary is not loaded yet.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="kv">
+      ${section.fields
+        .map(
+          (field) => `
+            <div class="k">${escapeHtml(field.label)}</div>
+            <div>${renderBadge(field.value)}</div>
+          `,
+        )
+        .join("")}
+    </div>
+    <div class="action-meta" style="margin-top: 12px;">
+      Rendered report readiness counts are review prompts only. They remain separate from accountable-manager sign-off and are not compliance certification.
+    </div>
+  `;
+};
+
 const postOperationExportLinks = (snapshotId) => {
   if (!uiState.missionId || !snapshotId) {
     return { renderUrl: "", pdfUrl: "" };
@@ -908,6 +936,10 @@ const renderEvidenceHelpers = () => {
             Opens the current mission live-ops map history and metadata-only evidence capture.
           </div>
         </div>
+      </section>
+      <section class="summary-block">
+        <h4>Rendered Report Readiness Summary</h4>
+        ${renderReportReadinessSummary()}
       </section>
     </div>
     <div class="action-grid">

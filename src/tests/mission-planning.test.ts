@@ -2002,6 +2002,12 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/post-operation/evidence-snapshots/${encodeURIComponent(");
     expect(response.text).toContain("/readiness");
     expect(response.text).toContain("Pre-sign-off Evidence Summary");
+    expect(response.text).toContain("Rendered Report Readiness Summary");
+    expect(response.text).toContain("renderReportReadinessSummary");
+    expect(response.text).toContain("Evidence readiness summary");
+    expect(response.text).toContain("Rendered report readiness summary is not loaded yet.");
+    expect(response.text).toContain("Rendered report readiness counts are review prompts only.");
+    expect(response.text).toContain("They remain separate from accountable-manager sign-off and are not compliance certification.");
     expect(response.text).toContain("Map view-state evidence");
     expect(response.text).toContain("live_ops_map_view_state_snapshots");
     expect(response.text).toContain("These counts are informational prompts for review before sign-off");
