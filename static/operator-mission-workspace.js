@@ -162,6 +162,7 @@ const uiState = {
   regulatoryReviewImpact: null,
   postOperationSnapshots: [],
   postOperationEvidenceReport: null,
+  postOperationEvidenceReadiness: null,
   postOperationEvidenceReportError: "",
   missionList: [],
   missionQuery: "",
@@ -297,23 +298,10 @@ const reportFieldValue = (heading, label) =>
   reportSection(heading)?.fields?.find((field) => field.label === label)?.value ??
   null;
 
-const countReportFieldsWithPrefix = (heading, labelPrefix) => {
-  const section = reportSection(heading);
-  if (!section) {
-    return 0;
-  }
-
-  return new Set(
-    section.fields
-      .map((field) => String(field.label ?? ""))
-      .filter((label) => label.startsWith(labelPrefix))
-      .map((label) => label.match(/\d+/)?.[0])
-      .filter(Boolean),
-  ).size;
-};
-
-const evidencePresenceLabel = (count, noun) =>
-  count > 0 ? `${count} ${noun}${count === 1 ? "" : "s"}` : `No ${noun}s`;
+const readinessCategory = (key) =>
+  uiState.postOperationEvidenceReadiness?.categories?.find(
+    (category) => category.key === key,
+  ) ?? null;
 
 const postOperationExportLinks = (snapshotId) => {
   if (!uiState.missionId || !snapshotId) {
@@ -696,14 +684,10 @@ const renderEvidenceHelpers = () => {
   const regulatoryAlertCount =
     uiState.postOperationEvidenceReport?.sourceExport?.regulatoryAmendmentAlerts
       ?.length ?? 0;
-  const conflictAcknowledgementCount = countReportFieldsWithPrefix(
-    "Live conflict guidance acknowledgements",
-    "Conflict acknowledgement",
-  );
-  const safetyActionClosureCount = countReportFieldsWithPrefix(
-    "Safety action closure evidence",
-    "Closure",
-  );
+  const readiness = uiState.postOperationEvidenceReadiness;
+  const conflictReadiness = readinessCategory("conflict_guidance_acknowledgements");
+  const safetyActionReadiness = readinessCategory("safety_action_closure_evidence");
+  const regulatoryReadiness = readinessCategory("regulatory_amendment_reviews");
   const reportSectionCount =
     uiState.postOperationEvidenceReport?.report?.sections?.length ?? 0;
   const completionStatus = reportFieldValue(
@@ -797,16 +781,26 @@ const renderEvidenceHelpers = () => {
           <div class="k">Report sections</div>
           <div>${renderBadge(reportSectionCount > 0 ? `${reportSectionCount} loaded` : "Not loaded")}</div>
           <div class="k">Completion status</div>
-          <div>${renderBadge(completionStatus ?? "Not recorded")}</div>
+          <div>${renderBadge(readiness?.completionStatus ?? completionStatus ?? "Not recorded")}</div>
           <div class="k">Conflict acknowledgements</div>
-          <div>${renderBadge(evidencePresenceLabel(conflictAcknowledgementCount, "acknowledgement"))}</div>
+          <div>${renderBadge(conflictReadiness ? `${conflictReadiness.count} ${conflictReadiness.status}` : "Not loaded")}</div>
           <div class="k">Safety action closures</div>
-          <div>${renderBadge(evidencePresenceLabel(safetyActionClosureCount, "closure"))}</div>
+          <div>${renderBadge(safetyActionReadiness ? `${safetyActionReadiness.count} ${safetyActionReadiness.status}` : "Not loaded")}</div>
           <div class="k">Regulatory amendment reviews</div>
-          <div>${renderBadge(evidencePresenceLabel(regulatoryAlertCount, "review"))}</div>
+          <div>${renderBadge(regulatoryReadiness ? `${regulatoryReadiness.count} ${regulatoryReadiness.status}` : "Not loaded")}</div>
         </div>
         <div class="action-meta" style="margin-top: 12px;">
-          These counts are informational prompts for review before sign-off. Empty categories do not automatically reject the mission or certify compliance.
+          ${escapeHtml(
+            readiness?.summary?.message ??
+              "These counts are informational prompts for review before sign-off. Empty categories do not automatically reject the mission or certify compliance.",
+          )}
+          ${
+            readiness?.categories?.length
+              ? `<br />${readiness.categories
+                  .map((category) => escapeHtml(category.message))
+                  .join("<br />")}`
+              : ""
+          }
         </div>
       </section>
     </div>
@@ -1445,6 +1439,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.regulatoryReviewImpact = null;
     uiState.postOperationSnapshots = [];
     uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReadiness = null;
     uiState.postOperationEvidenceReportError = "";
     renderMissionBrowser();
     uiState.transitionChecks = {};
@@ -1495,18 +1490,27 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.regulatoryReviewImpact = regulatoryReviewImpactResponse;
     uiState.postOperationSnapshots = postOperationSnapshotsResponse.snapshots ?? [];
     uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReadiness = null;
     uiState.postOperationEvidenceReportError = "";
     const postOperationSnapshot = latestPostOperationSnapshot();
 
     if (postOperationSnapshot) {
       try {
-        const reportResponse = await fetchJson(
-          postOperationExportLinks(postOperationSnapshot.id).renderUrl,
-        );
+        const [reportResponse, readinessResponse] = await Promise.all([
+          fetchJson(postOperationExportLinks(postOperationSnapshot.id).renderUrl),
+          fetchJson(
+            `/missions/${encodeURIComponent(
+              missionId,
+            )}/post-operation/evidence-snapshots/${encodeURIComponent(
+              postOperationSnapshot.id,
+            )}/readiness`,
+          ),
+        ]);
         uiState.postOperationEvidenceReport = reportResponse.report;
+        uiState.postOperationEvidenceReadiness = readinessResponse.readiness;
       } catch (error) {
         uiState.postOperationEvidenceReportError =
-          error instanceof Error ? error.message : "Report unavailable";
+          error instanceof Error ? error.message : "Report/readiness unavailable";
       }
     }
 
@@ -1529,6 +1533,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.regulatoryReviewImpact = null;
     uiState.postOperationSnapshots = [];
     uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReadiness = null;
     uiState.postOperationEvidenceReportError = "";
     uiState.transitionChecks = {};
     renderMissionBrowser();
