@@ -2674,6 +2674,22 @@ const renderConflictAssessment = () => {
     </div>
   `;
 };
+
+const formatSecondaryAdvisoryValue = (advisory) =>
+  [
+    advisory.recommendation,
+    `Authority: ${advisory.authorityRequired}`,
+    `Evidence: ${advisory.evidenceAction}`,
+    `Acknowledgement: ${advisory.acknowledgementStatus}`,
+    `Pilot instruction: ${advisory.pilotInstructionStatus}`,
+    advisory.acknowledgement
+      ? `Guidance summary: ${advisory.acknowledgement.guidanceSummary}`
+      : null,
+    advisory.summary,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
 const renderConflictAdvisory = () => {
   const advisories = deriveConflictAdvisories();
   const replayConflictRelation = currentConflictReplayRelation();
@@ -2768,7 +2784,7 @@ const renderConflictAdvisory = () => {
             : renderList(
                 secondary.map((advisory) => ({
                   label: `${advisory.actionCode} | ${advisory.relatedObject}`,
-                  value: `${advisory.recommendation} | ${advisory.authorityRequired} | ${advisory.evidenceAction} | ${advisory.acknowledgementStatus} | ${advisory.summary}`,
+                  value: formatSecondaryAdvisoryValue(advisory),
                 })),
                 "additional advisories",
               )

@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show conflict-guidance acknowledgement context in live operations.
+Show secondary advisory decision-support context in live operations.
 
 ---
 
@@ -9,12 +9,12 @@ Show conflict-guidance acknowledgement context in live operations.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- show the recorded guidance summary after acknowledgement
-- show the recorded pilot instruction boundary after acknowledgement
+- keep secondary advisory rendering read-only
+- show existing acknowledgement context when a secondary advisory has been recorded
 
 ### 2. Operator clarity
-- make the live-ops audit record show what was reviewed, not only who recorded it
-- keep `not_a_pilot_command` visible beside the acknowledgement
+- show authority, evidence action, acknowledgement state, and pilot-instruction boundary in secondary advisory rows
+- show the recorded guidance summary for acknowledged secondary advisories
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -33,6 +33,6 @@ Show conflict-guidance acknowledgement context in live operations.
 ---
 
 ## Done When
-- Recorded acknowledgements in live ops display the guidance summary
-- Recorded acknowledgements in live ops display `not_a_pilot_command`
+- Secondary advisory rows display `not_a_pilot_command`
+- Secondary acknowledged advisories display the preserved guidance summary
 - No operational authority or direct-control behavior changes
