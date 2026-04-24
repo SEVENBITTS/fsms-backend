@@ -16,32 +16,30 @@ Current findings:
 
 These are display-only or documentation-only surfaces that can be renamed first with low technical risk.
 
-- [README.md](C:\Users\rabbi\Documents\Codex\fsms-backend\README.md)
+- [README.md](../README.md)
   - Line 1: `# FSMS Backend`
   - Line 3: `Flight Safety Monitoring System (FSMS)...`
   - Line 277: `The current FSMS product direction...`
   - Line 285: `Internal project - FSMS prototype.`
-- [README2.md](C:\Users\rabbi\Documents\Codex\fsms-backend\README2.md)
-  - Line 1: `# FSMS Validation Demo`
-- [docs/api.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\api.md)
+- [docs/api.md](api.md)
   - Line 1: `# FSMS Backend API`
   - Note: keep route examples unchanged for now if they reflect real endpoints
-- [docs/architecture.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\architecture.md)
+- [docs/architecture.md](architecture.md)
   - Line 1: `# FSMS Backend Architecture`
   - Line 14: `The FSMS backend provides...`
-- [docs/FSMS_DIRECTION.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\FSMS_DIRECTION.md)
+- [docs/FSMS_DIRECTION.md](FSMS_DIRECTION.md)
   - File title and body are heavily FSMS-branded
   - Candidate rename later: `docs/VERITYATLAS_DIRECTION.md`
-- [docs/roadmap.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\roadmap.md)
+- [docs/roadmap.md](roadmap.md)
   - Line 1: `# FSMS Development Roadmap`
   - Line 101+: summary section uses FSMS naming
-- [docs/system_diagram.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\system_diagram.md)
+- [docs/system_diagram.md](system_diagram.md)
   - Line 1: `# FSMS System Architecture Diagram`
-- [static/operator-live-operations-map.html](C:\Users\rabbi\Documents\Codex\fsms-backend\static\operator-live-operations-map.html)
+- [static/operator-live-operations-map.html](../static/operator-live-operations-map.html)
   - Line 6: browser title `FSMS Operator Live Operations`
-- [static/operator-mission-workspace.html](C:\Users\rabbi\Documents\Codex\fsms-backend\static\operator-mission-workspace.html)
+- [static/operator-mission-workspace.html](../static/operator-mission-workspace.html)
   - Line 6: browser title `FSMS Operator Mission Workspace`
-- [src/app.ts](C:\Users\rabbi\Documents\Codex\fsms-backend\src\app.ts)
+- [src/app.ts](../src/app.ts)
   - Line 264: health response text `FSMS backend is running`
 
 Recommended first-pass replacements:
@@ -54,17 +52,18 @@ Recommended first-pass replacements:
 These names are technical identifiers and should stay unchanged until there is a deliberate compatibility pass.
 
 - Repo folder and GitHub repo name
-  - `C:\Users\rabbi\Documents\Codex\fsms-backend`
+  - local active clone: `D:\Dev\fsms-backend`
+  - GitHub repo: `SEVENBITTS/fsms-backend`
 - File names with `fsms` in them
-  - [fsms-save-point.json](C:\Users\rabbi\Documents\Codex\fsms-backend\fsms-save-point.json)
-  - [fsms-save-point.schema.json](C:\Users\rabbi\Documents\Codex\fsms-backend\fsms-save-point.schema.json)
-  - [docs/FSMS_DIRECTION.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\FSMS_DIRECTION.md)
+  - [fsms-save-point.json](../fsms-save-point.json)
+  - [fsms-save-point.schema.json](../fsms-save-point.schema.json)
+  - [docs/FSMS_DIRECTION.md](FSMS_DIRECTION.md)
 - API/service identifiers
-  - [docs/api.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\api.md:22) service name `fsms`
-  - [docs/api.md](C:\Users\rabbi\Documents\Codex\fsms-backend\docs\api.md:33) route `/api/fsms/replay/<flight_id>`
+  - [docs/api.md](api.md) service name `fsms`
+  - [docs/api.md](api.md) route `/api/fsms/replay/<flight_id>`
 - CI and workflow identifiers
-  - [.github/workflows/fsms-savepoint.yml](C:\Users\rabbi\Documents\Codex\fsms-backend\.github\workflows\fsms-savepoint.yml)
-  - [.github/workflows/integration-tests.yml](C:\Users\rabbi\Documents\Codex\fsms-backend\.github\workflows\integration-tests.yml)
+  - [.github/workflows/fsms-savepoint.yml](../.github/workflows/fsms-savepoint.yml)
+  - [.github/workflows/integration-tests.yml](../.github/workflows/integration-tests.yml)
     - `fsms_test`
     - `<!-- fsms-nextbuildstep-comment -->`
 - Database and environment naming
@@ -82,14 +81,12 @@ When to do this phase:
 These items likely contain branding, but they are not safe to bulk rename automatically because they are binary, generated, or historical.
 
 - Root `.docx` files with FSMS in the filename
-  - [FSMS @stage and bidding.docx](C:\Users\rabbi\Documents\Codex\fsms-backend\FSMS%20@stage%20and%20bidding.docx)
-  - [FSMS Backend Build Board.docx](C:\Users\rabbi\Documents\Codex\fsms-backend\FSMS%20Backend%20Build%20Board.docx)
-  - [Fsms System Architecture Blueprint.docx](C:\Users\rabbi\Documents\Codex\fsms-backend\Fsms%20System%20Architecture%20Blueprint.docx)
-  - [Investor pitch for UAV Operations FSMS.docx](C:\Users\rabbi\Documents\Codex\fsms-backend\Investor%20pitch%20for%20UAV%20Operations%20FSMS.docx)
+  - [FSMS @stage and bidding.docx](../FSMS%20@stage%20and%20bidding.docx)
+  - [FSMS Backend Build Board.docx](../FSMS%20Backend%20Build%20Board.docx)
+  - [Fsms System Architecture Blueprint.docx](../Fsms%20System%20Architecture%20Blueprint.docx)
+  - [Investor pitch for UAV Operations FSMS.docx](../Investor%20pitch%20for%20UAV%20Operations%20FSMS.docx)
 - Experimental static HTML copies
-  - [replay fixed, strengthend working - Copy.html](C:\Users\rabbi\Documents\Codex\fsms-backend\static\replay%20fixed,%20strengthend%20working%20-%20Copy.html)
-  - [replay scenario card with all fields filled - Copy.html](C:\Users\rabbi\Documents\Codex\fsms-backend\static\replay%20scenario%20card%20with%20all%20fields%20filled%20-%20Copy.html)
-  - [replay working with scenario cards and sidebar functionality - Copy.html](C:\Users\rabbi\Documents\Codex\fsms-backend\static\replay%20working%20with%20scenario%20cards%20and%20sidebar%20functionality%20-%20Copy.html)
+  - removed during stale-data cleanup; recover from Git history only if needed
 - Generated or historical outputs
   - validation reports
   - save-point artifacts
