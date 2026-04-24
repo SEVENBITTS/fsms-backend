@@ -299,6 +299,7 @@ export interface PostOperationEvidenceRenderedReport {
 }
 
 export type PostOperationEvidenceReadinessCategoryKey =
+  | "live_ops_map_view_state_snapshots"
   | "conflict_guidance_acknowledgements"
   | "safety_action_closure_evidence"
   | "regulatory_amendment_reviews";
@@ -325,6 +326,7 @@ export interface PostOperationEvidenceReadiness {
   };
   categories: PostOperationEvidenceReadinessCategory[];
   summary: {
+    hasLiveOpsMapViewStateSnapshots: boolean;
     hasConflictGuidanceAcknowledgements: boolean;
     hasSafetyActionClosureEvidence: boolean;
     hasRegulatoryAmendmentReviews: boolean;

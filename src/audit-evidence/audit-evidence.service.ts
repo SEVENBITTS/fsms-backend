@@ -538,6 +538,8 @@ export class AuditEvidenceService {
       },
       categories,
       summary: {
+        hasLiveOpsMapViewStateSnapshots:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0,
         hasConflictGuidanceAcknowledgements:
           evidenceExport.conflictGuidanceAcknowledgements.length > 0,
         hasSafetyActionClosureEvidence:
@@ -666,6 +668,19 @@ export class AuditEvidenceService {
     evidenceExport: PostOperationEvidenceExportPackage,
   ): PostOperationEvidenceReadinessCategory[] {
     return [
+      {
+        key: "live_ops_map_view_state_snapshots",
+        label: "Live-ops map view-state snapshots",
+        count: evidenceExport.liveOpsMapViewStateSnapshots.length,
+        status:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0
+            ? "Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance."
+            : "No live-ops map view-state metadata is recorded in this evidence pack; this is a review prompt only, not an automatic rejection or compliance certificate.",
+      },
       {
         key: "conflict_guidance_acknowledgements",
         label: "Conflict guidance acknowledgements",

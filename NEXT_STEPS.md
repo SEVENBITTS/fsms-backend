@@ -1,32 +1,32 @@
 # NEXT STEP
 
 ## Goal
-Add post-operation readiness prompts for live-ops map view-state evidence.
+Show post-operation readiness prompts in the operator mission workspace.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- add a readiness category for live-ops map view-state snapshots
-- show whether recent map evidence exists before accountable-manager review
-- keep this as a review prompt only, not an automatic rejection or compliance certificate
+- fetch post-operation readiness for the selected evidence snapshot in the mission workspace
+- render readiness categories, sign-off status, and advisory review prompts
+- make missing evidence categories visible without presenting them as automatic failures
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- preserve the metadata-only and not-pilot-command wording in readiness summaries
+- preserve metadata-only and not-pilot-command wording for map view-state evidence
 
 ### 3. Tests
-- add focused readiness tests for present and missing map view-state evidence
-- run audit-evidence focused tests
+- add focused mission workspace UI tests for readiness output
+- run mission-planning UI tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Post-operation readiness includes a live-ops map view-state category
-- Readiness output clearly distinguishes missing map evidence from hard failure
-- Readiness summary preserves metadata-only, not-pilot-command boundaries
+- Operator workspace shows post-operation evidence readiness categories
+- Missing readiness categories are labelled as review prompts, not hard failures
+- Sign-off state is visible beside the evidence snapshot
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation
