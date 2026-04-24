@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Align live-ops acknowledgement prompt with required review role.
+Guard live-ops acknowledgement capture when guidance summary is missing.
 
 ---
 
@@ -9,13 +9,13 @@ Align live-ops acknowledgement prompt with required review role.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- keep sending the acknowledgement role required by the advisory
-- default the acknowledgement prompt to the required role
+- only post acknowledgements when guidance summary evidence is present
+- show a clear local error before posting if the summary is missing
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- make supervisor-required acknowledgements visibly ask for supervisor acknowledgement
-- make operator-required acknowledgements visibly ask for operator acknowledgement
+- prevent confusing backend validation failures for missing summary evidence
+- keep the operator in the same live-ops view when evidence capture is incomplete
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -34,6 +34,6 @@ Align live-ops acknowledgement prompt with required review role.
 ---
 
 ## Done When
-- Live-ops acknowledgement prompts reflect the required role
-- Posted acknowledgements still send the same validated role to the backend
+- Live ops does not submit acknowledgement requests without guidance summary evidence
+- Missing summary evidence produces a visible local error
 - No operational authority or direct-control behavior changes

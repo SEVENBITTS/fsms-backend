@@ -2821,6 +2821,16 @@ const recordConflictGuidanceAcknowledgement = async (button) => {
 
   button.disabled = true;
   const acknowledgementRole = button.dataset.acknowledgementRole ?? "operator";
+  const guidanceSummary = button.dataset.guidanceSummary?.trim() ?? "";
+  if (!guidanceSummary) {
+    button.disabled = false;
+    setConnectionState(
+      "Cannot record acknowledgement without guidance summary evidence",
+      "tone-bad",
+    );
+    return;
+  }
+
   const acknowledgedBy =
     window.prompt(
       `Record ${acknowledgementRole} acknowledgement by`,
@@ -2853,7 +2863,7 @@ const recordConflictGuidanceAcknowledgement = async (button) => {
         acknowledgementRole,
         acknowledgedBy,
         acknowledgementNote,
-        guidanceSummary: button.dataset.guidanceSummary,
+        guidanceSummary,
       }),
     });
 
