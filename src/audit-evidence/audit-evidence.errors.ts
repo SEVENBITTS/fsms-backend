@@ -30,6 +30,17 @@ export class ConflictGuidanceOverlayNotFoundError extends Error {
   }
 }
 
+export class ConflictGuidanceAcknowledgementAlreadyExistsError extends Error {
+  readonly statusCode = 409;
+  readonly code = "CONFLICT_GUIDANCE_ACKNOWLEDGEMENT_ALREADY_EXISTS";
+
+  constructor(overlayId: string) {
+    super(
+      `Conflict guidance acknowledgement already exists for overlay and guidance: ${overlayId}`,
+    );
+  }
+}
+
 export class AuditEvidenceMissionNotCompletedError extends Error {
   readonly statusCode = 409;
   readonly code = "MISSION_NOT_COMPLETED";

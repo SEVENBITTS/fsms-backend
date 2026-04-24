@@ -987,6 +987,39 @@ describe("audit evidence snapshots", () => {
     });
   });
 
+  it("rejects duplicate conflict guidance acknowledgements for the same overlay and guidance", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const endpoint = `/missions/${missionId}/conflict-guidance-acknowledgements`;
+
+    const firstResponse = await request(app).post(endpoint).send({
+      conflictId: "first-conflict-id",
+      overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "supervisor-a",
+    });
+    const beforeDuplicate = await countRows(missionId);
+    const duplicateResponse = await request(app).post(endpoint).send({
+      conflictId: "new-assessment-conflict-id",
+      overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "supervisor-b",
+    });
+
+    expect(firstResponse.status).toBe(201);
+    expect(duplicateResponse.status).toBe(409);
+    expect(duplicateResponse.body).toMatchObject({
+      error: {
+        type: "conflict_guidance_acknowledgement_already_exists",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(beforeDuplicate);
+  });
+
   it("rejects invalid conflict guidance acknowledgement requests", async () => {
     const { missionId } = await createReadyMission();
     const overlayId = await createConflictOverlay(missionId);
@@ -2501,6 +2534,70 @@ describe("audit evidence snapshots", () => {
     });
 
     expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("rejects direct duplicate conflict guidance acknowledgement records", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+
+    await pool.query(
+      `
+      insert into conflict_guidance_acknowledgements (
+        id,
+        mission_id,
+        conflict_id,
+        overlay_id,
+        guidance_action_code,
+        evidence_action,
+        acknowledgement_role,
+        acknowledged_by
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+      [
+        randomUUID(),
+        missionId,
+        "conflict-db-duplicate-first",
+        overlayId,
+        "hold_or_suspend",
+        "record_supervisor_review",
+        "supervisor",
+        "supervisor-a",
+      ],
+    );
+    const beforeDuplicate = await countRows(missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into conflict_guidance_acknowledgements (
+          id,
+          mission_id,
+          conflict_id,
+          overlay_id,
+          guidance_action_code,
+          evidence_action,
+          acknowledgement_role,
+          acknowledged_by
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        `,
+        [
+          randomUUID(),
+          missionId,
+          "conflict-db-duplicate-second",
+          overlayId,
+          "hold_or_suspend",
+          "record_supervisor_review",
+          "supervisor",
+          "supervisor-b",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23505",
+    });
+
+    expect(await countRows(missionId)).toEqual(beforeDuplicate);
   });
 
   it("rejects unsupported accountable-manager sign-off review decisions", async () => {

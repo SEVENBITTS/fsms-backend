@@ -1,25 +1,26 @@
 # NEXT STEP
 
 ## Goal
-Constrain conflict acknowledgement evidence roles for audit integrity.
+Prevent duplicate conflict-guidance acknowledgement evidence records.
 
 ---
 
 ## Build
 
-### 1. API validation
-- require operator review evidence to be acknowledged by an operator
-- require supervisor review evidence to be acknowledged by a supervisor
-- reject mismatched evidence-action/role combinations before writing records
+### 1. API behavior
+- return 409 when an acknowledgement already exists for the same mission, overlay, guidance action, and evidence action
+- keep valid acknowledgement, list, export, report, and PDF paths unchanged
+- preserve the decision-support boundary: acknowledge guidance only, do not issue pilot commands
 
-### 2. Database constraint
-- add a check constraint so direct writes cannot bypass the role/evidence rule
-- keep existing acknowledgement records and pilot-command guard intact
+### 2. Database integrity
+- add a unique constraint on the stable acknowledgement identity
+- prevent direct writes from bypassing the duplicate guard
+- keep existing role/evidence and not-pilot-command safeguards intact
 
 ### 3. Tests
-- API rejects mismatched supervisor/operator acknowledgement roles
-- database rejects direct mismatched acknowledgement records
-- valid acknowledgement and export paths continue to work
+- API rejects duplicate acknowledgement attempts with a clear conflict response
+- database rejects direct duplicate acknowledgement records
+- build and focused audit tests pass
 
 ---
 
@@ -32,6 +33,6 @@ Constrain conflict acknowledgement evidence roles for audit integrity.
 ---
 
 ## Done When
-- Conflict acknowledgement evidence action and role cannot disagree
-- The rule is enforced in both validation and database constraints
-- Build and focused audit tests pass
+- Duplicate acknowledgement attempts cannot create extra audit rows
+- The API returns a clear 409 conflict response
+- The database enforces the same rule directly

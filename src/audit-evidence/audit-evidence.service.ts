@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
 import { MissionService } from "../missions/mission.service";
 import {
+  ConflictGuidanceAcknowledgementAlreadyExistsError,
   ConflictGuidanceOverlayNotFoundError,
   AuditEvidenceMissionNotCompletedError,
   AuditEvidenceMissionNotFoundError,
@@ -193,20 +194,29 @@ export class AuditEvidenceService {
         throw new ConflictGuidanceOverlayNotFoundError(validated.overlayId);
       }
 
-      return await this.auditEvidenceRepository.insertConflictGuidanceAcknowledgement(
-        client,
-        {
-          missionId,
-          conflictId: validated.conflictId,
-          overlayId: validated.overlayId,
-          guidanceActionCode: validated.guidanceActionCode,
-          evidenceAction: validated.evidenceAction,
-          acknowledgementRole: validated.acknowledgementRole,
-          acknowledgedBy: validated.acknowledgedBy,
-          acknowledgementNote: validated.acknowledgementNote,
-          guidanceSummary: validated.guidanceSummary,
-        },
-      );
+      try {
+        return await this.auditEvidenceRepository.insertConflictGuidanceAcknowledgement(
+          client,
+          {
+            missionId,
+            conflictId: validated.conflictId,
+            overlayId: validated.overlayId,
+            guidanceActionCode: validated.guidanceActionCode,
+            evidenceAction: validated.evidenceAction,
+            acknowledgementRole: validated.acknowledgementRole,
+            acknowledgedBy: validated.acknowledgedBy,
+            acknowledgementNote: validated.acknowledgementNote,
+            guidanceSummary: validated.guidanceSummary,
+          },
+        );
+      } catch (error) {
+        if (this.isUniqueViolation(error)) {
+          throw new ConflictGuidanceAcknowledgementAlreadyExistsError(
+            validated.overlayId,
+          );
+        }
+        throw error;
+      }
     } finally {
       client.release();
     }
