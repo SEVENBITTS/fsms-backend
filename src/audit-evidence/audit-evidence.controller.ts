@@ -78,6 +78,39 @@ export class AuditEvidenceController {
     }
   };
 
+  createConflictGuidanceAcknowledgement = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const acknowledgement =
+        await this.auditEvidenceService.createConflictGuidanceAcknowledgement(
+          req.params.missionId,
+          req.body,
+        );
+      res.status(201).json({ acknowledgement });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listConflictGuidanceAcknowledgements = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const acknowledgements =
+        await this.auditEvidenceService.listConflictGuidanceAcknowledgements(
+          req.params.missionId,
+        );
+      res.status(200).json({ acknowledgements });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   createPostOperationEvidenceSnapshot = async (
     req: Request<MissionIdParams>,
     res: Response,

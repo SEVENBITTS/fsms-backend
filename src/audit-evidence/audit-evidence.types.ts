@@ -1,4 +1,9 @@
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
+import type {
+  TrafficConflictGuidanceActionCode,
+  TrafficConflictGuidanceAuthority,
+  TrafficConflictGuidanceEvidenceAction,
+} from "../conflict-assessment/traffic-conflict-assessment.types";
 
 export type AuditEvidenceType = "mission_readiness_gate";
 
@@ -34,6 +39,17 @@ export interface CreateMissionDecisionEvidenceLinkInput {
   createdBy?: string | null;
 }
 
+export interface CreateConflictGuidanceAcknowledgementInput {
+  conflictId?: string;
+  overlayId?: string;
+  guidanceActionCode?: TrafficConflictGuidanceActionCode;
+  evidenceAction?: TrafficConflictGuidanceEvidenceAction;
+  acknowledgementRole?: TrafficConflictGuidanceAuthority;
+  acknowledgedBy?: string;
+  acknowledgementNote?: string | null;
+  guidanceSummary?: string | null;
+}
+
 export interface AuditEvidenceReadinessSnapshot
   extends MissionReadinessCheck {
   smsControlMappings: AuditReportSmsControlMapping[];
@@ -59,6 +75,21 @@ export interface MissionDecisionEvidenceLink {
   auditEvidenceSnapshotId: string;
   decisionType: MissionDecisionType;
   createdBy: string | null;
+  createdAt: string;
+}
+
+export interface ConflictGuidanceAcknowledgement {
+  id: string;
+  missionId: string;
+  conflictId: string;
+  overlayId: string;
+  guidanceActionCode: TrafficConflictGuidanceActionCode;
+  evidenceAction: Exclude<TrafficConflictGuidanceEvidenceAction, "none">;
+  acknowledgementRole: TrafficConflictGuidanceAuthority;
+  acknowledgedBy: string;
+  acknowledgementNote: string | null;
+  guidanceSummary: string | null;
+  pilotInstructionStatus: "not_a_pilot_command";
   createdAt: string;
 }
 

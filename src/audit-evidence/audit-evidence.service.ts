@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
 import { MissionService } from "../missions/mission.service";
 import {
+  ConflictGuidanceOverlayNotFoundError,
   AuditEvidenceMissionNotCompletedError,
   AuditEvidenceMissionNotFoundError,
   AuditEvidenceSnapshotNotFoundError,
@@ -14,7 +15,9 @@ import type {
   AuditEvidenceReadinessSnapshot,
   AuditReportSection,
   AuditReportSmsControlMapping,
+  ConflictGuidanceAcknowledgement,
   CreateAuditEvidenceSnapshotInput,
+  CreateConflictGuidanceAcknowledgementInput,
   CreateMissionDecisionEvidenceLinkInput,
   CreatePostOperationAuditSignoffInput,
   CreatePostOperationEvidenceSnapshotInput,
@@ -29,6 +32,7 @@ import type {
 } from "./audit-evidence.types";
 import {
   validateCreateAuditEvidenceSnapshotInput,
+  validateCreateConflictGuidanceAcknowledgementInput,
   validateCreateMissionDecisionEvidenceLinkInput,
   validateCreatePostOperationAuditSignoffInput,
   validateCreatePostOperationEvidenceSnapshotInput,
@@ -153,6 +157,77 @@ export class AuditEvidenceService {
       }
 
       return await this.auditEvidenceRepository.listDecisionEvidenceLinks(
+        client,
+        missionId,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async createConflictGuidanceAcknowledgement(
+    missionId: string,
+    input: CreateConflictGuidanceAcknowledgementInput | undefined,
+  ): Promise<ConflictGuidanceAcknowledgement> {
+    const validated = validateCreateConflictGuidanceAcknowledgementInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      const overlayExists =
+        await this.auditEvidenceRepository.overlayExistsForMission(
+          client,
+          missionId,
+          validated.overlayId,
+        );
+
+      if (!overlayExists) {
+        throw new ConflictGuidanceOverlayNotFoundError(validated.overlayId);
+      }
+
+      return await this.auditEvidenceRepository.insertConflictGuidanceAcknowledgement(
+        client,
+        {
+          missionId,
+          conflictId: validated.conflictId,
+          overlayId: validated.overlayId,
+          guidanceActionCode: validated.guidanceActionCode,
+          evidenceAction: validated.evidenceAction,
+          acknowledgementRole: validated.acknowledgementRole,
+          acknowledgedBy: validated.acknowledgedBy,
+          acknowledgementNote: validated.acknowledgementNote,
+          guidanceSummary: validated.guidanceSummary,
+        },
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async listConflictGuidanceAcknowledgements(
+    missionId: string,
+  ): Promise<ConflictGuidanceAcknowledgement[]> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      return await this.auditEvidenceRepository.listConflictGuidanceAcknowledgements(
         client,
         missionId,
       );

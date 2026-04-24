@@ -4,6 +4,7 @@ import type {
   AuditEvidenceSnapshot,
   AuditEvidenceReadinessSnapshot,
   AuditReportSmsControlMapping,
+  ConflictGuidanceAcknowledgement,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PlanningApprovalHandoffEvidence,
@@ -48,6 +49,33 @@ interface CreateMissionDecisionEvidenceLinkRow {
   snapshotId: string;
   decisionType: MissionDecisionEvidenceLink["decisionType"];
   createdBy: string | null;
+}
+
+interface ConflictGuidanceAcknowledgementRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  conflict_id: string;
+  overlay_id: string;
+  guidance_action_code: ConflictGuidanceAcknowledgement["guidanceActionCode"];
+  evidence_action: ConflictGuidanceAcknowledgement["evidenceAction"];
+  acknowledgement_role: ConflictGuidanceAcknowledgement["acknowledgementRole"];
+  acknowledged_by: string;
+  acknowledgement_note: string | null;
+  guidance_summary: string | null;
+  pilot_instruction_status: ConflictGuidanceAcknowledgement["pilotInstructionStatus"];
+  created_at: Date;
+}
+
+interface CreateConflictGuidanceAcknowledgementRow {
+  missionId: string;
+  conflictId: string;
+  overlayId: string;
+  guidanceActionCode: ConflictGuidanceAcknowledgement["guidanceActionCode"];
+  evidenceAction: ConflictGuidanceAcknowledgement["evidenceAction"];
+  acknowledgementRole: ConflictGuidanceAcknowledgement["acknowledgementRole"];
+  acknowledgedBy: string;
+  acknowledgementNote: string | null;
+  guidanceSummary: string | null;
 }
 
 interface MissionAuditStateRow extends QueryResultRow {
@@ -182,6 +210,23 @@ const toMissionDecisionEvidenceLink = (
   auditEvidenceSnapshotId: row.audit_evidence_snapshot_id,
   decisionType: row.decision_type,
   createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
+const toConflictGuidanceAcknowledgement = (
+  row: ConflictGuidanceAcknowledgementRow,
+): ConflictGuidanceAcknowledgement => ({
+  id: row.id,
+  missionId: row.mission_id,
+  conflictId: row.conflict_id,
+  overlayId: row.overlay_id,
+  guidanceActionCode: row.guidance_action_code,
+  evidenceAction: row.evidence_action,
+  acknowledgementRole: row.acknowledgement_role,
+  acknowledgedBy: row.acknowledged_by,
+  acknowledgementNote: row.acknowledgement_note,
+  guidanceSummary: row.guidance_summary,
+  pilotInstructionStatus: row.pilot_instruction_status,
   createdAt: row.created_at.toISOString(),
 });
 
@@ -459,6 +504,80 @@ export class AuditEvidenceRepository {
     }
 
     return this.getDecisionEvidenceLinkForMission(tx, missionId, linkId);
+  }
+
+  async overlayExistsForMission(
+    tx: PoolClient,
+    missionId: string,
+    overlayId: string,
+  ): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from mission_external_overlays
+      where mission_id = $1
+        and id = $2
+      `,
+      [missionId, overlayId],
+    );
+
+    return result.rowCount === 1;
+  }
+
+  async insertConflictGuidanceAcknowledgement(
+    tx: PoolClient,
+    input: CreateConflictGuidanceAcknowledgementRow,
+  ): Promise<ConflictGuidanceAcknowledgement> {
+    const result = await tx.query<ConflictGuidanceAcknowledgementRow>(
+      `
+      insert into conflict_guidance_acknowledgements (
+        id,
+        mission_id,
+        conflict_id,
+        overlay_id,
+        guidance_action_code,
+        evidence_action,
+        acknowledgement_role,
+        acknowledged_by,
+        acknowledgement_note,
+        guidance_summary,
+        pilot_instruction_status
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'not_a_pilot_command')
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        input.conflictId,
+        input.overlayId,
+        input.guidanceActionCode,
+        input.evidenceAction,
+        input.acknowledgementRole,
+        input.acknowledgedBy,
+        input.acknowledgementNote,
+        input.guidanceSummary,
+      ],
+    );
+
+    return toConflictGuidanceAcknowledgement(result.rows[0]);
+  }
+
+  async listConflictGuidanceAcknowledgements(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<ConflictGuidanceAcknowledgement[]> {
+    const result = await tx.query<ConflictGuidanceAcknowledgementRow>(
+      `
+      select *
+      from conflict_guidance_acknowledgements
+      where mission_id = $1
+      order by created_at desc, id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toConflictGuidanceAcknowledgement);
   }
 
   async getLifecycleEvidenceEvents(

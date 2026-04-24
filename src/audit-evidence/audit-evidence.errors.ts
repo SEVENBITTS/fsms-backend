@@ -21,6 +21,15 @@ export class AuditEvidenceSnapshotNotFoundError extends Error {
   }
 }
 
+export class ConflictGuidanceOverlayNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = "CONFLICT_GUIDANCE_OVERLAY_NOT_FOUND";
+
+  constructor(overlayId: string) {
+    super(`Conflict guidance overlay not found for mission: ${overlayId}`);
+  }
+}
+
 export class AuditEvidenceMissionNotCompletedError extends Error {
   readonly statusCode = 409;
   readonly code = "MISSION_NOT_COMPLETED";

@@ -24,11 +24,13 @@ const clearTables = async () => {
   await pool.query("delete from post_operation_evidence_snapshots");
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
+  await pool.query("delete from conflict_guidance_acknowledgements");
   await pool.query("delete from audit_evidence_snapshots");
   await pool.query("delete from airspace_compliance_inputs");
   await pool.query("delete from mission_risk_inputs");
   await pool.query("delete from mission_events");
   await pool.query("delete from missions");
+  await pool.query("delete from mission_external_overlays");
   await pool.query("delete from pilot_readiness_evidence");
   await pool.query("delete from pilots");
   await pool.query("delete from maintenance_records");
@@ -173,6 +175,32 @@ const createReadyMission = async () => {
   };
 };
 
+const createConflictOverlay = async (missionId: string) => {
+  const overlayId = randomUUID();
+
+  await pool.query(
+    `
+    insert into mission_external_overlays (
+      id,
+      mission_id,
+      overlay_kind,
+      source_provider,
+      source_type,
+      source_record_id,
+      observed_at,
+      geometry_type,
+      latitude,
+      longitude,
+      severity
+    )
+    values ($1, $2, 'crewed_traffic', 'test-radar', 'adsb', 'traffic-1', $3, 'point', 51.5, -0.12, 'critical')
+    `,
+    [overlayId, missionId, "2026-04-18T12:00:00.000Z"],
+  );
+
+  return overlayId;
+};
+
 const createDecisionEvidenceLink = async (
   missionId: string,
   decisionType: "approval" | "dispatch",
@@ -283,6 +311,7 @@ const countRows = async (missionId: string) => {
     select
       (select status from missions where id = $1) as mission_status,
       (select count(*)::int from audit_evidence_snapshots where mission_id = $1) as snapshot_count,
+      (select count(*)::int from conflict_guidance_acknowledgements where mission_id = $1) as conflict_guidance_acknowledgement_count,
       (select count(*)::int from post_operation_evidence_snapshots where mission_id = $1) as post_operation_snapshot_count,
       (select count(*)::int from post_operation_audit_signoffs where mission_id = $1) as post_operation_signoff_count,
       (select count(*)::int from mission_decision_evidence_links where mission_id = $1) as decision_link_count,
@@ -301,6 +330,7 @@ const countRows = async (missionId: string) => {
   return result.rows[0] as {
     mission_status: string;
     snapshot_count: number;
+    conflict_guidance_acknowledgement_count: number;
     post_operation_snapshot_count: number;
     post_operation_signoff_count: number;
     decision_link_count: number;
@@ -829,6 +859,149 @@ describe("audit evidence snapshots", () => {
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.snapshots[0]).toEqual(beforeSnapshot);
+  });
+
+  it("records conflict guidance acknowledgements as decision-support evidence", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: " conflict-critical-1 ",
+        overlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: " ops-supervisor ",
+        acknowledgementNote: " Supervisor reviewed the advisory. ",
+        guidanceSummary: " Critical crewed traffic conflict advisory. ",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.acknowledgement).toMatchObject({
+      missionId,
+      conflictId: "conflict-critical-1",
+      overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "ops-supervisor",
+      acknowledgementNote: "Supervisor reviewed the advisory.",
+      guidanceSummary: "Critical crewed traffic conflict advisory.",
+      pilotInstructionStatus: "not_a_pilot_command",
+    });
+    expect(response.body.acknowledgement.id).toEqual(expect.any(String));
+    expect(response.body.acknowledgement.createdAt).toEqual(expect.any(String));
+    expect(await countRows(missionId)).toEqual({
+      ...before,
+      conflict_guidance_acknowledgement_count:
+        before.conflict_guidance_acknowledgement_count + 1,
+    });
+  });
+
+  it("lists conflict guidance acknowledgements only for the requested mission", async () => {
+    const first = await createReadyMission();
+    const second = await createReadyMission();
+    const firstOverlayId = await createConflictOverlay(first.missionId);
+    const secondOverlayId = await createConflictOverlay(second.missionId);
+
+    const firstResponse = await request(app)
+      .post(`/missions/${first.missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "first-conflict",
+        overlayId: firstOverlayId,
+        guidanceActionCode: "prepare_deconfliction",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+      });
+    const secondResponse = await request(app)
+      .post(`/missions/${second.missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "second-conflict",
+        overlayId: secondOverlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: "supervisor-b",
+      });
+
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/conflict-guidance-acknowledgements`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.acknowledgements).toHaveLength(1);
+    expect(response.body.acknowledgements[0]).toMatchObject({
+      missionId: first.missionId,
+      conflictId: "first-conflict",
+      overlayId: firstOverlayId,
+      evidenceAction: "record_operator_review",
+      pilotInstructionStatus: "not_a_pilot_command",
+    });
+  });
+
+  it("rejects invalid conflict guidance acknowledgement requests", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    const missingActorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-a",
+        overlayId,
+        guidanceActionCode: "review_separation",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "operator",
+      });
+    const monitorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-b",
+        overlayId,
+        guidanceActionCode: "monitor_context",
+        evidenceAction: "none",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+      });
+
+    expect(missingActorResponse.status).toBe(400);
+    expect(monitorResponse.status).toBe(400);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("does not acknowledge conflict guidance for another mission overlay", async () => {
+    const first = await createReadyMission();
+    const second = await createReadyMission();
+    const secondOverlayId = await createConflictOverlay(second.missionId);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app)
+      .post(`/missions/${first.missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "wrong-overlay-conflict",
+        overlayId: secondOverlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: "supervisor-a",
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "conflict_guidance_overlay_not_found",
+      },
+    });
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
   });
 
   it("captures post-operation completion evidence without mutating the mission", async () => {

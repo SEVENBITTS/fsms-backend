@@ -1,32 +1,27 @@
 # NEXT STEP
 
 ## Goal
-Add auditable acknowledgement expectations to conflict resolution guidance.
+Add conflict-guidance acknowledgement records for live-ops audit evidence.
 
 ---
 
 ## Build
 
 ### 1. Conflict guidance model
-- extend resolution guidance with acknowledgement requirements
-- identify the evidence action expected for operator or supervisor review
+- add immutable acknowledgement records linked to mission conflict overlays
+- capture the guidance action code and evidence action that was acknowledged
 - keep guidance explicitly advisory, not a pilot command
 
 ### 2. Live-ops presentation
-- show recommended attention
-- show action code
-- show authority required
-- show acknowledgement requirement
-- show evidence action
-- show pilot instruction status
-- show prohibited actions
-- show guidance rationale
+- expose a backend acknowledgement path that the UI can call next
+- keep acknowledgement separate from aircraft or pilot command transmission
+- make the recorded audit status explicit
 
 ### 3. Tests
-- conflict assessment includes acknowledgement expectations
-- critical conflicts require acknowledgement
-- critical conflicts require supervisor review evidence
-- guidance remains marked as not a pilot command
+- acknowledgement records can be created and listed by mission
+- records cannot be created for another mission's overlay
+- invalid monitor/no-evidence acknowledgements are rejected
+- records remain marked as not pilot commands
 
 ---
 
@@ -39,7 +34,7 @@ Add auditable acknowledgement expectations to conflict resolution guidance.
 ---
 
 ## Done When
-- Conflict responses include acknowledgement and evidence expectations
-- Live ops shows the audit expectation clearly
+- Conflict guidance acknowledgements are stored as auditable evidence
+- Acknowledgements are tied to the correct mission overlay
 - Guidance remains decision support and cannot be mistaken for pilot command transmission
-- Build and focused conflict tests pass
+- Build and focused audit/conflict tests pass

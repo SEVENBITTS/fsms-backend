@@ -1,5 +1,6 @@
 import { AuditEvidenceValidationError } from "./audit-evidence.errors";
 import type {
+  CreateConflictGuidanceAcknowledgementInput,
   CreateAuditEvidenceSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
   CreatePostOperationAuditSignoffInput,
@@ -7,8 +8,26 @@ import type {
   MissionDecisionType,
   PostOperationAuditSignoffDecision,
 } from "./audit-evidence.types";
+import type {
+  TrafficConflictGuidanceActionCode,
+  TrafficConflictGuidanceAuthority,
+  TrafficConflictGuidanceEvidenceAction,
+} from "../conflict-assessment/traffic-conflict-assessment.types";
 
 const DECISION_TYPES = new Set<MissionDecisionType>(["approval", "dispatch"]);
+const CONFLICT_GUIDANCE_ACTION_CODES =
+  new Set<TrafficConflictGuidanceActionCode>([
+    "review_separation",
+    "prepare_deconfliction",
+    "hold_or_suspend",
+  ]);
+const CONFLICT_GUIDANCE_EVIDENCE_ACTIONS =
+  new Set<TrafficConflictGuidanceEvidenceAction>([
+    "record_operator_review",
+    "record_supervisor_review",
+  ]);
+const CONFLICT_GUIDANCE_ACKNOWLEDGEMENT_ROLES =
+  new Set<TrafficConflictGuidanceAuthority>(["operator", "supervisor"]);
 const SIGNOFF_DECISIONS = new Set<PostOperationAuditSignoffDecision>([
   "approved",
   "rejected",
@@ -80,6 +99,49 @@ function requiredDecisionType(value: unknown): MissionDecisionType {
   return value as MissionDecisionType;
 }
 
+function requiredConflictGuidanceActionCode(
+  value: unknown,
+): TrafficConflictGuidanceActionCode {
+  if (
+    typeof value !== "string" ||
+    !CONFLICT_GUIDANCE_ACTION_CODES.has(value as TrafficConflictGuidanceActionCode)
+  ) {
+    throw new AuditEvidenceValidationError("guidanceActionCode is not supported");
+  }
+
+  return value as TrafficConflictGuidanceActionCode;
+}
+
+function requiredConflictGuidanceEvidenceAction(
+  value: unknown,
+): Exclude<TrafficConflictGuidanceEvidenceAction, "none"> {
+  if (
+    typeof value !== "string" ||
+    !CONFLICT_GUIDANCE_EVIDENCE_ACTIONS.has(value as TrafficConflictGuidanceEvidenceAction)
+  ) {
+    throw new AuditEvidenceValidationError(
+      "evidenceAction must require operator or supervisor review",
+    );
+  }
+
+  return value as Exclude<TrafficConflictGuidanceEvidenceAction, "none">;
+}
+
+function requiredAcknowledgementRole(
+  value: unknown,
+): TrafficConflictGuidanceAuthority {
+  if (
+    typeof value !== "string" ||
+    !CONFLICT_GUIDANCE_ACKNOWLEDGEMENT_ROLES.has(value as TrafficConflictGuidanceAuthority)
+  ) {
+    throw new AuditEvidenceValidationError(
+      "acknowledgementRole is not supported",
+    );
+  }
+
+  return value as TrafficConflictGuidanceAuthority;
+}
+
 function requiredSignoffDecision(value: unknown): PostOperationAuditSignoffDecision {
   if (
     typeof value !== "string" ||
@@ -116,6 +178,30 @@ export function validateCreateMissionDecisionEvidenceLinkInput(
     snapshotId: requiredString(input.snapshotId, "snapshotId"),
     decisionType: requiredDecisionType(input.decisionType),
     createdBy: optionalTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+export function validateCreateConflictGuidanceAcknowledgementInput(
+  input: CreateConflictGuidanceAcknowledgementInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new AuditEvidenceValidationError("Request body must be an object");
+  }
+
+  return {
+    conflictId: requiredString(input.conflictId, "conflictId"),
+    overlayId: requiredString(input.overlayId, "overlayId"),
+    guidanceActionCode: requiredConflictGuidanceActionCode(
+      input.guidanceActionCode,
+    ),
+    evidenceAction: requiredConflictGuidanceEvidenceAction(input.evidenceAction),
+    acknowledgementRole: requiredAcknowledgementRole(input.acknowledgementRole),
+    acknowledgedBy: requiredString(input.acknowledgedBy, "acknowledgedBy"),
+    acknowledgementNote: optionalTrimmed(
+      input.acknowledgementNote,
+      "acknowledgementNote",
+    ),
+    guidanceSummary: optionalTrimmed(input.guidanceSummary, "guidanceSummary"),
   };
 }
 
