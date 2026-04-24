@@ -47,6 +47,10 @@ export function createAuditEvidenceRouter(
     controller.renderPostOperationEvidenceSnapshot,
   );
   router.get(
+    "/:missionId/post-operation/evidence-snapshots/:snapshotId/readiness",
+    controller.getPostOperationEvidenceReadiness,
+  );
+  router.get(
     "/:missionId/post-operation/evidence-snapshots/:snapshotId/export/render/pdf",
     controller.generatePostOperationEvidencePdf,
   );

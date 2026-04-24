@@ -258,6 +258,41 @@ export interface PostOperationEvidenceRenderedReport {
   };
 }
 
+export type PostOperationEvidenceReadinessCategoryKey =
+  | "conflict_guidance_acknowledgements"
+  | "safety_action_closure_evidence"
+  | "regulatory_amendment_reviews";
+
+export interface PostOperationEvidenceReadinessCategory {
+  key: PostOperationEvidenceReadinessCategoryKey;
+  label: string;
+  count: number;
+  status: "present" | "not_recorded";
+  message: string;
+}
+
+export interface PostOperationEvidenceReadiness {
+  missionId: string;
+  snapshotId: string;
+  lifecycleState: string;
+  completionStatus: string;
+  evidenceCapturedAt: string;
+  signoff: {
+    status: "recorded" | "pending";
+    reviewDecision: PostOperationAuditSignoffDecision | null;
+    signoffId: string | null;
+    signedAt: string | null;
+  };
+  categories: PostOperationEvidenceReadinessCategory[];
+  summary: {
+    hasConflictGuidanceAcknowledgements: boolean;
+    hasSafetyActionClosureEvidence: boolean;
+    hasRegulatoryAmendmentReviews: boolean;
+    emptyCategoryCount: number;
+    message: string;
+  };
+}
+
 export interface PostOperationEvidencePdf {
   fileName: string;
   contentType: "application/pdf";

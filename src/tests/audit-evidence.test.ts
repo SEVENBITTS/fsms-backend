@@ -1535,6 +1535,134 @@ describe("audit evidence snapshots", () => {
     expect(await countRows(missionId)).toEqual(before);
   });
 
+  it("returns post-operation evidence readiness prompts without mutating audit state", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/readiness`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.readiness).toMatchObject({
+      missionId,
+      snapshotId: snapshotResponse.body.snapshot.id,
+      lifecycleState: "completed",
+      completionStatus: "completed",
+      evidenceCapturedAt: snapshotResponse.body.snapshot.createdAt,
+      signoff: {
+        status: "pending",
+        reviewDecision: null,
+        signoffId: null,
+        signedAt: null,
+      },
+      summary: {
+        hasConflictGuidanceAcknowledgements: false,
+        hasSafetyActionClosureEvidence: false,
+        hasRegulatoryAmendmentReviews: false,
+        emptyCategoryCount: 3,
+        message:
+          "Empty categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+      },
+    });
+    expect(response.body.readiness.categories).toEqual([
+      expect.objectContaining({
+        key: "conflict_guidance_acknowledgements",
+        count: 0,
+        status: "not_recorded",
+      }),
+      expect.objectContaining({
+        key: "safety_action_closure_evidence",
+        count: 0,
+        status: "not_recorded",
+      }),
+      expect.objectContaining({
+        key: "regulatory_amendment_reviews",
+        count: 0,
+        status: "not_recorded",
+      }),
+    ]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("summarizes post-operation evidence readiness with records and sign-off state", async () => {
+    const { missionId } = await createCompletedMission();
+    await createConflictGuidanceAcknowledgement(missionId, {
+      conflictId: "conflict-readiness-1",
+    });
+    await createSafetyActionClosureEvidence(missionId);
+    await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const signoffResponse = await request(app)
+      .post(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Alex Accountable",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+        signatureReference: "signature://accountable-manager/alex",
+        createdBy: "audit-admin",
+      });
+
+    expect(signoffResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/readiness`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.readiness).toMatchObject({
+      missionId,
+      snapshotId: snapshotResponse.body.snapshot.id,
+      signoff: {
+        status: "recorded",
+        reviewDecision: "approved",
+        signoffId: signoffResponse.body.signoff.id,
+        signedAt: "2026-04-18T18:00:00.000Z",
+      },
+      summary: {
+        hasConflictGuidanceAcknowledgements: true,
+        hasSafetyActionClosureEvidence: true,
+        hasRegulatoryAmendmentReviews: true,
+        emptyCategoryCount: 0,
+        message:
+          "All tracked evidence categories have records for accountable-manager review.",
+      },
+    });
+    expect(response.body.readiness.categories).toEqual([
+      expect.objectContaining({
+        key: "conflict_guidance_acknowledgements",
+        count: 1,
+        status: "present",
+      }),
+      expect.objectContaining({
+        key: "safety_action_closure_evidence",
+        count: 1,
+        status: "present",
+      }),
+      expect.objectContaining({
+        key: "regulatory_amendment_reviews",
+        count: 1,
+        status: "present",
+      }),
+    ]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
   it("does not leak safety action closure evidence from other missions", async () => {
     const first = await createCompletedMission();
     const second = await createCompletedMission();

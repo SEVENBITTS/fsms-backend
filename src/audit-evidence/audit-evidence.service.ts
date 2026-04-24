@@ -28,6 +28,8 @@ import type {
   PostOperationCompletionSnapshot,
   PostOperationEvidenceExportPackage,
   PostOperationEvidencePdf,
+  PostOperationEvidenceReadiness,
+  PostOperationEvidenceReadinessCategory,
   PostOperationEvidenceRenderedReport,
   PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
@@ -436,6 +438,54 @@ export class AuditEvidenceService {
     };
   }
 
+  async getPostOperationEvidenceReadiness(
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationEvidenceReadiness> {
+    const evidenceExport = await this.exportPostOperationEvidenceSnapshot(
+      missionId,
+      snapshotId,
+    );
+    const signoff = await this.getPostOperationAuditSignoff(
+      evidenceExport.missionId,
+      evidenceExport.snapshotId,
+    );
+    const categories = this.buildPostOperationEvidenceReadinessCategories(
+      evidenceExport,
+    );
+    const emptyCategoryCount = categories.filter(
+      (category) => category.status === "not_recorded",
+    ).length;
+
+    return {
+      missionId: evidenceExport.missionId,
+      snapshotId: evidenceExport.snapshotId,
+      lifecycleState: evidenceExport.lifecycleState,
+      completionStatus: evidenceExport.completionSnapshot.status,
+      evidenceCapturedAt: evidenceExport.createdAt,
+      signoff: {
+        status: signoff ? "recorded" : "pending",
+        reviewDecision: signoff?.reviewDecision ?? null,
+        signoffId: signoff?.id ?? null,
+        signedAt: signoff?.signedAt ?? null,
+      },
+      categories,
+      summary: {
+        hasConflictGuidanceAcknowledgements:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0,
+        hasSafetyActionClosureEvidence:
+          evidenceExport.safetyActionClosureEvidence.length > 0,
+        hasRegulatoryAmendmentReviews:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0,
+        emptyCategoryCount,
+        message:
+          emptyCategoryCount === 0
+            ? "All tracked evidence categories have records for accountable-manager review."
+            : "Empty categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+      },
+    };
+  }
+
   async createPostOperationAuditSignoff(
     missionId: string,
     snapshotId: string,
@@ -543,6 +593,52 @@ export class AuditEvidenceService {
     } finally {
       client.release();
     }
+  }
+
+  private buildPostOperationEvidenceReadinessCategories(
+    evidenceExport: PostOperationEvidenceExportPackage,
+  ): PostOperationEvidenceReadinessCategory[] {
+    return [
+      {
+        key: "conflict_guidance_acknowledgements",
+        label: "Conflict guidance acknowledgements",
+        count: evidenceExport.conflictGuidanceAcknowledgements.length,
+        status:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0
+            ? "Live conflict guidance acknowledgements are included for review."
+            : "No live conflict guidance acknowledgements are recorded in this evidence pack.",
+      },
+      {
+        key: "safety_action_closure_evidence",
+        label: "Safety action closure evidence",
+        count: evidenceExport.safetyActionClosureEvidence.length,
+        status:
+          evidenceExport.safetyActionClosureEvidence.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.safetyActionClosureEvidence.length > 0
+            ? "Safety action closure evidence is included for review."
+            : "No safety action closure evidence is recorded in this evidence pack.",
+      },
+      {
+        key: "regulatory_amendment_reviews",
+        label: "Regulatory amendment reviews",
+        count: evidenceExport.regulatoryAmendmentAlerts.length,
+        status:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0
+            ? "Regulatory amendment review records are included for review."
+            : "No regulatory amendment review records are recorded in this evidence pack.",
+      },
+    ];
   }
 
   private buildReadinessEvidenceSnapshot(

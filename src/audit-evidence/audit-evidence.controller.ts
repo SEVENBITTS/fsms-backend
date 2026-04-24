@@ -178,6 +178,23 @@ export class AuditEvidenceController {
     }
   };
 
+  getPostOperationEvidenceReadiness = async (
+    req: Request<PostOperationSnapshotParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const readiness =
+        await this.auditEvidenceService.getPostOperationEvidenceReadiness(
+          req.params.missionId,
+          req.params.snapshotId,
+        );
+      res.status(200).json({ readiness });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   generatePostOperationEvidencePdf = async (
     req: Request<PostOperationSnapshotParams>,
     res: Response,
