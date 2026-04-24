@@ -1999,6 +1999,14 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain('getElementById("evidence-panel")');
     expect(response.text).toContain("/readiness/audit-snapshots");
     expect(response.text).toContain("/approval-handoff");
+    expect(response.text).toContain("/post-operation/evidence-snapshots/${encodeURIComponent(");
+    expect(response.text).toContain("/readiness");
+    expect(response.text).toContain("Pre-sign-off Evidence Summary");
+    expect(response.text).toContain("Map view-state evidence");
+    expect(response.text).toContain("live_ops_map_view_state_snapshots");
+    expect(response.text).toContain("These counts are informational prompts for review before sign-off");
+    expect(response.text).toContain("Empty categories do not automatically reject the mission or certify compliance");
+    expect(response.text).toContain("metadata-only evidence and not pilot command guidance");
     expect(response.text).toContain('payload.decisionType = "dispatch"');
     expect(response.text).toContain("Aircraft Capability and Maintenance");
     expect(response.text).toContain("manufacturerMaintenanceScheduleRef");

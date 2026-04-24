@@ -772,6 +772,7 @@ const renderEvidenceHelpers = () => {
     uiState.postOperationEvidenceReport?.sourceExport?.regulatoryAmendmentAlerts
       ?.length ?? 0;
   const readiness = uiState.postOperationEvidenceReadiness;
+  const mapViewStateReadiness = readinessCategory("live_ops_map_view_state_snapshots");
   const conflictReadiness = readinessCategory("conflict_guidance_acknowledgements");
   const safetyActionReadiness = readinessCategory("safety_action_closure_evidence");
   const regulatoryReadiness = readinessCategory("regulatory_amendment_reviews");
@@ -869,6 +870,8 @@ const renderEvidenceHelpers = () => {
           <div>${renderBadge(reportSectionCount > 0 ? `${reportSectionCount} loaded` : "Not loaded")}</div>
           <div class="k">Completion status</div>
           <div>${renderBadge(readiness?.completionStatus ?? completionStatus ?? "Not recorded")}</div>
+          <div class="k">Map view-state evidence</div>
+          <div>${renderBadge(mapViewStateReadiness ? `${mapViewStateReadiness.count} ${mapViewStateReadiness.status}` : "Not loaded")}</div>
           <div class="k">Conflict acknowledgements</div>
           <div>${renderBadge(conflictReadiness ? `${conflictReadiness.count} ${conflictReadiness.status}` : "Not loaded")}</div>
           <div class="k">Safety action closures</div>
@@ -881,6 +884,7 @@ const renderEvidenceHelpers = () => {
             readiness?.summary?.message ??
               "These counts are informational prompts for review before sign-off. Empty categories do not automatically reject the mission or certify compliance.",
           )}
+          <br />Map view-state readiness is metadata-only evidence and not pilot command guidance.
           ${
             readiness?.categories?.length
               ? `<br />${readiness.categories
