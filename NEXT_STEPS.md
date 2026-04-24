@@ -1,26 +1,26 @@
 # NEXT STEP
 
 ## Goal
-Add a compact operator view of post-operation evidence pack contents before sign-off.
+Add a post-operation evidence readiness endpoint for structured pre-sign-off review.
 
 ---
 
 ## Build
 
-### 1. Workspace visibility
-- show report section summaries from the rendered post-operation evidence pack
-- surface regulatory amendment review count, conflict acknowledgement count, and safety action closure count together
-- keep report/PDF links as the source of full detail
+### 1. Backend summary
+- expose a mission/snapshot readiness summary for post-operation evidence packs
+- include counts for conflict acknowledgements, safety action closures, regulatory amendment reviews, and sign-off state
+- keep the summary read-only and derived from existing audit evidence
 
 ### 2. Operator clarity
-- explain what evidence is present before accountable-manager sign-off
-- keep missing evidence warnings informational, not automatic rejection
-- avoid presenting summaries as formal compliance certification
+- describe missing categories as review prompts, not hard failures
+- avoid legal compliance certification wording
+- keep accountable-manager sign-off separate from evidence readiness
 
 ### 3. Tests
-- parse-check the mission workspace script
-- run TypeScript build
-- run diff whitespace check
+- add focused API/service coverage for evidence readiness
+- run targeted audit evidence tests
+- run TypeScript build and diff whitespace check
 
 ---
 
@@ -33,6 +33,6 @@ Add a compact operator view of post-operation evidence pack contents before sign
 ---
 
 ## Done When
-- Operators can see key evidence-pack counts before signing off
-- Missing/empty evidence categories are visible but non-authoritative
-- Full report/PDF remains available for audit detail
+- API returns structured post-operation evidence readiness for a snapshot
+- Empty evidence categories are visible as informational review prompts
+- Existing report/PDF exports remain unchanged

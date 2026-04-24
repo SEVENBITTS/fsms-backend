@@ -297,6 +297,24 @@ const reportFieldValue = (heading, label) =>
   reportSection(heading)?.fields?.find((field) => field.label === label)?.value ??
   null;
 
+const countReportFieldsWithPrefix = (heading, labelPrefix) => {
+  const section = reportSection(heading);
+  if (!section) {
+    return 0;
+  }
+
+  return new Set(
+    section.fields
+      .map((field) => String(field.label ?? ""))
+      .filter((label) => label.startsWith(labelPrefix))
+      .map((label) => label.match(/\d+/)?.[0])
+      .filter(Boolean),
+  ).size;
+};
+
+const evidencePresenceLabel = (count, noun) =>
+  count > 0 ? `${count} ${noun}${count === 1 ? "" : "s"}` : `No ${noun}s`;
+
 const postOperationExportLinks = (snapshotId) => {
   if (!uiState.missionId || !snapshotId) {
     return { renderUrl: "", pdfUrl: "" };
@@ -678,6 +696,20 @@ const renderEvidenceHelpers = () => {
   const regulatoryAlertCount =
     uiState.postOperationEvidenceReport?.sourceExport?.regulatoryAmendmentAlerts
       ?.length ?? 0;
+  const conflictAcknowledgementCount = countReportFieldsWithPrefix(
+    "Live conflict guidance acknowledgements",
+    "Conflict acknowledgement",
+  );
+  const safetyActionClosureCount = countReportFieldsWithPrefix(
+    "Safety action closure evidence",
+    "Closure",
+  );
+  const reportSectionCount =
+    uiState.postOperationEvidenceReport?.report?.sections?.length ?? 0;
+  const completionStatus = reportFieldValue(
+    "Mission completion",
+    "Completion status",
+  );
   const exportLinks = postOperationExportLinks(postOperationSnapshot?.id);
   const signoffState =
     signoffDecision && signoffDecision !== "Pending sign-off"
@@ -757,6 +789,24 @@ const renderEvidenceHelpers = () => {
               `
               : `<div class="action-status tone-warn">No post-operation snapshot is available yet.</div>`
           }
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Pre-sign-off Evidence Summary</h4>
+        <div class="kv">
+          <div class="k">Report sections</div>
+          <div>${renderBadge(reportSectionCount > 0 ? `${reportSectionCount} loaded` : "Not loaded")}</div>
+          <div class="k">Completion status</div>
+          <div>${renderBadge(completionStatus ?? "Not recorded")}</div>
+          <div class="k">Conflict acknowledgements</div>
+          <div>${renderBadge(evidencePresenceLabel(conflictAcknowledgementCount, "acknowledgement"))}</div>
+          <div class="k">Safety action closures</div>
+          <div>${renderBadge(evidencePresenceLabel(safetyActionClosureCount, "closure"))}</div>
+          <div class="k">Regulatory amendment reviews</div>
+          <div>${renderBadge(evidencePresenceLabel(regulatoryAlertCount, "review"))}</div>
+        </div>
+        <div class="action-meta" style="margin-top: 12px;">
+          These counts are informational prompts for review before sign-off. Empty categories do not automatically reject the mission or certify compliance.
         </div>
       </section>
     </div>
