@@ -1,25 +1,26 @@
 # NEXT STEP
 
 ## Goal
-Surface conflict-guidance summaries in post-operation audit outputs.
+Require conflict-guidance acknowledgement summaries for audit integrity.
 
 ---
 
 ## Build
 
 ### 1. API behavior
-- keep storing guidance summaries on conflict acknowledgement records
-- include the stored guidance summary in post-operation rendered reports
-- include the stored guidance summary in post-operation audit PDFs
+- require `guidanceSummary` when recording conflict-guidance acknowledgements
+- reject missing or blank guidance summaries before writing evidence
+- keep valid live-ops acknowledgement flow unchanged
 
-### 2. Audit clarity
-- make the audit pack show what was acknowledged, not only who acknowledged it
+### 2. Database integrity
+- backfill any existing blank summaries with a migration-safe placeholder
+- enforce non-empty `guidance_summary` at the database layer
 - keep the pilot instruction status visible as `not_a_pilot_command`
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
-- rendered report includes conflict acknowledgement guidance summary
-- PDF export includes conflict acknowledgement guidance summary
+- API rejects missing or blank guidance summaries
+- database rejects direct blank guidance summaries
 - build and focused audit tests pass
 
 ---
@@ -33,6 +34,6 @@ Surface conflict-guidance summaries in post-operation audit outputs.
 ---
 
 ## Done When
-- Post-operation reports explain the conflict guidance summary that was acknowledged
-- Post-operation PDFs preserve the same summary for audit review
+- Conflict acknowledgement evidence cannot be created without the reviewed guidance summary
+- The API and database enforce the same non-empty summary rule
 - No operational authority or direct-control behavior changes

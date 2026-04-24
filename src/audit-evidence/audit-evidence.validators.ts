@@ -223,7 +223,7 @@ export function validateCreateConflictGuidanceAcknowledgementInput(
       input.acknowledgementNote,
       "acknowledgementNote",
     ),
-    guidanceSummary: optionalTrimmed(input.guidanceSummary, "guidanceSummary"),
+    guidanceSummary: requiredString(input.guidanceSummary, "guidanceSummary"),
   };
 }
 

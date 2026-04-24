@@ -959,6 +959,7 @@ describe("audit evidence snapshots", () => {
         evidenceAction: "record_operator_review",
         acknowledgementRole: "operator",
         acknowledgedBy: "operator-a",
+        guidanceSummary: "Operator reviewed separation advisory.",
       });
     const secondResponse = await request(app)
       .post(`/missions/${second.missionId}/conflict-guidance-acknowledgements`)
@@ -969,6 +970,7 @@ describe("audit evidence snapshots", () => {
         evidenceAction: "record_supervisor_review",
         acknowledgementRole: "supervisor",
         acknowledgedBy: "supervisor-b",
+        guidanceSummary: "Supervisor reviewed hold-or-suspend advisory.",
       });
 
     expect(firstResponse.status).toBe(201);
@@ -1001,6 +1003,7 @@ describe("audit evidence snapshots", () => {
       evidenceAction: "record_supervisor_review",
       acknowledgementRole: "supervisor",
       acknowledgedBy: "supervisor-a",
+      guidanceSummary: "Supervisor reviewed initial duplicate advisory.",
     });
     const beforeDuplicate = await countRows(missionId);
     const duplicateResponse = await request(app).post(endpoint).send({
@@ -1010,6 +1013,7 @@ describe("audit evidence snapshots", () => {
       evidenceAction: "record_supervisor_review",
       acknowledgementRole: "supervisor",
       acknowledgedBy: "supervisor-b",
+      guidanceSummary: "Supervisor reviewed duplicate advisory.",
     });
 
     expect(firstResponse.status).toBe(201);
@@ -1035,6 +1039,18 @@ describe("audit evidence snapshots", () => {
         guidanceActionCode: "review_separation",
         evidenceAction: "record_operator_review",
         acknowledgementRole: "operator",
+        guidanceSummary: "Operator review required.",
+      });
+    const missingGuidanceSummaryResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-summary",
+        overlayId,
+        guidanceActionCode: "review_separation",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+        guidanceSummary: " ",
       });
     const monitorResponse = await request(app)
       .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
@@ -1045,6 +1061,7 @@ describe("audit evidence snapshots", () => {
         evidenceAction: "none",
         acknowledgementRole: "operator",
         acknowledgedBy: "operator-a",
+        guidanceSummary: "Monitor action is not acknowledgement evidence.",
       });
     const supervisorEvidenceByOperatorResponse = await request(app)
       .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
@@ -1055,6 +1072,7 @@ describe("audit evidence snapshots", () => {
         evidenceAction: "record_supervisor_review",
         acknowledgementRole: "operator",
         acknowledgedBy: "operator-a",
+        guidanceSummary: "Supervisor evidence cannot be acknowledged by operator.",
       });
     const operatorEvidenceBySupervisorResponse = await request(app)
       .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
@@ -1065,9 +1083,11 @@ describe("audit evidence snapshots", () => {
         evidenceAction: "record_operator_review",
         acknowledgementRole: "supervisor",
         acknowledgedBy: "supervisor-a",
+        guidanceSummary: "Operator evidence cannot be acknowledged by supervisor.",
       });
 
     expect(missingActorResponse.status).toBe(400);
+    expect(missingGuidanceSummaryResponse.status).toBe(400);
     expect(monitorResponse.status).toBe(400);
     expect(supervisorEvidenceByOperatorResponse.status).toBe(400);
     expect(operatorEvidenceBySupervisorResponse.status).toBe(400);
@@ -1090,6 +1110,7 @@ describe("audit evidence snapshots", () => {
         evidenceAction: "record_supervisor_review",
         acknowledgementRole: "supervisor",
         acknowledgedBy: "supervisor-a",
+        guidanceSummary: "Supervisor reviewed the wrong overlay reference.",
       });
 
     expect(response.status).toBe(404);
@@ -2533,9 +2554,10 @@ describe("audit evidence snapshots", () => {
           guidance_action_code,
           evidence_action,
           acknowledgement_role,
-          acknowledged_by
+          acknowledged_by,
+          guidance_summary
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         `,
         [
           randomUUID(),
@@ -2546,6 +2568,7 @@ describe("audit evidence snapshots", () => {
           "record_supervisor_review",
           "operator",
           "operator-a",
+          "Direct DB role mismatch summary.",
         ],
       ),
     ).rejects.toMatchObject({
@@ -2569,9 +2592,10 @@ describe("audit evidence snapshots", () => {
         guidance_action_code,
         evidence_action,
         acknowledgement_role,
-        acknowledged_by
+        acknowledged_by,
+        guidance_summary
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `,
       [
         randomUUID(),
@@ -2582,6 +2606,7 @@ describe("audit evidence snapshots", () => {
         "record_supervisor_review",
         "supervisor",
         "supervisor-a",
+        "First direct duplicate summary.",
       ],
     );
     const beforeDuplicate = await countRows(missionId);
@@ -2597,9 +2622,10 @@ describe("audit evidence snapshots", () => {
           guidance_action_code,
           evidence_action,
           acknowledgement_role,
-          acknowledged_by
+          acknowledged_by,
+          guidance_summary
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         `,
         [
           randomUUID(),
@@ -2610,6 +2636,7 @@ describe("audit evidence snapshots", () => {
           "record_supervisor_review",
           "supervisor",
           "supervisor-b",
+          "Second direct duplicate summary.",
         ],
       ),
     ).rejects.toMatchObject({
@@ -2617,6 +2644,46 @@ describe("audit evidence snapshots", () => {
     });
 
     expect(await countRows(missionId)).toEqual(beforeDuplicate);
+  });
+
+  it("rejects direct conflict guidance acknowledgement records without a guidance summary", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into conflict_guidance_acknowledgements (
+          id,
+          mission_id,
+          conflict_id,
+          overlay_id,
+          guidance_action_code,
+          evidence_action,
+          acknowledgement_role,
+          acknowledged_by,
+          guidance_summary
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `,
+        [
+          randomUUID(),
+          missionId,
+          "conflict-db-empty-summary",
+          overlayId,
+          "hold_or_suspend",
+          "record_supervisor_review",
+          "supervisor",
+          "supervisor-a",
+          " ",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23514",
+    });
+
+    expect(await countRows(missionId)).toEqual(before);
   });
 
   it("rejects unsupported accountable-manager sign-off review decisions", async () => {

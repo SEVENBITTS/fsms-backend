@@ -88,7 +88,7 @@ export interface ConflictGuidanceAcknowledgement {
   acknowledgementRole: TrafficConflictGuidanceAuthority;
   acknowledgedBy: string;
   acknowledgementNote: string | null;
-  guidanceSummary: string | null;
+  guidanceSummary: string;
   pilotInstructionStatus: "not_a_pilot_command";
   createdAt: string;
 }

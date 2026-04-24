@@ -61,7 +61,7 @@ interface ConflictGuidanceAcknowledgementRow extends QueryResultRow {
   acknowledgement_role: ConflictGuidanceAcknowledgement["acknowledgementRole"];
   acknowledged_by: string;
   acknowledgement_note: string | null;
-  guidance_summary: string | null;
+  guidance_summary: string;
   pilot_instruction_status: ConflictGuidanceAcknowledgement["pilotInstructionStatus"];
   created_at: Date;
 }
@@ -75,7 +75,7 @@ interface CreateConflictGuidanceAcknowledgementRow {
   acknowledgementRole: ConflictGuidanceAcknowledgement["acknowledgementRole"];
   acknowledgedBy: string;
   acknowledgementNote: string | null;
-  guidanceSummary: string | null;
+  guidanceSummary: string;
 }
 
 interface MissionAuditStateRow extends QueryResultRow {
