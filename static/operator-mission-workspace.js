@@ -12,6 +12,7 @@ const missionBrowserList = document.getElementById("mission-browser-list");
 const missionBrowserDetail = document.getElementById("mission-browser-detail");
 const actionsPanel = document.getElementById("actions-panel");
 const evidencePanel = document.getElementById("evidence-panel");
+const regulatoryMatrixPanel = document.getElementById("regulatory-matrix-panel");
 const planningPanel = document.getElementById("planning-panel");
 const dispatchPanel = document.getElementById("dispatch-panel");
 const timelinePanel = document.getElementById("timeline-panel");
@@ -104,6 +105,7 @@ const uiState = {
   planningWorkspace: null,
   dispatchWorkspace: null,
   timeline: null,
+  regulatoryMatrix: [],
   missionList: [],
   missionQuery: "",
   transitionChecks: {},
@@ -206,6 +208,15 @@ const renderBadge = (value) =>
 
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
+
+const formatMatrixSource = (mapping) =>
+  [
+    mapping.sourceCode,
+    mapping.sourceVersionLabel,
+    mapping.requirementRef,
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
 const setConnectionState = (message, tone = "tone-muted") => {
   connectionStatus.className = `status-pill ${tone}`;
@@ -586,6 +597,77 @@ const renderEvidenceHelperCard = (helper, definition) => {
   `;
 };
 
+const renderRegulatoryMatrix = () => {
+  if (!regulatoryMatrixPanel) {
+    return;
+  }
+
+  const mappings = uiState.regulatoryMatrix ?? [];
+  if (mappings.length === 0) {
+    regulatoryMatrixPanel.innerHTML =
+      '<div class="empty-state">Regulatory requirement matrix is not loaded.</div>';
+    return;
+  }
+
+  const sourceMapped = mappings.filter(
+    (mapping) => mapping.reviewStatus === "source_mapped",
+  ).length;
+  const needsReview = mappings.filter((mapping) =>
+    String(mapping.reviewStatus ?? "").includes("needs"),
+  ).length;
+
+  regulatoryMatrixPanel.innerHTML = `
+    <div class="summary-grid" style="margin-bottom: 14px;">
+      <section class="summary-block">
+        <h4>Matrix Status</h4>
+        <div class="kv">
+          <div class="k">Mapped requirements</div>
+          <div>${escapeHtml(String(mappings.length))}</div>
+          <div class="k">Source mapped</div>
+          <div>${renderBadge(String(sourceMapped))}</div>
+          <div class="k">Needs review</div>
+          <div>${renderBadge(needsReview > 0 ? `${needsReview} needs review` : "Clear")}</div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Compliance Posture</h4>
+        <div class="kv">
+          <div class="k">Authority</div>
+          <div>CAA / UK UAS source context</div>
+          <div class="k">Status</div>
+          <div>${renderBadge(needsReview > 0 ? "Clause review required" : "Source mapped")}</div>
+          <div class="k">Boundary</div>
+          <div>Read-only traceability matrix; not a legal compliance certification.</div>
+        </div>
+      </section>
+    </div>
+    <ul class="list">
+      ${mappings
+        .map(
+          (mapping) => `
+            <li class="list-item">
+              <strong>${escapeHtml(mapping.requirementCode)}</strong>
+              <div>
+                ${renderBadge(mapping.reviewStatus)}
+                ${renderBadge(mapping.assuranceOwner)}
+              </div>
+              <div style="margin-top: 8px;">
+                ${escapeHtml(mapping.requirementSummary)}
+              </div>
+              <div class="timeline-meta" style="margin-top: 8px;">
+                Source: ${escapeHtml(formatMatrixSource(mapping))}<br />
+                Control: ${escapeHtml(mapping.controlCode)} - ${escapeHtml(mapping.controlTitle)}<br />
+                Evidence: ${escapeHtml(mapping.evidenceType)}<br />
+                Intent: ${escapeHtml(mapping.complianceIntent)}
+              </div>
+            </li>
+          `,
+        )
+        .join("")}
+    </ul>
+  `;
+};
+
 const bindEvidenceHelperForms = () => {
   document.querySelectorAll(".evidence-helper-form").forEach((form) => {
     form.addEventListener("submit", async (event) => {
@@ -628,6 +710,28 @@ const loadMissionList = async (query = "") => {
     missionBrowserList.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     missionBrowserDetail.innerHTML =
       '<div class="empty-state">Mission detail is unavailable because the mission list did not load.</div>';
+  }
+};
+
+const loadRegulatoryMatrix = async () => {
+  if (!regulatoryMatrixPanel) {
+    return;
+  }
+
+  regulatoryMatrixPanel.innerHTML =
+    '<div class="empty-state">Loading regulatory requirement matrix...</div>';
+
+  try {
+    const response = await fetchJson("/sms/regulatory-requirement-mappings");
+    uiState.regulatoryMatrix = response.mappings ?? [];
+    renderRegulatoryMatrix();
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to load regulatory requirement matrix";
+    uiState.regulatoryMatrix = [];
+    regulatoryMatrixPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   }
 };
 
@@ -997,6 +1101,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     overviewMetrics.innerHTML = "";
     actionsPanel.innerHTML = `<div class="empty-state">Load a mission before lifecycle actions can be evaluated.</div>`;
     evidencePanel.innerHTML = `<div class="empty-state">Load a mission before evidence helpers can be used.</div>`;
+    regulatoryMatrixPanel.innerHTML = `<div class="empty-state">Regulatory requirement matrix is available after the workspace loads.</div>`;
     planningPanel.innerHTML = `<div class="empty-state">Enter a mission UUID to load the planning workspace.</div>`;
     dispatchPanel.innerHTML = `<div class="empty-state">Dispatch state will appear after a mission is loaded.</div>`;
     timelinePanel.innerHTML = `<div class="empty-state">Timeline data will appear after a mission is loaded.</div>`;
@@ -1215,4 +1320,5 @@ if (initialMissionId) {
 }
 
 loadMissionList("");
+loadRegulatoryMatrix();
 loadMissionWorkspace(initialMissionId);

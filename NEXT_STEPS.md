@@ -1,28 +1,27 @@
 # NEXT STEP
 
 ## Goal
-Add the first read-only regulatory requirement matrix.
+Show the regulatory requirement matrix in the operator mission workspace.
 
 ---
 
 ## Build
 
-### 1. API behavior
-- add a regulatory requirement mapping endpoint under the SMS framework
-- seed source-level CAA/CAP rows for CAP 722, CAP 722A, and UK UAS regulatory context
-- map each source-level requirement to an existing platform control and evidence type
-- mark mappings as source-level or needing clause review rather than accepted compliance
+### 1. UI behavior
+- add a read-only regulatory requirement matrix panel
+- fetch the existing SMS regulatory mapping endpoint
+- summarize mapped requirements, source-mapped count, and clause-review count
+- show source, requirement summary, platform control, evidence type, assurance owner, and review status
 
 ### 2. Operator clarity
-- make CAA/CAP traceability visible before claiming formal compliance
-- show assurance owner, evidence type, review status, and platform control per requirement
-- keep the matrix read-only until formal clause-level review exists
+- make CAA/CAP traceability visible without leaving the workspace
+- keep unresolved clause review explicit
+- avoid presenting the matrix as a legal compliance certification
 
 ### 3. Tests
-- add API coverage for regulatory requirement mappings
-- confirm broken control links are rejected by database constraints
-- run focused SMS framework tests
-- run build
+- parse-check the mission workspace script
+- run TypeScript build
+- run diff whitespace check
 
 ---
 
@@ -35,7 +34,6 @@ Add the first read-only regulatory requirement matrix.
 ---
 
 ## Done When
-- Regulatory source mappings can be listed through the API
-- CAP/CAA rows are tied to existing controls and evidence types
-- Review status makes unresolved clause-level work explicit
+- Operator workspace displays the regulatory matrix
+- Review status and evidence type are visible per mapped requirement
 - No operational authority, approval, or direct-control behavior changes
