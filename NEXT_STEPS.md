@@ -1,32 +1,32 @@
 # NEXT STEP
 
 ## Goal
-Add post-operation evidence readiness counts to audit report render output.
+Surface rendered audit report readiness counts in the mission workspace.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- include readiness category counts in rendered post-operation evidence reports
-- show present/not-recorded status for map view-state, conflict acknowledgement, safety closure, and amendment review categories
-- keep sign-off readiness context visible alongside the report
+- show the rendered report readiness summary section in the mission workspace evidence panel
+- keep category counts/status aligned with the backend rendered report
+- make the report-readiness view distinct from accountable-manager sign-off
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- preserve review-prompt-only and not-compliance-certificate wording in report output
+- preserve review-prompt-only and not-compliance-certificate wording in the workspace UI
 
 ### 3. Tests
-- add focused audit render/PDF tests for readiness category counts
-- run audit-evidence focused tests
+- add focused mission workspace UI tests for rendered report readiness summary copy
+- run mission-planning UI tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Rendered report includes evidence readiness category counts/status
-- PDF/plain text include review-prompt-only wording
-- Sign-off state remains separate from evidence category readiness
+- Mission workspace displays readiness counts from the rendered report
+- Workspace still separates evidence category readiness from sign-off state
+- Copy remains explicit that readiness is review-prompt-only, not compliance certification
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation

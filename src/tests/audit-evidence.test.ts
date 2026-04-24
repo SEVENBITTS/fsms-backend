@@ -2092,6 +2092,41 @@ describe("audit evidence snapshots", () => {
             ]),
           },
           {
+            heading: "Evidence readiness summary",
+            fields: expect.arrayContaining([
+              {
+                label: "Readiness boundary",
+                value:
+                  "Evidence readiness categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+              },
+              {
+                label: "Sign-off separation",
+                value:
+                  "Accountable-manager sign-off remains separate from evidence category readiness.",
+              },
+              {
+                label: "Live-ops map view-state snapshots count",
+                value: 0,
+              },
+              {
+                label: "Live-ops map view-state snapshots status",
+                value: "not_recorded",
+              },
+              {
+                label: "Conflict guidance acknowledgements count",
+                value: 0,
+              },
+              {
+                label: "Safety action closure evidence count",
+                value: 0,
+              },
+              {
+                label: "Regulatory amendment reviews count",
+                value: 0,
+              },
+            ]),
+          },
+          {
             heading: "Live-ops map view-state evidence",
             fields: [
               {
@@ -2164,6 +2199,18 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
+      "Evidence readiness summary",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Readiness boundary: Evidence readiness categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Sign-off separation: Accountable-manager sign-off remains separate from evidence category readiness.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state snapshots status: not_recorded",
+    );
+    expect(response.body.report.report.plainText).toContain(
       "Live-ops map view-state evidence: No live-ops map view-state snapshots recorded",
     );
     expect(response.body.report.report.plainText).toContain(
@@ -2220,6 +2267,28 @@ describe("audit evidence snapshots", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.report.report.sections).toContainEqual({
+      heading: "Evidence readiness summary",
+      fields: expect.arrayContaining([
+        {
+          label: "Live-ops map view-state snapshots count",
+          value: 1,
+        },
+        {
+          label: "Live-ops map view-state snapshots status",
+          value: "present",
+        },
+        {
+          label: "Live-ops map view-state snapshots review prompt",
+          value:
+            "Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance.",
+        },
+        {
+          label: "Conflict guidance acknowledgements status",
+          value: "not_recorded",
+        },
+      ]),
+    });
+    expect(response.body.report.report.sections).toContainEqual({
       heading: "Live-ops map view-state evidence",
       fields: expect.arrayContaining([
         {
@@ -2259,6 +2328,12 @@ describe("audit evidence snapshots", () => {
     });
     expect(response.body.report.report.plainText).toContain(
       "Live-ops map view-state evidence",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state snapshots status: present",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state snapshots review prompt: Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance.",
     );
     expect(response.body.report.report.plainText).toContain(
       "Map view-state snapshot 1 replay cursor: 3 / 5",
@@ -2714,6 +2789,21 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.toString("latin1")).toContain(
       "Review decision/status: Pending sign-off",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Evidence readiness summary",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Evidence readiness categories are review prompts only",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "automatically reject the evidence pack or certify compliance.",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Sign-off separation: Accountable-manager sign-off remains separate",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Live-ops map view-state snapshots status: not_recorded",
     );
     expect(response.body.toString("latin1")).toContain(
       "Live-ops map view-state evidence",

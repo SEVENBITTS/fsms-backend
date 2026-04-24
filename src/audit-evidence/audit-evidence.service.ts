@@ -972,6 +972,37 @@ export class AuditEvidenceService {
         ],
       },
       {
+        heading: "Evidence readiness summary",
+        fields: [
+          {
+            label: "Readiness boundary",
+            value:
+              "Evidence readiness categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+          },
+          {
+            label: "Sign-off separation",
+            value:
+              "Accountable-manager sign-off remains separate from evidence category readiness.",
+          },
+          ...this.buildPostOperationEvidenceReadinessCategories(
+            evidenceExport,
+          ).flatMap((category) => [
+            {
+              label: `${category.label} count`,
+              value: category.count,
+            },
+            {
+              label: `${category.label} status`,
+              value: category.status,
+            },
+            {
+              label: `${category.label} review prompt`,
+              value: category.message,
+            },
+          ]),
+        ],
+      },
+      {
         heading: "Live-ops map view-state evidence",
         fields:
           evidenceExport.liveOpsMapViewStateSnapshots.length > 0
