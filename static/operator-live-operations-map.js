@@ -2688,6 +2688,10 @@ const formatSecondaryAdvisoryValue = (advisory) =>
     `Acknowledgement: ${advisory.acknowledgementStatus}`,
     `Pilot instruction: ${advisory.pilotInstructionStatus}`,
     `Rationale: ${advisory.guidanceRationale}`,
+    `Do not: ${
+      advisory.prohibitedActions.join(" | ") ||
+      "No additional constraints recorded"
+    }`,
     advisory.acknowledgement
       ? `Audit record: ${advisory.acknowledgement.id}`
       : null,

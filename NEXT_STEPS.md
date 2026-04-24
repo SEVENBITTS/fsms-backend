@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show secondary advisory rationale in live operations.
+Show secondary advisory prohibited-action context in live operations.
 
 ---
 
@@ -9,13 +9,13 @@ Show secondary advisory rationale in live operations.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- keep using existing advisory rationale data
-- enrich secondary advisory rows with the guidance rationale
+- keep using existing advisory prohibited-action data
+- enrich secondary advisory rows with the "do not" context
 - leave primary advisory rendering unchanged
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- show why secondary advisory guidance was generated
+- show what operators should not treat the secondary advisory as authorising
 - keep the existing summary, role, timing, and audit context visible
 - do not add any automated avoidance or direct-control behavior
 
@@ -35,6 +35,6 @@ Show secondary advisory rationale in live operations.
 ---
 
 ## Done When
-- Secondary advisory rows include rationale text
+- Secondary advisory rows include prohibited-action context
 - Existing secondary acknowledgement/audit context remains visible
 - No operational authority or direct-control behavior changes
