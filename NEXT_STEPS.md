@@ -1,24 +1,24 @@
 # NEXT STEP
 
 ## Goal
-Start the aircraft capability specification registry foundation.
+Link platform instances to curated aircraft capability specifications.
 
 ---
 
 ## Build
 
-### 1. Data model
-- create an aircraft type/specification table for UAV capability limits
-- include source/evidence metadata for manufacturer or curated specs
-- keep platform instances separate from aircraft type specifications
+### 1. Data link
+- add an optional aircraft type/specification reference to platforms
+- expose the linked spec when reading platform records
+- keep existing platform creation working without a spec reference
 
 ### 2. Future analysis path
-- prepare fields for weather, environment, payload, endurance, and GNSS capability checks
-- do not yet automate suitability decisions
-- plan to connect platform selection to aircraft specs in a later UI step
+- prepare mission planning to select a platform with known capability limits
+- do not yet automate weather/environment suitability decisions
+- keep aircraft spec source evidence visible for later audit review
 
 ### 3. Tests
-- add migration/validation coverage where appropriate
+- add focused platform tests for linked/unlinked specs
 - run targeted platform tests
 - run TypeScript build and diff whitespace check
 
@@ -33,6 +33,6 @@ Start the aircraft capability specification registry foundation.
 ---
 
 ## Done When
-- Repository has a safe aircraft spec registry foundation
-- Specs can preserve source/version evidence
-- Platform selection remains unchanged until the next UI/data-link step
+- Platforms can optionally reference a curated aircraft capability spec
+- Existing platform flows remain backwards compatible
+- Mission/platform UI can use this link in a later select-box step

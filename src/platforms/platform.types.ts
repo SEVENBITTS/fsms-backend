@@ -113,3 +113,58 @@ export interface PlatformReadinessCheck {
   reasons: PlatformReadinessReason[];
   maintenanceStatus: PlatformMaintenanceStatus;
 }
+
+export type AircraftSpecSourceType =
+  | "manufacturer"
+  | "curated"
+  | "operator"
+  | "api";
+
+export interface CreateAircraftTypeSpecInput {
+  displayName?: string;
+  manufacturer?: string;
+  model?: string;
+  aircraftType?: string | null;
+  mtomKg?: number | null;
+  maxPayloadKg?: number | null;
+  maxWindMps?: number | null;
+  maxGustMps?: number | null;
+  minOperatingTempC?: number | null;
+  maxOperatingTempC?: number | null;
+  maxFlightTimeMin?: number | null;
+  maxRangeM?: number | null;
+  ipRating?: string | null;
+  gnssCapability?: string | null;
+  rtkCapable?: boolean;
+  sourceType?: AircraftSpecSourceType;
+  sourceReference?: string;
+  sourceVersion?: string | null;
+  sourceUrl?: string | null;
+  notes?: string | null;
+}
+
+export interface AircraftTypeSpec {
+  id: string;
+  displayName: string;
+  manufacturer: string;
+  model: string;
+  aircraftType: string | null;
+  mtomKg: number | null;
+  maxPayloadKg: number | null;
+  maxWindMps: number | null;
+  maxGustMps: number | null;
+  minOperatingTempC: number | null;
+  maxOperatingTempC: number | null;
+  maxFlightTimeMin: number | null;
+  maxRangeM: number | null;
+  ipRating: string | null;
+  gnssCapability: string | null;
+  rtkCapable: boolean;
+  sourceType: AircraftSpecSourceType;
+  sourceReference: string;
+  sourceVersion: string | null;
+  sourceUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

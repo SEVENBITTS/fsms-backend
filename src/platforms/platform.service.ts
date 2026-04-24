@@ -6,6 +6,8 @@ import {
 } from "./platform.errors";
 import { PlatformRepository } from "./platform.repository";
 import type {
+  AircraftTypeSpec,
+  CreateAircraftTypeSpecInput,
   CreateMaintenanceRecordInput,
   CreateMaintenanceScheduleInput,
   CreatePlatformInput,
@@ -16,6 +18,7 @@ import type {
   PlatformReadinessResult,
 } from "./platform.types";
 import {
+  validateCreateAircraftTypeSpecInput,
   validateCreateMaintenanceRecordInput,
   validateCreateMaintenanceScheduleInput,
   validateCreatePlatformInput,
@@ -33,6 +36,32 @@ export class PlatformService {
 
     try {
       return await this.platformRepository.insertPlatform(client, validated);
+    } finally {
+      client.release();
+    }
+  }
+
+  async createAircraftTypeSpec(
+    input: CreateAircraftTypeSpecInput,
+  ): Promise<AircraftTypeSpec> {
+    const validated = validateCreateAircraftTypeSpecInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      return await this.platformRepository.insertAircraftTypeSpec(
+        client,
+        validated,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAircraftTypeSpecs(): Promise<AircraftTypeSpec[]> {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.platformRepository.listAircraftTypeSpecs(client);
     } finally {
       client.release();
     }
