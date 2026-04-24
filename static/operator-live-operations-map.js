@@ -39,6 +39,7 @@ const uiState = {
   areaRefreshChronology: null,
   conflictAssessment: null,
   conflictGuidanceAcknowledgements: [],
+  mapViewStateEvidenceSnapshots: [],
   missionList: [],
   missionQuery: "",
   replayPlayback: {
@@ -868,6 +869,7 @@ const resetLiveOperationsState = () => {
   uiState.areaRefreshChronology = null;
   uiState.conflictAssessment = null;
   uiState.conflictGuidanceAcknowledgements = [];
+  uiState.mapViewStateEvidenceSnapshots = [];
   uiState.replayPlayback.index = 0;
   uiState.mapViewStateEvidenceCapture = {
     status: "idle",
@@ -1847,6 +1849,14 @@ const mapViewStateEvidencePayload = () => {
   };
 };
 
+const loadMapViewStateEvidenceSnapshots = async (missionId) => {
+  const response = await fetchJson(
+    `/missions/${encodeURIComponent(missionId)}/live-operations/map-view-state/audit-snapshots`,
+  );
+  uiState.mapViewStateEvidenceSnapshots = response.snapshots ?? [];
+  return uiState.mapViewStateEvidenceSnapshots;
+};
+
 const recordMapViewStateEvidenceSnapshot = async () => {
   const missionId = normalizeMissionId(uiState.missionId);
   if (!hasSelectedMissionId(missionId)) {
@@ -1884,6 +1894,20 @@ const recordMapViewStateEvidenceSnapshot = async () => {
       snapshotId: response.snapshot?.id ?? null,
       createdAt: response.snapshot?.createdAt ?? null,
     };
+    if (response.snapshot) {
+      uiState.mapViewStateEvidenceSnapshots = [
+        response.snapshot,
+        ...(uiState.mapViewStateEvidenceSnapshots ?? []).filter(
+          (snapshot) => snapshot.id !== response.snapshot.id,
+        ),
+      ];
+    }
+    try {
+      await loadMapViewStateEvidenceSnapshots(missionId);
+    } catch {
+      uiState.mapViewStateEvidenceCapture.message =
+        "Metadata-only map view-state evidence snapshot recorded. Recent history refresh failed.";
+    }
   } catch (error) {
     uiState.mapViewStateEvidenceCapture = {
       status: "failed",
@@ -1897,6 +1921,46 @@ const recordMapViewStateEvidenceSnapshot = async () => {
   }
 
   renderStatus();
+};
+
+const renderMapViewStateEvidenceHistory = () => {
+  const snapshots = (uiState.mapViewStateEvidenceSnapshots ?? []).slice(0, 3);
+
+  if (snapshots.length === 0) {
+    return `
+      <div class="empty-state">
+        No backend-recorded map view-state evidence snapshots yet.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="list compact-list">
+      ${snapshots
+        .map(
+          (snapshot) => `
+            <article class="list-card">
+              <div class="list-card-title">
+                Snapshot ${escapeHtml(snapshot.id ?? "unknown")}
+              </div>
+              <div class="kv">
+                <div class="k">Captured</div>
+                <div>${escapeHtml(formatDateTime(snapshot.createdAt))}</div>
+                <div class="k">Replay cursor</div>
+                <div>${escapeHtml(snapshot.replayCursor ?? "Not recorded")}</div>
+                <div class="k">Area freshness filter</div>
+                <div>${renderBadge(snapshot.areaFreshnessFilter ?? "Not recorded")}</div>
+                <div class="k">Area overlays</div>
+                <div>${escapeHtml(`${snapshot.visibleAreaOverlayCount ?? 0} / ${snapshot.totalAreaOverlayCount ?? 0} visible, ${snapshot.degradedAreaOverlayCount ?? 0} degraded`)}</div>
+                <div class="k">Alerts / conflicts</div>
+                <div>${escapeHtml(`${snapshot.openAlertCount ?? 0} open alerts, ${snapshot.activeConflictCount ?? 0} active conflicts`)}</div>
+              </div>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 };
 
 const renderList = (items, title) => {
@@ -2953,6 +3017,13 @@ const renderStatus = () => {
         </div>
       </section>
       <section class="summary-block">
+        <h4>Recent Map View-State Evidence</h4>
+        ${renderMapViewStateEvidenceHistory()}
+        <div class="alert-window-meta">
+          Snapshot history is backend audit metadata only. It is not screenshot evidence, not an exported file, and not pilot command guidance.
+        </div>
+      </section>
+      <section class="summary-block">
         <h4>Operational Posture</h4>
         <div class="kv">
           <div class="k">Approval</div>
@@ -3698,6 +3769,7 @@ const loadLiveOperationsView = async (missionId) => {
       areaRefreshChronologyResponse,
       conflictAssessmentResponse,
       conflictGuidanceAcknowledgementsResponse,
+      mapViewStateEvidenceSnapshotsResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${normalizedMissionId}/planning-workspace`),
       fetchJson(`/missions/${normalizedMissionId}/dispatch-workspace`),
@@ -3711,6 +3783,9 @@ const loadLiveOperationsView = async (missionId) => {
       ),
       fetchJson(`/missions/${normalizedMissionId}/conflict-assessment`),
       fetchJson(`/missions/${normalizedMissionId}/conflict-guidance-acknowledgements`),
+      fetchJson(
+        `/missions/${normalizedMissionId}/live-operations/map-view-state/audit-snapshots`,
+      ),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -3724,6 +3799,8 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.conflictAssessment = conflictAssessmentResponse;
     uiState.conflictGuidanceAcknowledgements =
       conflictGuidanceAcknowledgementsResponse.acknowledgements ?? [];
+    uiState.mapViewStateEvidenceSnapshots =
+      mapViewStateEvidenceSnapshotsResponse.snapshots ?? [];
     uiState.replayPlayback.index = 0;
     renderMissionBrowser();
     renderLiveOperations();
@@ -3741,6 +3818,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.areaRefreshChronology = null;
     uiState.conflictAssessment = null;
     uiState.conflictGuidanceAcknowledgements = [];
+    uiState.mapViewStateEvidenceSnapshots = [];
     uiState.replayPlayback.index = 0;
     renderMissionBrowser();
     clearPanels(message);

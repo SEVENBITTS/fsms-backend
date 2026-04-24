@@ -2144,7 +2144,9 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Area refresh runs");
     expect(response.text).toContain("View-state metadata only; no evidence export has been generated.");
     expect(response.text).toContain("mapViewStateEvidencePayload");
+    expect(response.text).toContain("loadMapViewStateEvidenceSnapshots");
     expect(response.text).toContain("recordMapViewStateEvidenceSnapshot");
+    expect(response.text).toContain("renderMapViewStateEvidenceHistory");
     expect(response.text).toContain("data-record-map-view-state-evidence");
     expect(response.text).toContain("Record map view-state evidence");
     expect(response.text).toContain("/live-operations/map-view-state/audit-snapshots");
@@ -2154,6 +2156,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("activeConflictCount");
     expect(response.text).toContain("areaRefreshRunCount");
     expect(response.text).toContain("Metadata-only map view-state evidence snapshot recorded.");
+    expect(response.text).toContain("Recent Map View-State Evidence");
+    expect(response.text).toContain("No backend-recorded map view-state evidence snapshots yet.");
+    expect(response.text).toContain("Snapshot history is backend audit metadata only.");
+    expect(response.text).toContain("not screenshot evidence, not an exported file, and not pilot command guidance");
     expect(response.text).toContain("does not create screenshots, create local files, or transmit pilot instructions");
     expect(response.text).toContain("areaFreshnessOverlays");
     expect(response.text).toContain("area-freshness-overlay");
