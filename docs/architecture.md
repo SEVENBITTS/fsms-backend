@@ -1,4 +1,4 @@
-# FSMS Backend Architecture
+# VerityAtlas Backend Architecture
 
 ## Current Note
 
@@ -11,7 +11,7 @@ For the current TypeScript/Express mission workflow and live-operations directio
 
 ## Overview
 
-The FSMS backend provides airspace monitoring, compliance evaluation, and replay visualization for flight telemetry.
+The VerityAtlas backend provides airspace monitoring, compliance evaluation, and replay visualization for flight telemetry.
 
 The system evaluates drone flight paths against airspace restrictions and provides predictive alerts for potential breaches.
 

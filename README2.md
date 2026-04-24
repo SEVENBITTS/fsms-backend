@@ -1,4 +1,4 @@
-# FSMS Validation Demo
+# VerityAtlas Validation Demo
 
 ## Setup
 

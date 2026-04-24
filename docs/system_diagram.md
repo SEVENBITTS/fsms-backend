@@ -1,4 +1,4 @@
-# FSMS System Architecture Diagram
+# VerityAtlas System Architecture Diagram
 
 ```mermaid
 flowchart TD

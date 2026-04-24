@@ -70,6 +70,7 @@ import { createExternalOverlayRouter } from "./external-overlays/external-overla
 import { TrafficConflictAssessmentService } from "./conflict-assessment/traffic-conflict-assessment.service";
 import { TrafficConflictAssessmentController } from "./conflict-assessment/traffic-conflict-assessment.controller";
 import { createTrafficConflictAssessmentRouter } from "./conflict-assessment/traffic-conflict-assessment.routes";
+import { BRANDING } from "./config/branding";
 
 const projectRoot = path.resolve(__dirname, "..");
 const staticRoot = path.resolve(projectRoot, "static");
@@ -261,7 +262,7 @@ app.get("/operator/missions/:missionId/live-operations", (_req, res) => {
   res.type("html").send(readStaticHtml("operator-live-operations-map.html"));
 });
 app.get("/", (_req, res) => {
-  res.status(200).send("FSMS backend is running");
+  res.status(200).send(BRANDING.backendStatusText);
 });
 
 

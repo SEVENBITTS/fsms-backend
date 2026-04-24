@@ -1,8 +1,8 @@
-# FSMS Product Direction
+# VerityAtlas Product Direction
 
 ## Purpose
 
-The end product is a UAV Flight Safety Management System that supports safety assurance from planning through live operations and post-operation review.
+The end product is VerityAtlas, a UAV operations platform that supports safety assurance from planning through live operations and post-operation review.
 
 The system should help answer:
 
@@ -16,7 +16,7 @@ Future work should stay focused on safety, compliance, operational assurance, an
 
 ## Active Product Core
 
-The TypeScript backend is the active FSMS product core.
+The TypeScript backend is the active VerityAtlas product core.
 
 It owns the long-term direction for:
 
@@ -74,7 +74,7 @@ Regulatory logic should be structured as profiles or rule packs rather than scat
 
 ## Audit Principle
 
-The FSMS should be built as an evidence machine.
+VerityAtlas should be built as an evidence machine.
 
 Important safety and compliance decisions should produce auditable records, including:
 
