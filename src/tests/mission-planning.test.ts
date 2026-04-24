@@ -2171,6 +2171,14 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Metadata-only map view-state evidence snapshot recorded.");
     expect(response.text).toContain("Recent Map View-State Evidence");
     expect(response.text).toContain("No backend-recorded map view-state evidence snapshots yet.");
+    expect(response.text).toContain("Latest metadata snapshot");
+    expect(response.text).toContain("Older metadata snapshot");
+    expect(response.text).toContain("History status");
+    expect(response.text).toContain("Capture scope");
+    expect(response.text).toContain("Pilot instruction status");
+    expect(response.text).toContain("metadata_only");
+    expect(response.text).toContain("not_a_pilot_command");
+    expect(response.text).toContain("Review cue: latest/older status supports post-operation review only");
     expect(response.text).toContain("Snapshot history is backend audit metadata only.");
     expect(response.text).toContain("not screenshot evidence, not an exported file, and not pilot command guidance");
     expect(response.text).toContain("does not create screenshots, create local files, or transmit pilot instructions");

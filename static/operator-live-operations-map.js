@@ -1938,14 +1938,17 @@ const renderMapViewStateEvidenceHistory = () => {
     <div class="list compact-list">
       ${snapshots
         .map(
-          (snapshot) => `
+          (snapshot, index) => `
             <article class="list-card">
               <div class="list-card-title">
                 Snapshot ${escapeHtml(snapshot.id ?? "unknown")}
+                ${index === 0 ? renderBadge("Latest metadata snapshot") : renderBadge("Older metadata snapshot")}
               </div>
               <div class="kv">
                 <div class="k">Captured</div>
                 <div>${escapeHtml(formatDateTime(snapshot.createdAt))}</div>
+                <div class="k">History status</div>
+                <div>${renderBadge(index === 0 ? "Latest" : "Older")}</div>
                 <div class="k">Replay cursor</div>
                 <div>${escapeHtml(snapshot.replayCursor ?? "Not recorded")}</div>
                 <div class="k">Area freshness filter</div>
@@ -1954,6 +1957,13 @@ const renderMapViewStateEvidenceHistory = () => {
                 <div>${escapeHtml(`${snapshot.visibleAreaOverlayCount ?? 0} / ${snapshot.totalAreaOverlayCount ?? 0} visible, ${snapshot.degradedAreaOverlayCount ?? 0} degraded`)}</div>
                 <div class="k">Alerts / conflicts</div>
                 <div>${escapeHtml(`${snapshot.openAlertCount ?? 0} open alerts, ${snapshot.activeConflictCount ?? 0} active conflicts`)}</div>
+                <div class="k">Capture scope</div>
+                <div>${renderBadge(snapshot.captureScope ?? "metadata_only")}</div>
+                <div class="k">Pilot instruction status</div>
+                <div>${renderBadge(snapshot.pilotInstructionStatus ?? "not_a_pilot_command")}</div>
+              </div>
+              <div class="alert-window-meta">
+                Review cue: latest/older status supports post-operation review only; this remains metadata-only evidence, not screenshot evidence, and not pilot command guidance.
               </div>
             </article>
           `,
