@@ -37,6 +37,7 @@ const uiState = {
   alerts: [],
   externalOverlays: [],
   conflictAssessment: null,
+  conflictGuidanceAcknowledgements: [],
   missionList: [],
   missionQuery: "",
   replayPlayback: {
@@ -503,6 +504,7 @@ const resetLiveOperationsState = () => {
   uiState.alerts = [];
   uiState.externalOverlays = [];
   uiState.conflictAssessment = null;
+  uiState.conflictGuidanceAcknowledgements = [];
   uiState.replayPlayback.index = 0;
 };
 
@@ -969,6 +971,14 @@ const fallbackResolutionGuidance = (conflict) => ({
   rationale: conflict?.explanation ?? "No conflict rationale is currently available.",
 });
 
+const matchingConflictGuidanceAcknowledgement = (advisory) =>
+  (uiState.conflictGuidanceAcknowledgements ?? []).find(
+    (acknowledgement) =>
+      acknowledgement.overlayId === advisory.overlayId &&
+      acknowledgement.guidanceActionCode === advisory.actionCode &&
+      acknowledgement.evidenceAction === advisory.evidenceAction,
+  ) ?? null;
+
 const deriveConflictAdvisories = () =>
   activeConflictAssessmentItems().slice(0, 5).map((conflict) => {
     const guidance =
@@ -991,6 +1001,7 @@ const deriveConflictAdvisories = () =>
 
     return {
       id: conflict.id,
+      overlayId: conflict.overlayId,
       tone: conflict.severity,
       headline,
       actionCode: guidance.actionCode,
@@ -1016,6 +1027,18 @@ const deriveConflictAdvisories = () =>
         .filter(Boolean)
         .join(" | "),
     };
+  }).map((advisory) => {
+    const acknowledgement = matchingConflictGuidanceAcknowledgement(advisory);
+
+    return {
+      ...advisory,
+      acknowledgement,
+      acknowledgementStatus: acknowledgement
+        ? `Recorded by ${acknowledgement.acknowledgedBy}`
+        : advisory.acknowledgementRequired
+          ? "Required"
+          : "Not required",
+    };
   });
 
 const conflictAdvisorySummary = () => {
@@ -1032,7 +1055,7 @@ const conflictAdvisorySummary = () => {
   return {
     label: `${advisories.length} advisory item${advisories.length === 1 ? "" : "s"}`,
     tone: primary.tone,
-    detail: `${primary.recommendation} | ${primary.relatedObject} | ${primary.summary}`,
+    detail: `${primary.recommendation} | ${primary.acknowledgementStatus} | ${primary.relatedObject} | ${primary.summary}`,
   };
 };
 
@@ -2668,6 +2691,7 @@ const renderConflictAdvisory = () => {
                   Action code: ${escapeHtml(primary.actionCode)}<br />
                   Authority required: ${escapeHtml(primary.authorityRequired)}<br />
                   Acknowledgement required: ${escapeHtml(primary.acknowledgementRequired ? "yes" : "no")}<br />
+                  Acknowledgement status: ${escapeHtml(primary.acknowledgementStatus)}<br />
                   Evidence action: ${escapeHtml(primary.evidenceAction)}<br />
                   Pilot instruction status: ${escapeHtml(primary.pilotInstructionStatus)}<br />
                   Related object: ${escapeHtml(primary.relatedObject)}<br />
@@ -2681,6 +2705,35 @@ const renderConflictAdvisory = () => {
                 <div class="alert-window-meta">
                   Do not: ${escapeHtml(primary.prohibitedActions.join(" | ") || "No additional constraints recorded")}
                 </div>
+                ${
+                  primary.acknowledgement
+                    ? `
+                      <div class="alert-window-meta">
+                        Audit record: ${escapeHtml(primary.acknowledgement.id)}<br />
+                        Recorded at: ${escapeHtml(formatDateTime(primary.acknowledgement.createdAt))}<br />
+                        Note: ${escapeHtml(primary.acknowledgement.acknowledgementNote ?? "No note recorded")}
+                      </div>
+                    `
+                    : primary.acknowledgementRequired && primary.evidenceAction !== "none"
+                      ? `
+                        <button
+                          type="button"
+                          class="action-button"
+                          data-acknowledge-conflict="${escapeHtml(primary.id)}"
+                          data-overlay-id="${escapeHtml(primary.overlayId)}"
+                          data-action-code="${escapeHtml(primary.actionCode)}"
+                          data-evidence-action="${escapeHtml(primary.evidenceAction)}"
+                          data-acknowledgement-role="${escapeHtml(primary.authorityRequired)}"
+                          data-guidance-summary="${escapeHtml(primary.recommendation)}"
+                        >
+                          Record audit acknowledgement
+                        </button>
+                        <div class="alert-window-meta">
+                          This records operator/supervisor review evidence only. It does not transmit pilot instructions.
+                        </div>
+                      `
+                      : ""
+                }
               </article>
             `
             : '<div class="empty-state">No primary advisory is currently derived.</div>'
@@ -2694,7 +2747,7 @@ const renderConflictAdvisory = () => {
             : renderList(
                 secondary.map((advisory) => ({
                   label: `${advisory.actionCode} | ${advisory.relatedObject}`,
-                  value: `${advisory.recommendation} | ${advisory.authorityRequired} | ${advisory.evidenceAction} | ${advisory.summary}`,
+                  value: `${advisory.recommendation} | ${advisory.authorityRequired} | ${advisory.evidenceAction} | ${advisory.acknowledgementStatus} | ${advisory.summary}`,
                 })),
                 "additional advisories",
               )
@@ -2703,6 +2756,66 @@ const renderConflictAdvisory = () => {
     </div>
   `;
 };
+
+const loadConflictGuidanceAcknowledgements = async (missionId) => {
+  const response = await fetchJson(
+    `/missions/${missionId}/conflict-guidance-acknowledgements`,
+  );
+  uiState.conflictGuidanceAcknowledgements = response.acknowledgements ?? [];
+};
+
+const recordConflictGuidanceAcknowledgement = async (button) => {
+  const missionId = normalizeMissionId(uiState.missionId);
+  if (!hasSelectedMissionId(missionId)) {
+    setConnectionState("Load a mission before recording acknowledgement", "tone-warn");
+    return;
+  }
+
+  button.disabled = true;
+  const acknowledgedBy =
+    window.prompt("Record acknowledgement by", "operator")?.trim() ?? "";
+
+  if (!acknowledgedBy) {
+    button.disabled = false;
+    setConnectionState("Acknowledgement cancelled", "tone-warn");
+    return;
+  }
+
+  const acknowledgementNote =
+    window.prompt(
+      "Optional audit note",
+      "Reviewed in live operations; decision-support advisory only.",
+    )?.trim() ?? "";
+
+  try {
+    await fetchJson(`/missions/${missionId}/conflict-guidance-acknowledgements`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        conflictId: button.dataset.acknowledgeConflict,
+        overlayId: button.dataset.overlayId,
+        guidanceActionCode: button.dataset.actionCode,
+        evidenceAction: button.dataset.evidenceAction,
+        acknowledgementRole: button.dataset.acknowledgementRole,
+        acknowledgedBy,
+        acknowledgementNote,
+        guidanceSummary: button.dataset.guidanceSummary,
+      }),
+    });
+
+    await loadConflictGuidanceAcknowledgements(missionId);
+    renderLiveOperations();
+    setConnectionState("Conflict guidance acknowledgement recorded", "tone-ok");
+  } catch (error) {
+    button.disabled = false;
+    const message =
+      error instanceof Error ? error.message : "Failed to record acknowledgement";
+    setConnectionState(message, "tone-bad");
+  }
+};
+
 const renderTimeline = () => {
   const relevant = correlatedConflictTimelineItems();
 
@@ -2848,6 +2961,7 @@ const loadLiveOperationsView = async (missionId) => {
       alertsResponse,
       externalOverlayResponse,
       conflictAssessmentResponse,
+      conflictGuidanceAcknowledgementsResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${normalizedMissionId}/planning-workspace`),
       fetchJson(`/missions/${normalizedMissionId}/dispatch-workspace`),
@@ -2857,6 +2971,7 @@ const loadLiveOperationsView = async (missionId) => {
       fetchJson(`/missions/${normalizedMissionId}/alerts`),
       fetchJson(`/missions/${normalizedMissionId}/external-overlays`),
       fetchJson(`/missions/${normalizedMissionId}/conflict-assessment`),
+      fetchJson(`/missions/${normalizedMissionId}/conflict-guidance-acknowledgements`),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -2867,6 +2982,8 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.alerts = alertsResponse.alerts ?? [];
     uiState.externalOverlays = externalOverlayResponse.overlays ?? [];
     uiState.conflictAssessment = conflictAssessmentResponse;
+    uiState.conflictGuidanceAcknowledgements =
+      conflictGuidanceAcknowledgementsResponse.acknowledgements ?? [];
     uiState.replayPlayback.index = 0;
     renderMissionBrowser();
     renderLiveOperations();
@@ -2882,6 +2999,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.alerts = [];
     uiState.externalOverlays = [];
     uiState.conflictAssessment = null;
+    uiState.conflictGuidanceAcknowledgements = [];
     uiState.replayPlayback.index = 0;
     renderMissionBrowser();
     clearPanels(message);
@@ -2967,6 +3085,20 @@ jumpControlsPanel.addEventListener("click", (event) => {
   stopReplayPlayback();
   setReplayIndex(nextIndex);
   renderLiveOperations();
+});
+
+conflictAdvisoryPanel.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("[data-acknowledge-conflict]");
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  recordConflictGuidanceAcknowledgement(button);
 });
 
 openWorkspaceButton.addEventListener("click", () => {
