@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show linked aircraft capability source context in the operator mission workspace.
+Add linked aircraft capability source context to the operator mission workspace.
 
 ---
 
