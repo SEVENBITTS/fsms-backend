@@ -2036,7 +2036,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/planning-workspace");
     expect(response.text).toContain("/dispatch-workspace");
     expect(response.text).toContain("/operations-timeline");
-    expect(response.text).toContain("/operator/missions/${encodeURIComponent(missionId)}");
+    expect(response.text).toContain("/operator/missions/${encodeURIComponent(normalizedMissionId)}");
     expect(response.text).toContain("buildOverlayCards");
     expect(response.text).toContain("normalizeMissionId");
     expect(response.text).toContain("isPlaceholderMissionId");
@@ -2160,6 +2160,13 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("loadMapViewStateEvidenceSnapshots");
     expect(response.text).toContain("recordMapViewStateEvidenceSnapshot");
     expect(response.text).toContain("renderMapViewStateEvidenceHistory");
+    expect(response.text).toContain("renderMapViewStatePostOperationReadiness");
+    expect(response.text).toContain("missionWorkspaceUrl");
+    expect(response.text).toContain("Post-operation readiness context");
+    expect(response.text).toContain("Present for post-operation review");
+    expect(response.text).toContain("Missing review prompt");
+    expect(response.text).toContain("map view-state metadata snapshot");
+    expect(response.text).toContain("Return to mission workspace evidence summary");
     expect(response.text).toContain("data-record-map-view-state-evidence");
     expect(response.text).toContain("Record map view-state evidence");
     expect(response.text).toContain("/live-operations/map-view-state/audit-snapshots");

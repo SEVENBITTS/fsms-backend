@@ -1,32 +1,32 @@
 # NEXT STEP
 
 ## Goal
-Show post-operation readiness context in live-ops map evidence capture.
+Add post-operation evidence readiness counts to audit report render output.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- show whether map view-state evidence is currently present for post-operation review
-- surface the latest snapshot ID/count near the live-ops evidence capture control
-- add a direct return link from live ops back to the mission workspace evidence summary
+- include readiness category counts in rendered post-operation evidence reports
+- show present/not-recorded status for map view-state, conflict acknowledgement, safety closure, and amendment review categories
+- keep sign-off readiness context visible alongside the report
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- preserve metadata-only and not-pilot-command wording in the capture readiness context
+- preserve review-prompt-only and not-compliance-certificate wording in report output
 
 ### 3. Tests
-- add focused live-ops UI tests for readiness context and return link copy
-- run live-operations UI tests
+- add focused audit render/PDF tests for readiness category counts
+- run audit-evidence focused tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Live-ops evidence capture shows whether metadata exists for post-operation review
-- Operators can return from live ops to the mission workspace evidence summary
-- Copy remains explicit that map evidence is metadata-only and not pilot command guidance
+- Rendered report includes evidence readiness category counts/status
+- PDF/plain text include review-prompt-only wording
+- Sign-off state remains separate from evidence category readiness
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation

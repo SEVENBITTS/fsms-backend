@@ -27,6 +27,13 @@ const missionBrowserList = document.getElementById("live-ops-mission-browser-lis
 const missionBrowserDetail = document.getElementById("live-ops-mission-browser-detail");
 const missionRoutePattern = /^\/operator\/missions\/([^/]+)\/live-operations$/;
 
+const missionWorkspaceUrl = (missionId = uiState.missionId) => {
+  const normalizedMissionId = normalizeMissionId(missionId);
+  return hasSelectedMissionId(normalizedMissionId)
+    ? `/operator/missions/${encodeURIComponent(normalizedMissionId)}`
+    : "/operator/mission-workspace";
+};
+
 const uiState = {
   missionId: "",
   planningWorkspace: null,
@@ -1973,6 +1980,30 @@ const renderMapViewStateEvidenceHistory = () => {
   `;
 };
 
+const renderMapViewStatePostOperationReadiness = () => {
+  const snapshots = uiState.mapViewStateEvidenceSnapshots ?? [];
+  const latestSnapshot = snapshots[0] ?? null;
+  const readinessLabel =
+    snapshots.length > 0 ? "Present for post-operation review" : "Missing review prompt";
+
+  return `
+    <div class="alert-window-meta">
+      Post-operation readiness context: ${renderBadge(readinessLabel)}
+      ${escapeHtml(`${snapshots.length} map view-state metadata snapshot${snapshots.length === 1 ? "" : "s"} recorded`)}.
+      ${
+        latestSnapshot?.id
+          ? ` Latest snapshot ${escapeHtml(latestSnapshot.id)} captured at ${escapeHtml(formatDateTime(latestSnapshot.createdAt))}.`
+          : " Capture a metadata snapshot here before accountable-manager review if map evidence is needed."
+      }
+    </div>
+    <div class="actions-row">
+      <a class="secondary-button" href="${escapeHtml(missionWorkspaceUrl())}">
+        Return to mission workspace evidence summary
+      </a>
+    </div>
+  `;
+};
+
 const renderList = (items, title) => {
   if (!items || items.length === 0) {
     return `<div class="empty-state">No ${escapeHtml(title).toLowerCase()} recorded.</div>`;
@@ -3014,6 +3045,7 @@ const renderStatus = () => {
             Record map view-state evidence
           </button>
         </div>
+        ${renderMapViewStatePostOperationReadiness()}
         <div class="alert-window-meta">
           Capture status: ${escapeHtml(uiState.mapViewStateEvidenceCapture.message)}
           ${
@@ -3968,10 +4000,7 @@ conflictAdvisoryPanel.addEventListener("click", (event) => {
 
 openWorkspaceButton.addEventListener("click", () => {
   const missionId = normalizeMissionId(missionIdInput.value);
-  const target = hasSelectedMissionId(missionId)
-    ? `/operator/missions/${encodeURIComponent(missionId)}`
-    : "/operator/mission-workspace";
-  window.location.assign(target);
+  window.location.assign(missionWorkspaceUrl(missionId));
 });
 
 openReplayApiButton.addEventListener("click", () => {
