@@ -11,6 +11,7 @@ import type {
   PostOperationAuditSignoff,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceSnapshot,
+  RegulatoryAmendmentAlertAuditRecord,
   SafetyActionClosureDecisionExportContext,
   SafetyActionClosureEvidenceExportContext,
 } from "./audit-evidence.types";
@@ -186,6 +187,31 @@ interface SafetyActionClosureEvidenceExportRow extends QueryResultRow {
   evidence_created_at: Date;
 }
 
+interface RegulatoryAmendmentAlertAuditRow extends QueryResultRow {
+  id: string;
+  status: RegulatoryAmendmentAlertAuditRecord["status"];
+  severity: RegulatoryAmendmentAlertAuditRecord["severity"];
+  message: string;
+  metadata: Record<string, unknown>;
+  triggered_at: Date;
+  created_at: Date;
+  acknowledged_at: Date | null;
+  resolved_at: Date | null;
+}
+
+const toNullableString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value : null;
+
+const toStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+        .filter(
+          (entry): entry is string =>
+            typeof entry === "string" && entry.trim().length > 0,
+        )
+        .map((entry) => entry.trim())
+    : [];
+
 const toAuditEvidenceSnapshot = (
   row: AuditEvidenceSnapshotRow,
 ): AuditEvidenceSnapshot => ({
@@ -324,6 +350,28 @@ const toSafetyActionClosureEvidenceExportContext = (
   reviewedBy: row.reviewed_by,
   reviewNotes: row.review_notes,
   evidenceCreatedAt: row.evidence_created_at.toISOString(),
+});
+
+const toRegulatoryAmendmentAlertAuditRecord = (
+  row: RegulatoryAmendmentAlertAuditRow,
+): RegulatoryAmendmentAlertAuditRecord => ({
+  id: row.id,
+  status: row.status,
+  severity: row.severity,
+  message: row.message,
+  sourceDocument: toNullableString(row.metadata.sourceDocument),
+  previousVersion: toNullableString(row.metadata.previousVersion),
+  currentVersion: toNullableString(row.metadata.currentVersion),
+  publishedAt: toNullableString(row.metadata.publishedAt),
+  effectiveFrom: toNullableString(row.metadata.effectiveFrom),
+  amendmentSummary: toNullableString(row.metadata.amendmentSummary),
+  changeImpact: toNullableString(row.metadata.changeImpact),
+  affectedRequirementRefs: toStringArray(row.metadata.affectedRequirementRefs),
+  reviewAction: toNullableString(row.metadata.reviewAction),
+  triggeredAt: row.triggered_at.toISOString(),
+  acknowledgedAt: row.acknowledged_at?.toISOString() ?? null,
+  resolvedAt: row.resolved_at?.toISOString() ?? null,
+  createdAt: row.created_at.toISOString(),
 });
 
 export class AuditEvidenceRepository {
@@ -890,6 +938,33 @@ export class AuditEvidenceRepository {
     );
 
     return result.rows.map(toSafetyActionClosureEvidenceExportContext);
+  }
+
+  async listRegulatoryAmendmentAlertsForMissionExport(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<RegulatoryAmendmentAlertAuditRecord[]> {
+    const result = await tx.query<RegulatoryAmendmentAlertAuditRow>(
+      `
+      select
+        id,
+        status,
+        severity,
+        message,
+        metadata,
+        triggered_at,
+        created_at,
+        acknowledged_at,
+        resolved_at
+      from alerts
+      where mission_id = $1
+        and alert_type = 'REGULATORY_AMENDMENT'
+      order by triggered_at asc, created_at asc, id asc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toRegulatoryAmendmentAlertAuditRecord);
   }
 
   async decisionEvidenceLinkReferencesReadinessSnapshot(

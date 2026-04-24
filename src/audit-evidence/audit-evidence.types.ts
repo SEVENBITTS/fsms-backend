@@ -1,4 +1,5 @@
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
+import type { AlertSeverity, AlertStatus } from "../alerts/alert.types";
 import type {
   TrafficConflictGuidanceActionCode,
   TrafficConflictGuidanceAuthority,
@@ -179,6 +180,26 @@ export interface SafetyActionClosureEvidenceExportContext {
   evidenceCreatedAt: string;
 }
 
+export interface RegulatoryAmendmentAlertAuditRecord {
+  id: string;
+  status: AlertStatus;
+  severity: AlertSeverity;
+  message: string;
+  sourceDocument: string | null;
+  previousVersion: string | null;
+  currentVersion: string | null;
+  publishedAt: string | null;
+  effectiveFrom: string | null;
+  amendmentSummary: string | null;
+  changeImpact: string | null;
+  affectedRequirementRefs: string[];
+  reviewAction: string | null;
+  triggeredAt: string;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
 export interface PostOperationAuditSignoff {
   id: string;
   missionId: string;
@@ -205,6 +226,7 @@ export interface PostOperationEvidenceExportPackage {
   completionSnapshot: PostOperationCompletionSnapshot;
   conflictGuidanceAcknowledgements: ConflictGuidanceAcknowledgement[];
   safetyActionClosureEvidence: SafetyActionClosureEvidenceExportContext[];
+  regulatoryAmendmentAlerts: RegulatoryAmendmentAlertAuditRecord[];
 }
 
 export interface AuditReportField {

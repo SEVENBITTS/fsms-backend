@@ -244,6 +244,58 @@ const createConflictGuidanceAcknowledgement = async (
   };
 };
 
+const createRegulatoryAmendmentAlert = async (
+  missionId: string,
+  params?: {
+    acknowledge?: boolean;
+    resolve?: boolean;
+  },
+) => {
+  const response = await request(app)
+    .post(`/missions/${missionId}/regulatory-amendments`)
+    .send({
+      sourceDocument: "CAA CAP 722",
+      previousVersion: "9.1",
+      currentVersion: "9.2",
+      publishedAt: "2026-04-18T09:00:00.000Z",
+      effectiveFrom: "2026-05-01T00:00:00.000Z",
+      amendmentSummary: "Updated operator assessment evidence expectations.",
+      changeImpact:
+        "Review affected operating safety case and post-operation evidence pack.",
+      affectedRequirementRefs: ["CAP722-OSC", "CAP722-Records"],
+      reviewAction:
+        "Accountable manager to confirm mission evidence remains current.",
+    });
+
+  expect(response.status).toBe(201);
+  let alert = response.body.alerts[0] as {
+    id: string;
+    status: string;
+    acknowledgedAt: string | null;
+    resolvedAt: string | null;
+  };
+
+  if (params?.acknowledge) {
+    const acknowledgeResponse = await request(app)
+      .post(`/missions/${missionId}/alerts/${alert.id}/acknowledge`)
+      .send({ acknowledgedAt: "2026-04-18T10:00:00.000Z" });
+
+    expect(acknowledgeResponse.status).toBe(200);
+    alert = acknowledgeResponse.body.alert;
+  }
+
+  if (params?.resolve) {
+    const resolveResponse = await request(app)
+      .post(`/missions/${missionId}/alerts/${alert.id}/resolve`)
+      .send({ resolvedAt: "2026-04-18T11:00:00.000Z" });
+
+    expect(resolveResponse.status).toBe(200);
+    alert = resolveResponse.body.alert;
+  }
+
+  return alert;
+};
+
 const createDecisionEvidenceLink = async (
   missionId: string,
   decisionType: "approval" | "dispatch",
@@ -1336,6 +1388,7 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.export.conflictGuidanceAcknowledgements).toEqual([]);
     expect(response.body.export.safetyActionClosureEvidence).toEqual([]);
+    expect(response.body.export.regulatoryAmendmentAlerts).toEqual([]);
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -1373,6 +1426,49 @@ describe("audit evidence snapshots", () => {
       acknowledgedBy: "night-ops-supervisor",
       acknowledgementNote: "Supervisor acknowledged the live-ops advisory.",
       pilotInstructionStatus: "not_a_pilot_command",
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("exports regulatory amendment alert review state in post-operation evidence", async () => {
+    const { missionId } = await createCompletedMission();
+    const alert = await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+      resolve: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.regulatoryAmendmentAlerts).toHaveLength(1);
+    expect(response.body.export.regulatoryAmendmentAlerts[0]).toMatchObject({
+      id: alert.id,
+      status: "resolved",
+      severity: "warning",
+      message:
+        "Regulatory amendment detected: CAA CAP 722 9.1 -> 9.2",
+      sourceDocument: "CAA CAP 722",
+      previousVersion: "9.1",
+      currentVersion: "9.2",
+      publishedAt: "2026-04-18T09:00:00.000Z",
+      effectiveFrom: "2026-05-01T00:00:00.000Z",
+      amendmentSummary: "Updated operator assessment evidence expectations.",
+      changeImpact:
+        "Review affected operating safety case and post-operation evidence pack.",
+      affectedRequirementRefs: ["CAP722-OSC", "CAP722-Records"],
+      reviewAction:
+        "Accountable manager to confirm mission evidence remains current.",
+      triggeredAt: "2026-04-18T09:00:00.000Z",
+      acknowledgedAt: "2026-04-18T10:00:00.000Z",
+      resolvedAt: "2026-04-18T11:00:00.000Z",
     });
     expect(await countRows(missionId)).toEqual(before);
   });
@@ -1610,6 +1706,15 @@ describe("audit evidence snapshots", () => {
             ],
           },
           {
+            heading: "Regulatory amendment alert review",
+            fields: [
+              {
+                label: "Regulatory amendment alerts",
+                value: "No regulatory amendment alerts recorded",
+              },
+            ],
+          },
+          {
             heading: "SMS assurance context",
             fields: expect.arrayContaining([
               expect.objectContaining({
@@ -1719,6 +1824,64 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Conflict acknowledgement 1 pilot instruction status: not_a_pilot_command",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders regulatory amendment alert reviews in post-operation reports", async () => {
+    const { missionId } = await createCompletedMission();
+    const alert = await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Regulatory amendment alert review",
+      fields: expect.arrayContaining([
+        {
+          label: "Regulatory amendment alert 1 ID",
+          value: alert.id,
+        },
+        {
+          label: "Regulatory amendment alert 1 status",
+          value: "acknowledged",
+        },
+        {
+          label: "Regulatory amendment alert 1 source",
+          value: "CAA CAP 722",
+        },
+        {
+          label: "Regulatory amendment alert 1 version change",
+          value: "9.1 -> 9.2",
+        },
+        {
+          label: "Regulatory amendment alert 1 affected references",
+          value: "CAP722-OSC, CAP722-Records",
+        },
+        {
+          label: "Regulatory amendment alert 1 acknowledged at",
+          value: "2026-04-18T10:00:00.000Z",
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Regulatory amendment alert review",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Regulatory amendment alert 1 review action: Accountable manager to confirm mission evidence remains current.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Regulatory amendment alert 1 affected references: CAP722-OSC, CAP722-Records",
     );
     expect(await countRows(missionId)).toEqual(before);
   });

@@ -359,6 +359,9 @@ export class AuditEvidenceService {
           client,
           missionId,
         );
+      const regulatoryAmendmentAlerts =
+        await this.auditEvidenceRepository
+          .listRegulatoryAmendmentAlertsForMissionExport(client, missionId);
 
       return {
         exportType: "post_operation_completion_evidence",
@@ -373,6 +376,7 @@ export class AuditEvidenceService {
         completionSnapshot: snapshot.completionSnapshot,
         conflictGuidanceAcknowledgements,
         safetyActionClosureEvidence,
+        regulatoryAmendmentAlerts,
       };
     } finally {
       client.release();
@@ -866,6 +870,78 @@ export class AuditEvidenceService {
                 {
                   label: "Safety action closure evidence",
                   value: "No safety action closure evidence recorded",
+                },
+              ],
+      },
+      {
+        heading: "Regulatory amendment alert review",
+        fields:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0
+            ? evidenceExport.regulatoryAmendmentAlerts.flatMap(
+                (alert, index) => [
+                  {
+                    label: `Regulatory amendment alert ${index + 1} ID`,
+                    value: alert.id,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} status`,
+                    value: alert.status,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} severity`,
+                    value: alert.severity,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} source`,
+                    value: alert.sourceDocument,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} version change`,
+                    value: `${alert.previousVersion ?? "unknown"} -> ${
+                      alert.currentVersion ?? "unknown"
+                    }`,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} published at`,
+                    value: alert.publishedAt,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} effective from`,
+                    value: alert.effectiveFrom,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} affected references`,
+                    value:
+                      alert.affectedRequirementRefs.length > 0
+                        ? alert.affectedRequirementRefs.join(", ")
+                        : "None recorded",
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} change impact`,
+                    value: alert.changeImpact,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} review action`,
+                    value: alert.reviewAction,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} triggered at`,
+                    value: alert.triggeredAt,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} acknowledged at`,
+                    value: alert.acknowledgedAt,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} resolved at`,
+                    value: alert.resolvedAt,
+                  },
+                ],
+              )
+            : [
+                {
+                  label: "Regulatory amendment alerts",
+                  value: "No regulatory amendment alerts recorded",
                 },
               ],
       },
