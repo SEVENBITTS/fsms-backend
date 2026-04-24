@@ -3,12 +3,18 @@ import { AlertRepository } from "./alert.repository";
 import type {
   Alert,
   AlertType,
+  AcknowledgeAlertInput,
   CreateAlertInput,
   RegulatoryAmendmentAlertInput,
   RegulatoryAmendmentAlertResult,
   RegulatoryReviewImpactSummary,
+  ResolveAlertInput,
 } from "./alert.types";
-import { AlertMissionNotFoundError } from "./alert.errors";
+import {
+  AlertMissionMismatchError,
+  AlertMissionNotFoundError,
+  AlertNotFoundError,
+} from "./alert.errors";
 import { SmsFrameworkRepository } from "../sms-framework/sms-framework.repository";
 import type { RegulatoryRequirementMapping } from "../sms-framework/sms-framework.types";
 
@@ -247,6 +253,70 @@ export class AlertService {
     }
   }
 
+  async acknowledgeAlertForMission(
+    missionId: string,
+    alertId: string,
+    input: AcknowledgeAlertInput = {},
+  ): Promise<Alert> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+      await this.assertAlertBelongsToMission(client, missionId, alertId);
+
+      const acknowledged = await this.alertRepository.acknowledge(
+        client,
+        alertId,
+        input.acknowledgedAt,
+      );
+      const alert = acknowledged ?? await this.alertRepository.getById(client, alertId);
+
+      if (!alert) {
+        throw new AlertNotFoundError(alertId);
+      }
+
+      await client.query("commit");
+      return alert;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async resolveAlertForMission(
+    missionId: string,
+    alertId: string,
+    input: ResolveAlertInput = {},
+  ): Promise<Alert> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+      await this.assertAlertBelongsToMission(client, missionId, alertId);
+
+      const resolved = await this.alertRepository.resolve(
+        client,
+        alertId,
+        input.resolvedAt,
+      );
+      const alert = resolved ?? await this.alertRepository.getById(client, alertId);
+
+      if (!alert) {
+        throw new AlertNotFoundError(alertId);
+      }
+
+      await client.query("commit");
+      return alert;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private async syncThresholdAlert(
     client: PoolClient,
     missionId: string,
@@ -293,6 +363,28 @@ export class AlertService {
     );
 
     return { created: [], resolvedCount };
+  }
+
+  private async assertAlertBelongsToMission(
+    client: PoolClient,
+    missionId: string,
+    alertId: string,
+  ): Promise<Alert> {
+    const exists = await this.alertRepository.missionExists(client, missionId);
+    if (!exists) {
+      throw new AlertMissionNotFoundError(missionId);
+    }
+
+    const alert = await this.alertRepository.getById(client, alertId);
+    if (!alert) {
+      throw new AlertNotFoundError(alertId);
+    }
+
+    if (alert.missionId !== missionId) {
+      throw new AlertMissionMismatchError(alertId, missionId);
+    }
+
+    return alert;
   }
 
   private normalizeRegulatoryAmendment(

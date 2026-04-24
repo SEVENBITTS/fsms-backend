@@ -13,6 +13,8 @@ export function createAlertRouter(controller: AlertController): Router {
     "/:id/regulatory-review-impact",
     controller.getRegulatoryReviewImpact,
   );
+  router.post("/:id/alerts/:alertId/acknowledge", controller.acknowledgeAlert);
+  router.post("/:id/alerts/:alertId/resolve", controller.resolveAlert);
 
   return router;
 }

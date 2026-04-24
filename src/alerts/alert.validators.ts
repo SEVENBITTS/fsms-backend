@@ -1,5 +1,9 @@
 import { AlertValidationError } from "./alert.errors";
-import type { RegulatoryAmendmentAlertInput } from "./alert.types";
+import type {
+  AcknowledgeAlertInput,
+  RegulatoryAmendmentAlertInput,
+  ResolveAlertInput,
+} from "./alert.types";
 
 const requiredTrimmed = (value: unknown, fieldName: string): string => {
   if (typeof value !== "string") {
@@ -71,5 +75,39 @@ export const validateRegulatoryAmendmentAlertInput = (
       "affectedRequirementRefs",
     ),
     reviewAction: requiredTrimmed(body.reviewAction, "reviewAction"),
+  };
+};
+
+export const validateAcknowledgeAlertInput = (
+  input: unknown,
+): AcknowledgeAlertInput => {
+  if (input === undefined || input === null) {
+    return {};
+  }
+
+  if (typeof input !== "object") {
+    throw new AlertValidationError("Request body must be an object");
+  }
+
+  const body = input as Record<string, unknown>;
+
+  return {
+    acknowledgedAt: optionalDate(body.acknowledgedAt, "acknowledgedAt") ?? undefined,
+  };
+};
+
+export const validateResolveAlertInput = (input: unknown): ResolveAlertInput => {
+  if (input === undefined || input === null) {
+    return {};
+  }
+
+  if (typeof input !== "object") {
+    throw new AlertValidationError("Request body must be an object");
+  }
+
+  const body = input as Record<string, unknown>;
+
+  return {
+    resolvedAt: optionalDate(body.resolvedAt, "resolvedAt") ?? undefined,
   };
 };

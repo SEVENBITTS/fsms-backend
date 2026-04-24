@@ -1,27 +1,29 @@
 # NEXT STEP
 
 ## Goal
-Show mission-specific regulatory review impact in the workspace.
+Expose controlled alert acknowledgement and resolution.
 
 ---
 
 ## Build
 
-### 1. UI behavior
-- fetch regulatory review impact for the selected mission
-- summarize open amendment alerts, impacted matrix rows, and clause-review count
-- mark impacted regulatory matrix rows ahead of non-impacted rows
-- show review reason and alert IDs for impacted mappings
+### 1. API behavior
+- add mission-scoped alert acknowledgement and resolve endpoints
+- require the alert to belong to the mission in the route
+- validate optional acknowledgement and resolution timestamps
+- preserve existing alert list and regulatory review impact behavior
 
 ### 2. Operator clarity
-- connect amendment alerts to the rows they affect
-- make mission-specific review workload visible beside the global matrix
-- avoid presenting the matrix as a legal compliance certification
+- allow amendment-review alerts to move from open to acknowledged to resolved
+- keep alert closure as evidence workflow, not compliance certification
+- prevent one mission from changing another mission's alert state
 
 ### 3. Tests
-- parse-check the mission workspace script
-- run TypeScript build
-- run diff whitespace check
+- add API coverage for acknowledgement and resolution
+- confirm mission mismatch is rejected
+- confirm invalid timestamps fail safely
+- run focused alert API tests
+- run build
 
 ---
 
@@ -34,6 +36,6 @@ Show mission-specific regulatory review impact in the workspace.
 ---
 
 ## Done When
-- Operator workspace displays mission-specific regulatory review impact
-- Impacted matrix rows are highlighted with review reason and alert IDs
+- Alerts can be acknowledged and resolved through mission-scoped endpoints
+- Cross-mission alert actions fail safely
 - No operational authority, approval, or direct-control behavior changes

@@ -190,4 +190,82 @@ describe("alert API", () => {
       impactedMappings: [],
     });
   });
+
+  it("acknowledges and resolves an alert for the owning mission", async () => {
+    const missionId = await insertMission();
+
+    const created = await request(app)
+      .post(`/missions/${missionId}/regulatory-amendments`)
+      .send(amendmentBody);
+    const alertId = created.body.alerts[0].id;
+
+    const acknowledged = await request(app)
+      .post(`/missions/${missionId}/alerts/${alertId}/acknowledge`)
+      .send({ acknowledgedAt: "2026-04-20T10:00:00Z" });
+
+    expect(acknowledged.status).toBe(200);
+    expect(acknowledged.body).toMatchObject({
+      missionId,
+      alert: {
+        id: alertId,
+        status: "acknowledged",
+        acknowledgedAt: "2026-04-20T10:00:00.000Z",
+      },
+    });
+
+    const resolved = await request(app)
+      .post(`/missions/${missionId}/alerts/${alertId}/resolve`)
+      .send({ resolvedAt: "2026-04-20T11:00:00Z" });
+
+    expect(resolved.status).toBe(200);
+    expect(resolved.body).toMatchObject({
+      missionId,
+      alert: {
+        id: alertId,
+        status: "resolved",
+        resolvedAt: "2026-04-20T11:00:00.000Z",
+      },
+    });
+  });
+
+  it("rejects alert lifecycle actions for another mission", async () => {
+    const owningMissionId = await insertMission();
+    const otherMissionId = await insertMission();
+
+    const created = await request(app)
+      .post(`/missions/${owningMissionId}/regulatory-amendments`)
+      .send(amendmentBody);
+    const alertId = created.body.alerts[0].id;
+
+    const response = await request(app)
+      .post(`/missions/${otherMissionId}/alerts/${alertId}/acknowledge`)
+      .send({ acknowledgedAt: "2026-04-20T10:00:00Z" });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "alert_not_found",
+      },
+    });
+  });
+
+  it("rejects invalid alert lifecycle timestamps", async () => {
+    const missionId = await insertMission();
+
+    const created = await request(app)
+      .post(`/missions/${missionId}/regulatory-amendments`)
+      .send(amendmentBody);
+    const alertId = created.body.alerts[0].id;
+
+    const response = await request(app)
+      .post(`/missions/${missionId}/alerts/${alertId}/resolve`)
+      .send({ resolvedAt: "not-a-date" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "alert_validation_failed",
+      },
+    });
+  });
 });

@@ -1,9 +1,17 @@
 import type { Request, Response, NextFunction } from "express";
 import { AlertService } from "./alert.service";
-import { validateRegulatoryAmendmentAlertInput } from "./alert.validators";
+import {
+  validateAcknowledgeAlertInput,
+  validateRegulatoryAmendmentAlertInput,
+  validateResolveAlertInput,
+} from "./alert.validators";
 
 type MissionIdParams = {
   id: string;
+};
+
+type MissionAlertParams = MissionIdParams & {
+  alertId: string;
 };
 
 export class AlertController {
@@ -61,6 +69,50 @@ export class AlertController {
       const impact = await this.alertService.getRegulatoryReviewImpact(missionId);
 
       return res.status(200).json(impact);
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  acknowledgeAlert = async (
+    req: Request<MissionAlertParams>,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const input = validateAcknowledgeAlertInput(req.body);
+      const alert = await this.alertService.acknowledgeAlertForMission(
+        req.params.id,
+        req.params.alertId,
+        input,
+      );
+
+      return res.status(200).json({
+        missionId: req.params.id,
+        alert,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  resolveAlert = async (
+    req: Request<MissionAlertParams>,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const input = validateResolveAlertInput(req.body);
+      const alert = await this.alertService.resolveAlertForMission(
+        req.params.id,
+        req.params.alertId,
+        input,
+      );
+
+      return res.status(200).json({
+        missionId: req.params.id,
+        alert,
+      });
     } catch (error) {
       return next(error);
     }
