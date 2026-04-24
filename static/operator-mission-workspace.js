@@ -114,6 +114,7 @@ const uiState = {
   busyAction: null,
   helperStatus: {},
   busyHelper: null,
+  busyAlertAction: null,
 };
 
 const toneClass = (value) => {
@@ -225,6 +226,47 @@ const regulatoryImpactByRequirement = () => {
   return new Map(
     impacted.map((item) => [item.mapping.requirementCode, item]),
   );
+};
+
+const alertActionKey = (action, alertId) => `${action}:${alertId}`;
+
+const renderAlertActionButtons = (impact) => {
+  const alertIds = impact?.alertIds ?? [];
+  if (!uiState.missionId || alertIds.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="action-footer" style="justify-content: flex-start; margin-top: 10px;">
+      ${alertIds
+        .map((alertId) => {
+          const acknowledgeKey = alertActionKey("acknowledge", alertId);
+          const resolveKey = alertActionKey("resolve", alertId);
+
+          return `
+            <button
+              class="action-button"
+              type="button"
+              data-alert-action="acknowledge"
+              data-alert-id="${escapeHtml(alertId)}"
+              ${uiState.busyAlertAction === acknowledgeKey ? "disabled" : ""}
+            >
+              ${uiState.busyAlertAction === acknowledgeKey ? "Acknowledging..." : "Acknowledge alert"}
+            </button>
+            <button
+              class="action-button"
+              type="button"
+              data-alert-action="resolve"
+              data-alert-id="${escapeHtml(alertId)}"
+              ${uiState.busyAlertAction === resolveKey ? "disabled" : ""}
+            >
+              ${uiState.busyAlertAction === resolveKey ? "Resolving..." : "Resolve alert"}
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 };
 
 const setConnectionState = (message, tone = "tone-muted") => {
@@ -703,6 +745,7 @@ const renderRegulatoryMatrix = () => {
                     : ""
                 }
               </div>
+              ${impact ? renderAlertActionButtons(impact) : ""}
             </li>
           `;
           },
@@ -710,6 +753,25 @@ const renderRegulatoryMatrix = () => {
         .join("")}
     </ul>
   `;
+
+  bindRegulatoryAlertActions();
+};
+
+const bindRegulatoryAlertActions = () => {
+  regulatoryMatrixPanel
+    ?.querySelectorAll("[data-alert-action][data-alert-id]")
+    .forEach((button) => {
+      button.addEventListener("click", async () => {
+        const action = button.getAttribute("data-alert-action");
+        const alertId = button.getAttribute("data-alert-id");
+
+        if (!action || !alertId) {
+          return;
+        }
+
+        await executeAlertLifecycleAction(action, alertId);
+      });
+    });
 };
 
 const bindEvidenceHelperForms = () => {
@@ -1141,6 +1203,7 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.busyAction = null;
     uiState.helperStatus = {};
     uiState.busyHelper = null;
+    uiState.busyAlertAction = null;
     setConnectionState("Enter a mission UUID", "tone-warn");
     setLoadedMission("");
     overviewMetrics.innerHTML = "";
@@ -1254,6 +1317,37 @@ const executeEvidenceHelper = async (helper) => {
     renderEvidenceHelpers();
     setConnectionState(
       error instanceof Error ? error.message : "Evidence helper failed",
+      "tone-bad",
+    );
+  }
+};
+
+const executeAlertLifecycleAction = async (action, alertId) => {
+  const missionId = uiState.missionId;
+  if (!missionId) {
+    return;
+  }
+
+  uiState.busyAlertAction = alertActionKey(action, alertId);
+  renderRegulatoryMatrix();
+  setConnectionState(`${action === "resolve" ? "Resolving" : "Acknowledging"} alert...`, "tone-info");
+
+  try {
+    await fetchJson(`/missions/${missionId}/alerts/${alertId}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    uiState.busyAlertAction = null;
+    await loadMissionWorkspace(missionId, { preserveActionStatus: true });
+    setConnectionState(
+      action === "resolve" ? "Alert resolved" : "Alert acknowledged",
+      "tone-ok",
+    );
+  } catch (error) {
+    uiState.busyAlertAction = null;
+    renderRegulatoryMatrix();
+    setConnectionState(
+      error instanceof Error ? error.message : "Alert lifecycle action failed",
       "tone-bad",
     );
   }

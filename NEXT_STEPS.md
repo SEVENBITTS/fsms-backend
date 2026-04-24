@@ -1,29 +1,27 @@
 # NEXT STEP
 
 ## Goal
-Expose controlled alert acknowledgement and resolution.
+Allow regulatory impact alerts to be acknowledged or resolved from the workspace.
 
 ---
 
 ## Build
 
-### 1. API behavior
-- add mission-scoped alert acknowledgement and resolve endpoints
-- require the alert to belong to the mission in the route
-- validate optional acknowledgement and resolution timestamps
-- preserve existing alert list and regulatory review impact behavior
+### 1. UI behavior
+- show acknowledge and resolve buttons for impacted regulatory amendment alerts
+- call the mission-scoped alert lifecycle API
+- refresh the workspace after alert lifecycle actions
+- keep alert closure separate from compliance acceptance
 
 ### 2. Operator clarity
-- allow amendment-review alerts to move from open to acknowledged to resolved
-- keep alert closure as evidence workflow, not compliance certification
-- prevent one mission from changing another mission's alert state
+- allow operators to record review workflow progress from the matrix panel
+- make resolved amendment alerts drop out of the mission-specific impact list
+- avoid presenting acknowledgement or resolution as legal compliance certification
 
 ### 3. Tests
-- add API coverage for acknowledgement and resolution
-- confirm mission mismatch is rejected
-- confirm invalid timestamps fail safely
-- run focused alert API tests
-- run build
+- parse-check the mission workspace script
+- run TypeScript build
+- run diff whitespace check
 
 ---
 
@@ -36,6 +34,6 @@ Expose controlled alert acknowledgement and resolution.
 ---
 
 ## Done When
-- Alerts can be acknowledged and resolved through mission-scoped endpoints
-- Cross-mission alert actions fail safely
+- Impacted regulatory alerts can be acknowledged from the workspace
+- Impacted regulatory alerts can be resolved from the workspace
 - No operational authority, approval, or direct-control behavior changes
