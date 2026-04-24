@@ -1783,6 +1783,31 @@ const getAreaFreshnessFilterFromLocation = () =>
     new URL(window.location.href).searchParams.get("areaFreshnessFilter")?.trim(),
   );
 
+const mapViewStateMetadata = () => {
+  const replayPoints = replayTrack();
+  const activePoint = activeReplayPoint();
+  const areaFilter = areaFreshnessFilterSummary();
+  const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
+  const conflicts = activeConflictAssessmentItems();
+  const refreshRuns = areaRefreshChronology()?.refreshRuns ?? [];
+
+  return {
+    missionId: uiState.missionId || "Not selected",
+    replayCursor:
+      replayPoints.length === 0
+        ? "0 / 0"
+        : `${uiState.replayPlayback.index + 1} / ${replayPoints.length}`,
+    replayTimestamp: formatDateTime(activePoint?.timestamp),
+    areaFreshnessFilter: areaFilter.label,
+    visibleAreaOverlays: areaFilter.visibleCount,
+    totalAreaOverlays: areaFilter.totalCount,
+    openAlertCount: openAlerts.length,
+    activeConflictCount: conflicts.length,
+    areaRefreshRunCount: refreshRuns.length,
+    exportStatus: "View-state metadata only; no evidence export has been generated.",
+  };
+};
+
 const renderList = (items, title) => {
   if (!items || items.length === 0) {
     return `<div class="empty-state">No ${escapeHtml(title).toLowerCase()} recorded.</div>`;
@@ -2706,6 +2731,7 @@ const renderStatus = () => {
   const replayConflictRelation = currentConflictReplayRelation();
   const areaProvenanceRows = areaSourceProvenanceRows();
   const areaFilterSummary = areaFreshnessFilterSummary();
+  const viewStateMetadata = mapViewStateMetadata();
   const primaryConflict = primaryConflictAssessmentItem();
   const primaryConflictOverlay = primaryConflict
     ? conflictOverlayForItem(primaryConflict)
@@ -2789,6 +2815,32 @@ const renderStatus = () => {
           )}</div>
           <div class="k">Latest live telemetry</div>
           <div>${escapeHtml(formatDateTime(latestTelemetry?.timestamp))}</div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Map View-State Metadata</h4>
+        <div class="kv">
+          <div class="k">Mission ID</div>
+          <div>${escapeHtml(viewStateMetadata.missionId)}</div>
+          <div class="k">Replay cursor</div>
+          <div>${escapeHtml(viewStateMetadata.replayCursor)}</div>
+          <div class="k">Replay timestamp</div>
+          <div>${escapeHtml(viewStateMetadata.replayTimestamp)}</div>
+          <div class="k">Area freshness filter</div>
+          <div>${renderBadge(viewStateMetadata.areaFreshnessFilter)}</div>
+          <div class="k">Visible area overlays</div>
+          <div>${escapeHtml(`${viewStateMetadata.visibleAreaOverlays} / ${viewStateMetadata.totalAreaOverlays}`)}</div>
+          <div class="k">Open alerts</div>
+          <div>${escapeHtml(String(viewStateMetadata.openAlertCount))}</div>
+          <div class="k">Active conflicts</div>
+          <div>${escapeHtml(String(viewStateMetadata.activeConflictCount))}</div>
+          <div class="k">Area refresh runs</div>
+          <div>${escapeHtml(String(viewStateMetadata.areaRefreshRunCount))}</div>
+          <div class="k">Export status</div>
+          <div>${escapeHtml(viewStateMetadata.exportStatus)}</div>
+        </div>
+        <div class="alert-window-meta">
+          This metadata describes the current read-only map view for future evidence export work. It does not create files or transmit pilot instructions.
         </div>
       </section>
       <section class="summary-block">

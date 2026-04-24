@@ -2136,6 +2136,15 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("areaFreshnessFilter");
     expect(response.text).toContain('next.searchParams.delete("areaFreshnessFilter")');
     expect(response.text).toContain('next.searchParams.set("areaFreshnessFilter"');
+    expect(response.text).toContain("mapViewStateMetadata");
+    expect(response.text).toContain("Map View-State Metadata");
+    expect(response.text).toContain("Replay cursor");
+    expect(response.text).toContain("Area freshness filter");
+    expect(response.text).toContain("Visible area overlays");
+    expect(response.text).toContain("Area refresh runs");
+    expect(response.text).toContain("View-state metadata only; no evidence export has been generated.");
+    expect(response.text).toContain("future evidence export work");
+    expect(response.text).toContain("does not create files or transmit pilot instructions");
     expect(response.text).toContain("areaFreshnessOverlays");
     expect(response.text).toContain("area-freshness-overlay");
     expect(response.text).toContain("data-area-freshness-filter");
