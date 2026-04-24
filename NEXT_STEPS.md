@@ -1,30 +1,30 @@
 # NEXT STEP
 
 ## Goal
-Add representative airspace and refresh provenance data to the live-ops demo seed.
+Surface seeded airspace refresh provenance in the live-ops UI.
 
 ---
 
 ## Build
 
-### 1. Demo data richness
-- add area-conflict/airspace overlays to the seeded live-ops demo
-- include source refresh run records with fresh, partial, and failed statuses
-- keep existing replay, alert, crewed traffic, drone traffic, weather, and conflict data intact
+### 1. Operator visibility
+- show airspace source refresh status in the live-ops side panel
+- highlight carried-forward area overlays after partial or failed refreshes
+- keep the map focused on operational awareness without adding pilot commands
 
 ### 2. Product boundary
-- use deterministic local demo data only
-- do not scrape external feeds or imply live CAA/NOTAM ingestion
+- continue to label demo airspace data as synthetic/local
+- do not imply live CAA, NOTAM, or manufacturer feed connectivity
 - keep provenance review informational and auditable
 
 ### 3. Tests
-- add focused seed/API assertions for area overlays and refresh provenance
-- run live-ops/external-overlay focused tests
+- add focused UI/static assertions for refresh provenance rendering
+- run live-ops and external-overlay focused tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- A freshly seeded live-ops mission has route, alert, traffic, weather, area overlays, and refresh provenance data
-- The operator live-ops page can render a richer map closer to the end-state visual
+- Operators can see whether area overlays are fresh, partial, failed, or carried forward
+- Failed or partial refresh state is visible without blocking the local demo
 - The demo remains clearly synthetic and safe for local presentation

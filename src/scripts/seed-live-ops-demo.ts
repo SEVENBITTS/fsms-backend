@@ -76,6 +76,104 @@ async function createPilotReadinessEvidence(pilotId: string) {
   );
 }
 
+const demoAreaSourceRecords = [
+  {
+    source: {
+      provider: "synthetic-caa-airspace",
+      sourceType: "danger_area",
+      sourceRecordId: "DA-312-20260421",
+    },
+    observedAt: "2026-04-21T11:55:00.000Z",
+    validFrom: "2026-04-21T11:30:00.000Z",
+    validTo: "2026-04-21T13:30:00.000Z",
+    geometry: {
+      type: "polygon",
+      points: [
+        { lat: 51.5102, lng: -0.132 },
+        { lat: 51.5134, lng: -0.1288 },
+        { lat: 51.5122, lng: -0.1239 },
+        { lat: 51.5089, lng: -0.1253 },
+      ],
+      altitudeFloorFt: 0,
+      altitudeCeilingFt: 1960,
+    },
+    severity: "caution",
+    confidence: 0.96,
+    freshnessSeconds: 120,
+    area: {
+      areaId: "DA-312",
+      label: "DA 312",
+      areaType: "danger_area",
+      description: "Synthetic demo danger area near the live ops route",
+      authorityName: "Synthetic CAA Airspace",
+      sourceReference: "Demo UK AIP ENR 5.1 package",
+    },
+  },
+  {
+    source: {
+      provider: "synthetic-danger-area-feed",
+      sourceType: "temporary_danger_area",
+      sourceRecordId: "TDA-625A-20260421",
+    },
+    observedAt: "2026-04-21T11:56:00.000Z",
+    validFrom: "2026-04-21T11:45:00.000Z",
+    validTo: "2026-04-21T13:15:00.000Z",
+    geometry: {
+      type: "polygon",
+      points: [
+        { lat: 51.5093, lng: -0.1282 },
+        { lat: 51.5117, lng: -0.1266 },
+        { lat: 51.5109, lng: -0.1226 },
+        { lat: 51.5078, lng: -0.1239 },
+      ],
+      altitudeFloorFt: 0,
+      altitudeCeilingFt: 1400,
+    },
+    severity: "critical",
+    confidence: 0.94,
+    freshnessSeconds: 180,
+    area: {
+      areaId: "TDA-625A",
+      label: "TDA 625A",
+      areaType: "temporary_danger_area",
+      description: "Synthetic temporary activation used for live ops review",
+      authorityName: "Synthetic Airspace Coordination Cell",
+      sourceReference: "Demo temporary activation notice",
+    },
+  },
+  {
+    source: {
+      provider: "synthetic-notam-feed",
+      sourceType: "notam_restriction",
+      sourceRecordId: "DEMO-A0421-26",
+    },
+    observedAt: "2026-04-21T11:57:00.000Z",
+    validFrom: "2026-04-21T11:50:00.000Z",
+    validTo: "2026-04-21T12:50:00.000Z",
+    severity: "caution",
+    confidence: 0.91,
+    freshnessSeconds: 240,
+    altitudeFloorFt: 0,
+    altitudeCeilingFt: 2000,
+    area: {
+      areaId: "NOTAM-DEMO-A0421-26",
+      label: "NOTAM DEMO LOW LEVEL",
+      areaType: "notam_restriction",
+      description: "Synthetic NOTAM restriction derived from Q-line geometry",
+      authorityName: "Synthetic NOTAM Office",
+      notamNumber: "A0421/26",
+      sourceReference: "Demo NOTAM A0421/26",
+    },
+    notamGeometry: {
+      qLine: {
+        centerLat: 51.4833,
+        centerLng: -0.1333,
+        radiusNm: 5,
+      },
+    },
+  },
+];
+
 async function main() {
   try {
     await runMigrations(pool);
@@ -309,6 +407,43 @@ async function main() {
       201,
     );
 
+    const freshAreaRefreshResponse = await expectStatus(
+      "normalize fresh demo area overlays",
+      request(app)
+        .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+        .send({
+          records: demoAreaSourceRecords,
+          refresh: { status: "fresh" },
+        }),
+      201,
+    );
+
+    const partialAreaRefreshResponse = await expectStatus(
+      "normalize partial demo area overlays",
+      request(app)
+        .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+        .send({
+          records: demoAreaSourceRecords.slice(0, 2).map((record) => ({
+            ...record,
+            observedAt: "2026-04-21T12:01:30.000Z",
+            freshnessSeconds: 90,
+          })),
+          refresh: { status: "partial" },
+        }),
+      201,
+    );
+
+    const failedAreaRefreshResponse = await expectStatus(
+      "record failed demo area overlay refresh",
+      request(app)
+        .post(`/missions/${missionId}/external-overlays/normalize-area-sources`)
+        .send({
+          records: [],
+          refresh: { status: "failed" },
+        }),
+      201,
+    );
+
     const alertsResponse = await expectStatus(
       "list mission alerts",
       request(app).get(`/missions/${missionId}/alerts`),
@@ -327,6 +462,20 @@ async function main() {
       200,
     );
 
+    const areaOverlaysResponse = await expectStatus(
+      "list demo area overlays",
+      request(app).get(
+        `/missions/${missionId}/external-overlays?kind=area_conflict&includeRetired=true`,
+      ),
+      200,
+    );
+
+    const areaRefreshRunsResponse = await expectStatus(
+      "list demo area refresh runs",
+      request(app).get(`/missions/${missionId}/external-overlays/refresh-runs`),
+      200,
+    );
+
     console.log(
       JSON.stringify(
         {
@@ -342,6 +491,14 @@ async function main() {
             alertCount: alertsResponse.body.alerts?.length ?? 0,
             conflictCount:
               conflictResponse.body.assessment?.conflicts?.length ?? 0,
+            areaOverlayCount: areaOverlaysResponse.body.overlays?.length ?? 0,
+            areaRefreshRunCount:
+              areaRefreshRunsResponse.body.refreshRuns?.length ?? 0,
+            areaRefreshRunIds: {
+              fresh: freshAreaRefreshResponse.body.refreshRunId,
+              partial: partialAreaRefreshResponse.body.refreshRunId,
+              failed: failedAreaRefreshResponse.body.refreshRunId,
+            },
           },
         },
         null,
