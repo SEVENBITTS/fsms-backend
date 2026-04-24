@@ -89,7 +89,7 @@
     ]
 
   },
-  "nextBuildStep": "Add linked aircraft capability and maintenance source context to the operator mission workspace.",
+  "nextBuildStep": "Add representative airspace and refresh provenance data to the live-ops demo seed.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -1,31 +1,30 @@
 # NEXT STEP
 
 ## Goal
-Add linked aircraft capability and maintenance source context to the operator mission workspace.
+Add representative airspace and refresh provenance data to the live-ops demo seed.
 
 ---
 
 ## Build
 
-### 1. UI visibility
-- surface the assigned platform's linked aircraft capability spec in the operator mission workspace
-- show capability and manufacturer maintenance source reference/version fields so operators can see where the data came from
-- show manufacturer maintenance advice and recommended inspection intervals when curated
-- keep the display informational only
+### 1. Demo data richness
+- add area-conflict/airspace overlays to the seeded live-ops demo
+- include source refresh run records with fresh, partial, and failed statuses
+- keep existing replay, alert, crewed traffic, drone traffic, weather, and conflict data intact
 
-### 2. Safe boundary
-- do not make automated weather/environment suitability decisions yet
-- do not block approval or dispatch based on aircraft spec or manufacturer maintenance intervals yet
-- do not add external aircraft-spec scraping or live manufacturer sync
+### 2. Product boundary
+- use deterministic local demo data only
+- do not scrape external feeds or imply live CAA/NOTAM ingestion
+- keep provenance review informational and auditable
 
 ### 3. Tests
-- add focused workspace bundle/API assertions for the visible aircraft capability source context
-- run the mission-planning workspace tests
+- add focused seed/API assertions for area overlays and refresh provenance
+- run live-ops/external-overlay focused tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- A mission with a linked platform spec shows aircraft capability and manufacturer maintenance source context in the operator workspace
-- Missions without a linked spec still render cleanly
-- The capability display remains advisory/contextual only
+- A freshly seeded live-ops mission has route, alert, traffic, weather, area overlays, and refresh provenance data
+- The operator live-ops page can render a richer map closer to the end-state visual
+- The demo remains clearly synthetic and safe for local presentation
