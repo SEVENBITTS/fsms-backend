@@ -7,6 +7,7 @@ import type {
   RegulatoryAmendmentAlertInput,
   RegulatoryAmendmentAlertResult,
 } from "./alert.types";
+import { AlertMissionNotFoundError } from "./alert.errors";
 
 export interface AlertThresholdConfig {
   altitudeHighM: number;
@@ -147,6 +148,11 @@ export class AlertService {
 
     try {
       await client.query("begin");
+
+      const exists = await this.alertRepository.missionExists(client, missionId);
+      if (!exists) {
+        throw new AlertMissionNotFoundError(missionId);
+      }
 
       const existingOpen = await this.alertRepository.listOpenByMissionAndType(
         client,

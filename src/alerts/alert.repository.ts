@@ -29,6 +29,20 @@ const toAlert = (row: AlertRow): Alert => ({
 });
 
 export class AlertRepository {
+  async missionExists(tx: DbTx, missionId: string): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from missions
+      where id = $1
+      limit 1
+      `,
+      [missionId],
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async insert(
     tx: DbTx,
     input: CreateAlertInput,
