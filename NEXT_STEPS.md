@@ -1,27 +1,26 @@
 # NEXT STEP
 
 ## Goal
-Require conflict-guidance acknowledgement summaries for audit integrity.
+Show conflict-guidance acknowledgement context in live operations.
 
 ---
 
 ## Build
 
 ### 1. API behavior
-- require `guidanceSummary` when recording conflict-guidance acknowledgements
-- reject missing or blank guidance summaries before writing evidence
-- keep valid live-ops acknowledgement flow unchanged
+- keep using the existing conflict-guidance acknowledgement API
+- show the recorded guidance summary after acknowledgement
+- show the recorded pilot instruction boundary after acknowledgement
 
-### 2. Database integrity
-- backfill any existing blank summaries with a migration-safe placeholder
-- enforce non-empty `guidance_summary` at the database layer
-- keep the pilot instruction status visible as `not_a_pilot_command`
+### 2. Operator clarity
+- make the live-ops audit record show what was reviewed, not only who recorded it
+- keep `not_a_pilot_command` visible beside the acknowledgement
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
-- API rejects missing or blank guidance summaries
-- database rejects direct blank guidance summaries
-- build and focused audit tests pass
+- static live-ops script parses cleanly
+- TypeScript build still passes
+- no backend API or schema change is introduced
 
 ---
 
@@ -34,6 +33,6 @@ Require conflict-guidance acknowledgement summaries for audit integrity.
 ---
 
 ## Done When
-- Conflict acknowledgement evidence cannot be created without the reviewed guidance summary
-- The API and database enforce the same non-empty summary rule
+- Recorded acknowledgements in live ops display the guidance summary
+- Recorded acknowledgements in live ops display `not_a_pilot_command`
 - No operational authority or direct-control behavior changes

@@ -2730,6 +2730,8 @@ const renderConflictAdvisory = () => {
                       <div class="alert-window-meta">
                         Audit record: ${escapeHtml(primary.acknowledgement.id)}<br />
                         Recorded at: ${escapeHtml(formatDateTime(primary.acknowledgement.createdAt))}<br />
+                        Guidance summary: ${escapeHtml(primary.acknowledgement.guidanceSummary)}<br />
+                        Pilot instruction status: ${escapeHtml(primary.acknowledgement.pilotInstructionStatus)}<br />
                         Note: ${escapeHtml(primary.acknowledgement.acknowledgementNote ?? "No note recorded")}
                       </div>
                     `
