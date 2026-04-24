@@ -42,6 +42,14 @@ describe("platform maintenance integration", () => {
         ipRating: "IP55",
         gnssCapability: "GPS, Galileo, BeiDou, GLONASS",
         rtkCapable: true,
+        manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+        manufacturerMaintenanceScheduleVersion: "v4.2",
+        manufacturerMaintenanceScheduleUrl:
+          "https://example.com/dji-m30t-maintenance",
+        manufacturerMaintenanceAdvice:
+          "Inspect propellers, arms, batteries, and gimbal before every flight.",
+        recommendedInspectionIntervalDays: 30,
+        recommendedInspectionIntervalFlightHours: 25,
         sourceType: "manufacturer",
         sourceReference: "Manufacturer datasheet reviewed by ops",
         sourceVersion: "2026-04-curated",
@@ -66,6 +74,14 @@ describe("platform maintenance integration", () => {
       ipRating: "IP55",
       gnssCapability: "GPS, Galileo, BeiDou, GLONASS",
       rtkCapable: true,
+      manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+      manufacturerMaintenanceScheduleVersion: "v4.2",
+      manufacturerMaintenanceScheduleUrl:
+        "https://example.com/dji-m30t-maintenance",
+      manufacturerMaintenanceAdvice:
+        "Inspect propellers, arms, batteries, and gimbal before every flight.",
+      recommendedInspectionIntervalDays: 30,
+      recommendedInspectionIntervalFlightHours: 25,
       sourceType: "manufacturer",
       sourceReference: "Manufacturer datasheet reviewed by ops",
       sourceVersion: "2026-04-curated",
@@ -82,6 +98,28 @@ describe("platform maintenance integration", () => {
       displayName: "DJI M30T curated operating profile",
       manufacturer: "DJI",
       model: "Matrice 30T",
+      manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+    });
+  });
+
+  it("rejects aircraft specs with invalid maintenance guidance intervals", async () => {
+    const response = await request(app)
+      .post("/platforms/aircraft-type-specs")
+      .send({
+        displayName: "Invalid maintenance spec",
+        manufacturer: "Example",
+        model: "Bad Interval",
+        sourceReference: "Manual test source",
+        recommendedInspectionIntervalDays: 0,
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "platform_validation_error",
+        message:
+          "recommendedInspectionIntervalDays must be a positive integer",
+      },
     });
   });
 
@@ -156,6 +194,10 @@ describe("platform maintenance integration", () => {
         model: "Matrice 30T",
         aircraftType: "multi-rotor",
         maxWindMps: 12,
+        manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+        manufacturerMaintenanceAdvice:
+          "Follow manufacturer post-flight inspection after heavy rain.",
+        recommendedInspectionIntervalFlightHours: 25,
         sourceType: "manufacturer",
         sourceReference: "Manufacturer datasheet reviewed by ops",
       });
@@ -181,6 +223,10 @@ describe("platform maintenance integration", () => {
         manufacturer: "DJI",
         model: "Matrice 30T",
         maxWindMps: 12,
+        manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+        manufacturerMaintenanceAdvice:
+          "Follow manufacturer post-flight inspection after heavy rain.",
+        recommendedInspectionIntervalFlightHours: 25,
         sourceReference: "Manufacturer datasheet reviewed by ops",
       },
     });

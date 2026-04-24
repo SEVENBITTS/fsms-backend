@@ -70,6 +70,12 @@ interface AircraftTypeSpecRow extends QueryResultRow {
   ip_rating: string | null;
   gnss_capability: string | null;
   rtk_capable: boolean;
+  manufacturer_maintenance_schedule_ref: string | null;
+  manufacturer_maintenance_schedule_version: string | null;
+  manufacturer_maintenance_schedule_url: string | null;
+  manufacturer_maintenance_advice: string | null;
+  recommended_inspection_interval_days: number | null;
+  recommended_inspection_interval_flight_hours: string | number | null;
   source_type: AircraftTypeSpec["sourceType"];
   source_reference: string;
   source_version: string | null;
@@ -182,6 +188,18 @@ const toAircraftTypeSpec = (row: AircraftTypeSpecRow): AircraftTypeSpec => ({
   ipRating: row.ip_rating,
   gnssCapability: row.gnss_capability,
   rtkCapable: row.rtk_capable,
+  manufacturerMaintenanceScheduleRef:
+    row.manufacturer_maintenance_schedule_ref,
+  manufacturerMaintenanceScheduleVersion:
+    row.manufacturer_maintenance_schedule_version,
+  manufacturerMaintenanceScheduleUrl:
+    row.manufacturer_maintenance_schedule_url,
+  manufacturerMaintenanceAdvice: row.manufacturer_maintenance_advice,
+  recommendedInspectionIntervalDays:
+    row.recommended_inspection_interval_days,
+  recommendedInspectionIntervalFlightHours: numberOrNull(
+    row.recommended_inspection_interval_flight_hours,
+  ),
   sourceType: row.source_type,
   sourceReference: row.source_reference,
   sourceVersion: row.source_version,
@@ -215,13 +233,19 @@ export class PlatformRepository {
         ip_rating,
         gnss_capability,
         rtk_capable,
+        manufacturer_maintenance_schedule_ref,
+        manufacturer_maintenance_schedule_version,
+        manufacturer_maintenance_schedule_url,
+        manufacturer_maintenance_advice,
+        recommended_inspection_interval_days,
+        recommended_inspection_interval_flight_hours,
         source_type,
         source_reference,
         source_version,
         source_url,
         notes
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
       returning *
       `,
       [
@@ -241,6 +265,12 @@ export class PlatformRepository {
         input.ipRating,
         input.gnssCapability,
         input.rtkCapable,
+        input.manufacturerMaintenanceScheduleRef,
+        input.manufacturerMaintenanceScheduleVersion,
+        input.manufacturerMaintenanceScheduleUrl,
+        input.manufacturerMaintenanceAdvice,
+        input.recommendedInspectionIntervalDays,
+        input.recommendedInspectionIntervalFlightHours,
         input.sourceType,
         input.sourceReference,
         input.sourceVersion,
@@ -345,6 +375,12 @@ export class PlatformRepository {
             'ip_rating', aircraft_type_specs.ip_rating,
             'gnss_capability', aircraft_type_specs.gnss_capability,
             'rtk_capable', aircraft_type_specs.rtk_capable,
+            'manufacturer_maintenance_schedule_ref', aircraft_type_specs.manufacturer_maintenance_schedule_ref,
+            'manufacturer_maintenance_schedule_version', aircraft_type_specs.manufacturer_maintenance_schedule_version,
+            'manufacturer_maintenance_schedule_url', aircraft_type_specs.manufacturer_maintenance_schedule_url,
+            'manufacturer_maintenance_advice', aircraft_type_specs.manufacturer_maintenance_advice,
+            'recommended_inspection_interval_days', aircraft_type_specs.recommended_inspection_interval_days,
+            'recommended_inspection_interval_flight_hours', aircraft_type_specs.recommended_inspection_interval_flight_hours,
             'source_type', aircraft_type_specs.source_type,
             'source_reference', aircraft_type_specs.source_reference,
             'source_version', aircraft_type_specs.source_version,

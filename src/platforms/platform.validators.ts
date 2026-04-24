@@ -265,6 +265,30 @@ export function validateCreateAircraftTypeSpecInput(
     ipRating: optionalTrimmed(input.ipRating, "ipRating"),
     gnssCapability: optionalTrimmed(input.gnssCapability, "gnssCapability"),
     rtkCapable: optionalBoolean(input.rtkCapable, "rtkCapable"),
+    manufacturerMaintenanceScheduleRef: optionalTrimmed(
+      input.manufacturerMaintenanceScheduleRef,
+      "manufacturerMaintenanceScheduleRef",
+    ),
+    manufacturerMaintenanceScheduleVersion: optionalTrimmed(
+      input.manufacturerMaintenanceScheduleVersion,
+      "manufacturerMaintenanceScheduleVersion",
+    ),
+    manufacturerMaintenanceScheduleUrl: optionalTrimmed(
+      input.manufacturerMaintenanceScheduleUrl,
+      "manufacturerMaintenanceScheduleUrl",
+    ),
+    manufacturerMaintenanceAdvice: optionalTrimmed(
+      input.manufacturerMaintenanceAdvice,
+      "manufacturerMaintenanceAdvice",
+    ),
+    recommendedInspectionIntervalDays: optionalPositiveInteger(
+      input.recommendedInspectionIntervalDays,
+      "recommendedInspectionIntervalDays",
+    ),
+    recommendedInspectionIntervalFlightHours: optionalPositiveNumber(
+      input.recommendedInspectionIntervalFlightHours,
+      "recommendedInspectionIntervalFlightHours",
+    ),
     sourceType,
     sourceReference: requiredTrimmed(input.sourceReference, "sourceReference"),
     sourceVersion: optionalTrimmed(input.sourceVersion, "sourceVersion"),

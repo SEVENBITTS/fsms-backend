@@ -139,6 +139,12 @@ export interface CreateAircraftTypeSpecInput {
   ipRating?: string | null;
   gnssCapability?: string | null;
   rtkCapable?: boolean;
+  manufacturerMaintenanceScheduleRef?: string | null;
+  manufacturerMaintenanceScheduleVersion?: string | null;
+  manufacturerMaintenanceScheduleUrl?: string | null;
+  manufacturerMaintenanceAdvice?: string | null;
+  recommendedInspectionIntervalDays?: number | null;
+  recommendedInspectionIntervalFlightHours?: number | null;
   sourceType?: AircraftSpecSourceType;
   sourceReference?: string;
   sourceVersion?: string | null;
@@ -163,6 +169,12 @@ export interface AircraftTypeSpec {
   ipRating: string | null;
   gnssCapability: string | null;
   rtkCapable: boolean;
+  manufacturerMaintenanceScheduleRef: string | null;
+  manufacturerMaintenanceScheduleVersion: string | null;
+  manufacturerMaintenanceScheduleUrl: string | null;
+  manufacturerMaintenanceAdvice: string | null;
+  recommendedInspectionIntervalDays: number | null;
+  recommendedInspectionIntervalFlightHours: number | null;
   sourceType: AircraftSpecSourceType;
   sourceReference: string;
   sourceVersion: string | null;
