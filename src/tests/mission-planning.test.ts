@@ -2122,6 +2122,15 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("areaOverlaySourceRefreshCardContext");
     expect(response.text).toContain("areaOverlayRefreshProvenanceDetail");
     expect(response.text).toContain("areaSourceProvenanceRows");
+    expect(response.text).toContain("areaOverlayFreshnessTone");
+    expect(response.text).toContain("areaOverlayFreshnessLabel");
+    expect(response.text).toContain("areaOverlayFreshnessStroke");
+    expect(response.text).toContain("areaOverlayCoordinatePoints");
+    expect(response.text).toContain("areaFreshnessOverlays");
+    expect(response.text).toContain("area-freshness-overlay");
+    expect(response.text).toContain("Area freshness: green fresh, amber partial, red failed");
+    expect(response.text).toContain("failed carry-forward");
+    expect(response.text).toContain("partial carry-forward");
     expect(response.text).toContain("areaRefreshChronology");
     expect(response.text).toContain("areaRefreshRunRows");
     expect(response.text).toContain("areaRefreshTransitionRows");

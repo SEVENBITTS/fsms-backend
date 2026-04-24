@@ -353,6 +353,80 @@ const areaSourceProvenanceRows = () =>
     })
     .sort((left, right) => severityRank(right.tone) - severityRank(left.tone));
 
+const areaOverlayFreshnessTone = (overlay) => {
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  if (
+    refreshState?.carriedForwardFromFailedRefresh === true ||
+    refreshState?.status === "failed"
+  ) {
+    return "failed";
+  }
+
+  if (
+    refreshState?.carriedForwardFromPartialRefresh === true ||
+    refreshState?.status === "partial"
+  ) {
+    return "partial";
+  }
+
+  return refreshState?.status ?? "missing";
+};
+
+const areaOverlayFreshnessLabel = (overlay) => {
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  const metadata = overlay?.metadata ?? {};
+  const baseLabel = metadata.label ?? metadata.areaId ?? "Area overlay";
+  const status = refreshState?.status ?? "missing";
+
+  if (refreshState?.carriedForwardFromFailedRefresh === true) {
+    return `${baseLabel} | failed carry-forward`;
+  }
+
+  if (refreshState?.carriedForwardFromPartialRefresh === true) {
+    return `${baseLabel} | partial carry-forward`;
+  }
+
+  return `${baseLabel} | ${status}`;
+};
+
+const areaOverlayFreshnessStroke = (overlay) => {
+  const tone = areaOverlayFreshnessTone(overlay);
+
+  if (tone === "failed") {
+    return "#ef4444";
+  }
+
+  if (tone === "partial" || tone === "stale") {
+    return "#f59e0b";
+  }
+
+  if (tone === "fresh") {
+    return "#22c55e";
+  }
+
+  return "#94a3b8";
+};
+
+const areaOverlayCoordinatePoints = (overlay) => {
+  const geometry = overlay?.geometry ?? {};
+
+  if (geometry.type === "polygon" && Array.isArray(geometry.points)) {
+    return geometry.points
+      .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
+      .map((point) => ({ lat: Number(point.lat), lng: Number(point.lng) }));
+  }
+
+  if (
+    geometry.type === "circle" &&
+    Number.isFinite(geometry.centerLat) &&
+    Number.isFinite(geometry.centerLng)
+  ) {
+    return [{ lat: Number(geometry.centerLat), lng: Number(geometry.centerLng) }];
+  }
+
+  return [];
+};
+
 const areaRefreshChronology = () =>
   uiState.areaRefreshChronology?.chronology ?? null;
 
@@ -2102,6 +2176,7 @@ const buildMapMarkup = () => {
       Number.isFinite(latestTelemetry.lng)
       ? [latestTelemetry]
       : [],
+    ...areaConflictOverlays().flatMap(areaOverlayCoordinatePoints),
   );
 
   if (points.length === 0) {
@@ -2173,6 +2248,7 @@ const buildMapMarkup = () => {
     weatherOverlays().length > 0 ? `Weather overlays ${weatherOverlays().length}` : "Weather overlays 0",
     crewedTrafficOverlays().length > 0 ? `Crewed traffic ${crewedTrafficOverlays().length}` : "Crewed traffic 0",
     droneTrafficOverlays().length > 0 ? `Drone traffic ${droneTrafficOverlays().length}` : "Drone traffic 0",
+    areaConflictOverlays().length > 0 ? `Area freshness ${areaConflictOverlays().length}` : "Area freshness 0",
   ];
 
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
@@ -2181,6 +2257,7 @@ const buildMapMarkup = () => {
     "Red marker latest telemetry",
     `Open alerts ${openAlerts.length}`,
     `Conflict windows ${activeConflictAssessmentItems().length}`,
+    "Area freshness: green fresh, amber partial, red failed",
   ];
 
   const highestAlertSeverity = openAlerts.reduce((highest, alert) => {
@@ -2351,6 +2428,72 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
+  const areaFreshnessOverlays = areaConflictOverlays()
+    .map((overlay) => {
+      const geometry = overlay?.geometry ?? {};
+      const stroke = areaOverlayFreshnessStroke(overlay);
+      const tone = areaOverlayFreshnessTone(overlay);
+      const label = areaOverlayFreshnessLabel(overlay);
+      const points = areaOverlayCoordinatePoints(overlay);
+
+      if (geometry.type === "polygon" && points.length >= 3) {
+        const projectedPoints = points.map((point) => toPoint(point.lat, point.lng));
+        const centroid = projectedPoints.reduce(
+          (accumulator, point) => ({
+            x: accumulator.x + point.x / projectedPoints.length,
+            y: accumulator.y + point.y / projectedPoints.length,
+          }),
+          { x: 0, y: 0 },
+        );
+
+        return `
+          <g class="area-freshness-overlay area-freshness-overlay-${escapeHtml(tone)}">
+            <polygon
+              points="${projectedPoints.map((point) => `${point.x},${point.y}`).join(" ")}"
+              fill="${stroke}"
+              fill-opacity="${tone === "fresh" ? "0.06" : "0.12"}"
+              stroke="${stroke}"
+              stroke-width="${tone === "fresh" ? "2" : "3"}"
+              stroke-dasharray="${tone === "fresh" ? "10 8" : "4 6"}"
+              opacity="0.86"
+            />
+            <text x="${centroid.x}" y="${centroid.y}" fill="${stroke}" text-anchor="middle" font-size="12" font-weight="800">${escapeHtml(label)}</text>
+          </g>
+        `;
+      }
+
+      if (geometry.type === "circle" && points.length === 1) {
+        const center = toPoint(points[0].lat, points[0].lng);
+        const pixelRadius = Math.max(
+          18,
+          Math.min(
+            120,
+            ((Number(geometry.radiusMeters) || 450) / 111320) *
+              ((height - padding * 2) / latSpan),
+          ),
+        );
+
+        return `
+          <g class="area-freshness-overlay area-freshness-overlay-${escapeHtml(tone)}">
+            <circle
+              cx="${center.x}"
+              cy="${center.y}"
+              r="${pixelRadius}"
+              fill="${stroke}"
+              fill-opacity="${tone === "fresh" ? "0.05" : "0.1"}"
+              stroke="${stroke}"
+              stroke-width="${tone === "fresh" ? "2" : "3"}"
+              stroke-dasharray="${tone === "fresh" ? "10 8" : "4 6"}"
+              opacity="0.86"
+            />
+            <text x="${center.x}" y="${center.y - pixelRadius - 8}" fill="${stroke}" text-anchor="middle" font-size="12" font-weight="800">${escapeHtml(label)}</text>
+          </g>
+        `;
+      }
+
+      return "";
+    })
+    .join("");
   const conflictSeverityBands = conflictEnvelopeTargets
     .map((target) =>
       target.radii
@@ -2421,6 +2564,7 @@ const buildMapMarkup = () => {
     </div>
     <svg class="map-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Mission live operations map">
       ${airspaceRegion}
+      ${areaFreshnessOverlays}
       ${riskCorridor}
       ${replayPath ? `<polyline points="${replayPath}" fill="none" stroke="#224665" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.72" />` : ""}
       ${completedReplayPath ? `<polyline points="${completedReplayPath}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />` : ""}
