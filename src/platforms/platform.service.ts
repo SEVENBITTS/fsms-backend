@@ -35,6 +35,19 @@ export class PlatformService {
     const client = await this.pool.connect();
 
     try {
+      if (validated.aircraftTypeSpecId) {
+        const spec = await this.platformRepository.getAircraftTypeSpecById(
+          client,
+          validated.aircraftTypeSpecId,
+        );
+
+        if (!spec) {
+          throw new PlatformValidationError(
+            "aircraftTypeSpecId does not reference a known aircraft capability specification",
+          );
+        }
+      }
+
       return await this.platformRepository.insertPlatform(client, validated);
     } finally {
       client.release();

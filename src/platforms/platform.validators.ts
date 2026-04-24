@@ -140,6 +140,10 @@ export function validateCreatePlatformInput(input: CreatePlatformInput) {
 
   return {
     name: requiredTrimmed(input.name, "name"),
+    aircraftTypeSpecId: optionalTrimmed(
+      input.aircraftTypeSpecId,
+      "aircraftTypeSpecId",
+    ),
     registration: optionalTrimmed(input.registration, "registration"),
     platformType: optionalTrimmed(input.platformType, "platformType"),
     manufacturer: optionalTrimmed(input.manufacturer, "manufacturer"),

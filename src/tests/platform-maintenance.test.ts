@@ -147,6 +147,92 @@ describe("platform maintenance integration", () => {
     });
   });
 
+  it("links UAV platforms to curated aircraft capability specifications", async () => {
+    const specResponse = await request(app)
+      .post("/platforms/aircraft-type-specs")
+      .send({
+        displayName: "DJI M30T curated operating profile",
+        manufacturer: "DJI",
+        model: "Matrice 30T",
+        aircraftType: "multi-rotor",
+        maxWindMps: 12,
+        sourceType: "manufacturer",
+        sourceReference: "Manufacturer datasheet reviewed by ops",
+      });
+
+    expect(specResponse.status).toBe(201);
+
+    const specId = specResponse.body.spec.id;
+    const platformResponse = await request(app)
+      .post("/platforms")
+      .send({
+        name: "UAV Echo",
+        aircraftTypeSpecId: specId,
+        status: "active",
+      });
+
+    expect(platformResponse.status).toBe(201);
+    expect(platformResponse.body.platform).toMatchObject({
+      name: "UAV Echo",
+      aircraftTypeSpecId: specId,
+      aircraftTypeSpec: {
+        id: specId,
+        displayName: "DJI M30T curated operating profile",
+        manufacturer: "DJI",
+        model: "Matrice 30T",
+        maxWindMps: 12,
+        sourceReference: "Manufacturer datasheet reviewed by ops",
+      },
+    });
+
+    const readResponse = await request(app).get(
+      `/platforms/${platformResponse.body.platform.id}`,
+    );
+
+    expect(readResponse.status).toBe(200);
+    expect(readResponse.body.platform).toMatchObject({
+      id: platformResponse.body.platform.id,
+      aircraftTypeSpecId: specId,
+      aircraftTypeSpec: {
+        id: specId,
+        displayName: "DJI M30T curated operating profile",
+      },
+    });
+  });
+
+  it("keeps platform creation compatible when no aircraft capability spec is linked", async () => {
+    const response = await request(app)
+      .post("/platforms")
+      .send({
+        name: "UAV Foxtrot",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.platform).toMatchObject({
+      name: "UAV Foxtrot",
+      aircraftTypeSpecId: null,
+      aircraftTypeSpec: null,
+    });
+  });
+
+  it("rejects UAV platforms linked to unknown aircraft capability specifications", async () => {
+    const response = await request(app)
+      .post("/platforms")
+      .send({
+        name: "UAV Ghost",
+        aircraftTypeSpecId: "4e8454e3-0cf6-4881-8b12-b6fbdfe3a1ab",
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "platform_validation_error",
+        message:
+          "aircraftTypeSpecId does not reference a known aircraft capability specification",
+      },
+    });
+  });
+
   it("reports maintenance_due when an active platform has overdue maintenance", async () => {
     const platformResponse = await request(app)
       .post("/platforms")

@@ -10,6 +10,8 @@ import type {
 interface PlatformRow extends QueryResultRow {
   id: string;
   name: string;
+  aircraft_type_spec_id: string | null;
+  aircraft_type_spec: AircraftTypeSpecRow | null;
   registration: string | null;
   platform_type: string | null;
   manufacturer: string | null;
@@ -73,11 +75,14 @@ interface AircraftTypeSpecRow extends QueryResultRow {
   source_version: string | null;
   source_url: string | null;
   notes: string | null;
-  created_at: Date;
-  updated_at: Date;
+  created_at: Date | string;
+  updated_at: Date | string;
 }
 
-type CreatePlatformRow = Omit<Platform, "id" | "createdAt" | "updatedAt">;
+type CreatePlatformRow = Omit<
+  Platform,
+  "id" | "createdAt" | "updatedAt" | "aircraftTypeSpec"
+>;
 
 type CreateScheduleRow = {
   platformId: string;
@@ -109,9 +114,16 @@ type CreateAircraftTypeSpecRow = Omit<
 const numberOrNull = (value: string | number | null): number | null =>
   value === null ? null : Number(value);
 
+const toIsoString = (value: Date | string): string =>
+  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
 const toPlatform = (row: PlatformRow): Platform => ({
   id: row.id,
   name: row.name,
+  aircraftTypeSpecId: row.aircraft_type_spec_id,
+  aircraftTypeSpec: row.aircraft_type_spec
+    ? toAircraftTypeSpec(row.aircraft_type_spec)
+    : null,
   registration: row.registration,
   platformType: row.platform_type,
   manufacturer: row.manufacturer,
@@ -175,8 +187,8 @@ const toAircraftTypeSpec = (row: AircraftTypeSpecRow): AircraftTypeSpec => ({
   sourceVersion: row.source_version,
   sourceUrl: row.source_url,
   notes: row.notes,
-  createdAt: row.created_at.toISOString(),
-  updatedAt: row.updated_at.toISOString(),
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
 });
 
 export class PlatformRepository {
@@ -252,12 +264,29 @@ export class PlatformRepository {
     return result.rows.map(toAircraftTypeSpec);
   }
 
+  async getAircraftTypeSpecById(
+    tx: PoolClient,
+    specId: string,
+  ): Promise<AircraftTypeSpec | null> {
+    const result = await tx.query<AircraftTypeSpecRow>(
+      `
+      select *
+      from aircraft_type_specs
+      where id = $1
+      `,
+      [specId],
+    );
+
+    return result.rows[0] ? toAircraftTypeSpec(result.rows[0]) : null;
+  }
+
   async insertPlatform(tx: PoolClient, input: CreatePlatformRow): Promise<Platform> {
     const result = await tx.query<PlatformRow>(
       `
       insert into platforms (
         id,
         name,
+        aircraft_type_spec_id,
         registration,
         platform_type,
         manufacturer,
@@ -267,12 +296,13 @@ export class PlatformRepository {
         total_flight_hours,
         notes
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       returning *
       `,
       [
         randomUUID(),
         input.name,
+        input.aircraftTypeSpecId,
         input.registration,
         input.platformType,
         input.manufacturer,
@@ -284,7 +314,8 @@ export class PlatformRepository {
       ],
     );
 
-    return toPlatform(result.rows[0]);
+    const platform = await this.getPlatformById(tx, result.rows[0].id);
+    return platform ?? toPlatform({ ...result.rows[0], aircraft_type_spec: null });
   }
 
   async getPlatformById(
@@ -293,9 +324,40 @@ export class PlatformRepository {
   ): Promise<Platform | null> {
     const result = await tx.query<PlatformRow>(
       `
-      select *
+      select
+        platforms.*,
+        case
+          when aircraft_type_specs.id is null then null
+          else jsonb_build_object(
+            'id', aircraft_type_specs.id,
+            'display_name', aircraft_type_specs.display_name,
+            'manufacturer', aircraft_type_specs.manufacturer,
+            'model', aircraft_type_specs.model,
+            'aircraft_type', aircraft_type_specs.aircraft_type,
+            'mtom_kg', aircraft_type_specs.mtom_kg,
+            'max_payload_kg', aircraft_type_specs.max_payload_kg,
+            'max_wind_mps', aircraft_type_specs.max_wind_mps,
+            'max_gust_mps', aircraft_type_specs.max_gust_mps,
+            'min_operating_temp_c', aircraft_type_specs.min_operating_temp_c,
+            'max_operating_temp_c', aircraft_type_specs.max_operating_temp_c,
+            'max_flight_time_min', aircraft_type_specs.max_flight_time_min,
+            'max_range_m', aircraft_type_specs.max_range_m,
+            'ip_rating', aircraft_type_specs.ip_rating,
+            'gnss_capability', aircraft_type_specs.gnss_capability,
+            'rtk_capable', aircraft_type_specs.rtk_capable,
+            'source_type', aircraft_type_specs.source_type,
+            'source_reference', aircraft_type_specs.source_reference,
+            'source_version', aircraft_type_specs.source_version,
+            'source_url', aircraft_type_specs.source_url,
+            'notes', aircraft_type_specs.notes,
+            'created_at', aircraft_type_specs.created_at,
+            'updated_at', aircraft_type_specs.updated_at
+          )
+        end as aircraft_type_spec
       from platforms
-      where id = $1
+      left join aircraft_type_specs
+        on aircraft_type_specs.id = platforms.aircraft_type_spec_id
+      where platforms.id = $1
       `,
       [platformId],
     );

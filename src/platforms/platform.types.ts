@@ -9,6 +9,7 @@ export type MaintenanceScheduleStatus = "active" | "inactive";
 
 export interface CreatePlatformInput {
   name?: string;
+  aircraftTypeSpecId?: string | null;
   registration?: string | null;
   platformType?: string | null;
   manufacturer?: string | null;
@@ -22,6 +23,8 @@ export interface CreatePlatformInput {
 export interface Platform {
   id: string;
   name: string;
+  aircraftTypeSpecId: string | null;
+  aircraftTypeSpec: AircraftTypeSpec | null;
   registration: string | null;
   platformType: string | null;
   manufacturer: string | null;
