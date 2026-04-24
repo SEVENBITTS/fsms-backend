@@ -2,13 +2,14 @@ export type AlertType =
   | "ALTITUDE_HIGH"
   | "SPEED_HIGH"
   | "RESTRICTED_ZONE"
-  | "MISSION_INACTIVE_TELEMETRY";
+  | "MISSION_INACTIVE_TELEMETRY"
+  | "REGULATORY_AMENDMENT";
 
 export type AlertSeverity = "info" | "warning" | "critical";
 
 export type AlertStatus = "open" | "acknowledged" | "resolved";
 
-export type AlertSource = "telemetry";
+export type AlertSource = "telemetry" | "regulatory";
 
 export interface AlertRow {
   id: string;
@@ -63,4 +64,21 @@ export interface AcknowledgeAlertInput {
 
 export interface ResolveAlertInput {
   resolvedAt?: string;
+}
+
+export interface RegulatoryAmendmentAlertInput {
+  sourceDocument: string;
+  previousVersion: string;
+  currentVersion: string;
+  publishedAt: string;
+  effectiveFrom?: string | null;
+  amendmentSummary: string;
+  changeImpact: string;
+  affectedRequirementRefs?: string[];
+  reviewAction: string;
+}
+
+export interface RegulatoryAmendmentAlertResult {
+  created: Alert[];
+  duplicate: boolean;
 }

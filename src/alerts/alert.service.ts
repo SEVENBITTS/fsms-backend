@@ -1,6 +1,12 @@
 import type { Pool, PoolClient } from "pg";
 import { AlertRepository } from "./alert.repository";
-import type { Alert, AlertType, CreateAlertInput } from "./alert.types";
+import type {
+  Alert,
+  AlertType,
+  CreateAlertInput,
+  RegulatoryAmendmentAlertInput,
+  RegulatoryAmendmentAlertResult,
+} from "./alert.types";
 
 export interface AlertThresholdConfig {
   altitudeHighM: number;
@@ -132,6 +138,52 @@ export class AlertService {
     };
   }
 
+  async recordRegulatoryAmendmentImpact(
+    missionId: string,
+    input: RegulatoryAmendmentAlertInput,
+  ): Promise<RegulatoryAmendmentAlertResult> {
+    const amendment = this.normalizeRegulatoryAmendment(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+
+      const existingOpen = await this.alertRepository.listOpenByMissionAndType(
+        client,
+        missionId,
+        "REGULATORY_AMENDMENT",
+      );
+      const duplicate = existingOpen.some(
+        (alert) =>
+          alert.metadata.sourceDocument === amendment.sourceDocument &&
+          alert.metadata.currentVersion === amendment.currentVersion,
+      );
+
+      if (duplicate) {
+        await client.query("commit");
+        return { created: [], duplicate: true };
+      }
+
+      const alert = await this.alertRepository.insert(client, {
+        missionId,
+        alertType: "REGULATORY_AMENDMENT",
+        severity: "warning",
+        message: `Regulatory amendment detected: ${amendment.sourceDocument} ${amendment.previousVersion} -> ${amendment.currentVersion}`,
+        triggeredAt: amendment.publishedAt,
+        metadata: { ...amendment },
+        source: "regulatory",
+      });
+
+      await client.query("commit");
+      return { created: [alert], duplicate: false };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private async syncThresholdAlert(
     client: PoolClient,
     missionId: string,
@@ -178,5 +230,40 @@ export class AlertService {
     );
 
     return { created: [], resolvedCount };
+  }
+
+  private normalizeRegulatoryAmendment(
+    input: RegulatoryAmendmentAlertInput,
+  ): RegulatoryAmendmentAlertInput {
+    const sourceDocument = input.sourceDocument.trim();
+    const previousVersion = input.previousVersion.trim();
+    const currentVersion = input.currentVersion.trim();
+    const amendmentSummary = input.amendmentSummary.trim();
+    const changeImpact = input.changeImpact.trim();
+    const reviewAction = input.reviewAction.trim();
+
+    if (
+      !sourceDocument ||
+      !previousVersion ||
+      !currentVersion ||
+      !input.publishedAt ||
+      !amendmentSummary ||
+      !changeImpact ||
+      !reviewAction
+    ) {
+      throw new Error("Regulatory amendment alerts require source, version, change, and review details");
+    }
+
+    return {
+      sourceDocument,
+      previousVersion,
+      currentVersion,
+      publishedAt: input.publishedAt,
+      effectiveFrom: input.effectiveFrom ?? null,
+      amendmentSummary,
+      changeImpact,
+      affectedRequirementRefs: input.affectedRequirementRefs ?? [],
+      reviewAction,
+    };
   }
 }

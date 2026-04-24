@@ -225,4 +225,76 @@ describe("AlertService", () => {
     const alerts = await listAlertsForMission(missionId);
     expect(alerts).toHaveLength(0);
   });
+
+  it("creates a regulatory amendment alert with change impact details", async () => {
+    const missionId = randomUUID();
+    await insertMission(missionId);
+
+    const result = await alertService.recordRegulatoryAmendmentImpact(
+      missionId,
+      {
+        sourceDocument: "CAP 722",
+        previousVersion: "9.2",
+        currentVersion: "9.3",
+        publishedAt: "2026-04-20T09:00:00Z",
+        effectiveFrom: "2026-05-01T00:00:00Z",
+        amendmentSummary: "Updated UAS operating guidance",
+        changeImpact: "Review airspace planning and operating safety case evidence",
+        affectedRequirementRefs: ["CAP722:2.1", "CAP722A:OSC"],
+        reviewAction: "Compliance owner to assess affected controls before dispatch",
+      },
+    );
+
+    expect(result.duplicate).toBe(false);
+    expect(result.created).toHaveLength(1);
+    expect(result.created[0]).toMatchObject({
+      alertType: "REGULATORY_AMENDMENT",
+      severity: "warning",
+      source: "regulatory",
+      triggeredAt: "2026-04-20T09:00:00.000Z",
+    });
+    expect(result.created[0].metadata).toMatchObject({
+      sourceDocument: "CAP 722",
+      previousVersion: "9.2",
+      currentVersion: "9.3",
+      changeImpact: "Review airspace planning and operating safety case evidence",
+      reviewAction: "Compliance owner to assess affected controls before dispatch",
+    });
+
+    const alerts = await listAlertsForMission(missionId);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].message).toBe(
+      "Regulatory amendment detected: CAP 722 9.2 -> 9.3",
+    );
+  });
+
+  it("does not duplicate an open regulatory amendment alert for the same source version", async () => {
+    const missionId = randomUUID();
+    await insertMission(missionId);
+
+    const amendment = {
+      sourceDocument: "CAP 722",
+      previousVersion: "9.2",
+      currentVersion: "9.3",
+      publishedAt: "2026-04-20T09:00:00Z",
+      amendmentSummary: "Updated UAS operating guidance",
+      changeImpact: "Review affected planning controls",
+      reviewAction: "Compliance owner review required",
+    };
+
+    const first = await alertService.recordRegulatoryAmendmentImpact(
+      missionId,
+      amendment,
+    );
+    const second = await alertService.recordRegulatoryAmendmentImpact(
+      missionId,
+      amendment,
+    );
+
+    expect(first.created).toHaveLength(1);
+    expect(second).toEqual({ created: [], duplicate: true });
+
+    const alerts = await listAlertsForMission(missionId);
+    expect(alerts).toHaveLength(1);
+  });
 });

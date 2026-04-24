@@ -1,28 +1,30 @@
 # NEXT STEP
 
 ## Goal
-Show secondary advisory source and replay relevance in live operations.
+Create a first regulatory amendment alert hook.
 
 ---
 
 ## Build
 
 ### 1. API behavior
-- keep using the existing conflict-guidance acknowledgement API
-- keep using existing advisory related-source and replay-relevance data
-- enrich secondary advisory rows with source and relevance context
-- leave primary advisory rendering unchanged
-- keep the acknowledgement action as evidence capture only
+- keep using the existing alerts model
+- add a regulatory amendment alert type for affected missions
+- capture source document, previous version, current version, published date, summary, impact, affected references, and review action
+- prevent duplicate open amendment alerts for the same source document and version
+- avoid automatic legal interpretation or dispatch authority changes
 
 ### 2. Operator clarity
-- make secondary advisory context traceable back to the source layer
-- show whether the advisory is current or near the replay window
-- do not add any automated avoidance or direct-control behavior
+- show that an amendment has occurred
+- explain what changed at summary/impact level
+- make the required compliance review action explicit
+- keep this as an alert/review workflow, not automatic approval or rejection
 
 ### 3. Tests
-- static live-ops script parses cleanly
-- TypeScript build still passes
-- no backend API or schema change is introduced
+- add service coverage for regulatory amendment alerts
+- confirm duplicate amendment alerts are suppressed
+- run focused alert tests
+- run build
 
 ---
 
@@ -31,10 +33,12 @@ Show secondary advisory source and replay relevance in live operations.
 - No automated avoidance execution
 - No pilot command transmission
 - No BVLOS command authority yet
+- No claim that the system has legally interpreted an amendment
 
 ---
 
 ## Done When
-- Secondary advisory rows include related source
-- Secondary advisory rows include replay relevance
-- No operational authority or direct-control behavior changes
+- Regulatory amendment alerts can be created for affected missions
+- Alerts include source/version/change-impact/review-action metadata
+- Duplicate open alerts are avoided for the same amendment
+- No operational authority, approval, or direct-control behavior changes
