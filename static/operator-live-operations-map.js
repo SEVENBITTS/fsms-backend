@@ -936,17 +936,35 @@ const primaryConflictAssessmentItem = () => activeConflictAssessmentItems()[0] ?
 const secondaryConflictAssessmentItems = () =>
   activeConflictAssessmentItems().slice(1, 4);
 
+const fallbackResolutionGuidance = (conflict) => ({
+  mode: "decision_support",
+  urgency:
+    conflict?.severity === "critical"
+      ? "immediate_review"
+      : conflict?.severity === "caution"
+        ? "review"
+        : "monitor",
+  recommendedAction:
+    conflict?.severity === "critical"
+      ? "Review immediately"
+      : conflict?.severity === "caution"
+        ? "Review conflict context"
+        : "Monitor conflict context",
+  authorityRequired: conflict?.severity === "critical" ? "supervisor" : "operator",
+  pilotInstructionStatus: "not_a_pilot_command",
+  rationale: conflict?.explanation ?? "No conflict rationale is currently available.",
+});
+
 const deriveConflictAdvisories = () =>
   activeConflictAssessmentItems().slice(0, 5).map((conflict) => {
+    const guidance =
+      conflict.resolutionGuidance ?? fallbackResolutionGuidance(conflict);
     let headline = "Monitor traffic proximity";
-    let recommendation = "Monitor";
 
-    if (conflict.severity === "critical") {
+    if (guidance.urgency === "immediate_review") {
       headline = "Immediate deconfliction review";
-      recommendation = "Review immediately";
-    } else if (conflict.severity === "caution") {
+    } else if (guidance.urgency === "review") {
       headline = "Deconfliction review recommended";
-      recommendation = "Deconflict";
     }
 
     const replayRelevance = conflict.replayRelevant
@@ -961,7 +979,10 @@ const deriveConflictAdvisories = () =>
       id: conflict.id,
       tone: conflict.severity,
       headline,
-      recommendation,
+      recommendation: guidance.recommendedAction,
+      authorityRequired: guidance.authorityRequired,
+      pilotInstructionStatus: guidance.pilotInstructionStatus,
+      guidanceRationale: guidance.rationale,
       relatedObject: conflict.overlayLabel,
       relatedSource: `${conflict.relatedSource.provider} / ${conflict.relatedSource.sourceType}`,
       reasoning: conflict.explanation,
@@ -2626,10 +2647,15 @@ const renderConflictAdvisory = () => {
                 <div>${escapeHtml(primary.reasoning)}</div>
                 <div class="alert-window-meta">
                   Recommended attention: ${escapeHtml(primary.recommendation)}<br />
+                  Authority required: ${escapeHtml(primary.authorityRequired)}<br />
+                  Pilot instruction status: ${escapeHtml(primary.pilotInstructionStatus)}<br />
                   Related object: ${escapeHtml(primary.relatedObject)}<br />
                   Related source: ${escapeHtml(primary.relatedSource)}<br />
                   Relevance: ${escapeHtml(primary.relevance)}<br />
                   Separation: ${escapeHtml(primary.summary)}
+                </div>
+                <div class="alert-window-meta">
+                  Guidance rationale: ${escapeHtml(primary.guidanceRationale)}
                 </div>
               </article>
             `
@@ -2644,7 +2670,7 @@ const renderConflictAdvisory = () => {
             : renderList(
                 secondary.map((advisory) => ({
                   label: `${advisory.recommendation} | ${advisory.relatedObject}`,
-                  value: advisory.summary,
+                  value: `${advisory.authorityRequired} | ${advisory.summary}`,
                 })),
                 "additional advisories",
               )

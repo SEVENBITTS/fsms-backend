@@ -16,6 +16,7 @@ import type { MissionTelemetryRow } from "../missions/mission-telemetry.types";
 import type {
   MissionTrafficConflictAssessmentResult,
   TrafficConflictAssessmentItem,
+  TrafficConflictResolutionGuidance,
   TrafficConflictReferencePoint,
   TrafficConflictSeverity,
   TrafficConflictStatus,
@@ -526,6 +527,50 @@ const buildExplanation = (
     : `${base}: ${lateral}, ${vertical}, ${bearing}.`;
 };
 
+const buildResolutionGuidance = (
+  overlayKind: TrafficConflictAssessmentItem["overlayKind"],
+  severity: TrafficConflictSeverity,
+  status: TrafficConflictStatus,
+  insideArea: boolean | null,
+  explanation: string,
+): TrafficConflictResolutionGuidance => {
+  if (severity === "critical") {
+    const recommendedAction =
+      overlayKind === "area_conflict" && insideArea
+        ? "Hold or suspend mission progress and escalate before continuing"
+        : "Review immediately and prepare deconfliction, abort, or diversion options";
+
+    return {
+      mode: "decision_support",
+      urgency: "immediate_review",
+      recommendedAction,
+      authorityRequired: "supervisor",
+      pilotInstructionStatus: "not_a_pilot_command",
+      rationale: `${explanation} This is decision-support guidance and does not directly command the pilot or aircraft.`,
+    };
+  }
+
+  if (severity === "caution" || status === "conflict_candidate") {
+    return {
+      mode: "decision_support",
+      urgency: "review",
+      recommendedAction: "Review conflict context and confirm separation remains acceptable",
+      authorityRequired: "operator",
+      pilotInstructionStatus: "not_a_pilot_command",
+      rationale: `${explanation} Operator review is recommended before continuing without further action.`,
+    };
+  }
+
+  return {
+    mode: "decision_support",
+    urgency: "monitor",
+    recommendedAction: "Monitor conflict context",
+    authorityRequired: "operator",
+    pilotInstructionStatus: "not_a_pilot_command",
+    rationale: `${explanation} Continue monitoring unless the operational picture changes.`,
+  };
+};
+
 const toReferenceTelemetry = (
   row: MissionTelemetryRow | null,
 ): TrafficConflictReferencePoint | null =>
@@ -705,6 +750,14 @@ export class TrafficConflictAssessmentService {
                     : `${round(geometryAssessment.bearingDegrees)}° bearing from mission reference`
                 }, ${temporalRelationText}.${validityWindowText ? `${validityWindowText}.` : ""}${verticalRelationText ? ` ${verticalRelationText}.` : ""}${altitudeBandText ? `${altitudeBandText}.` : ""}${weather.reason ? ` ${weather.reason}.` : ""}`;
 
+            const resolutionGuidance = buildResolutionGuidance(
+              "area_conflict",
+              severity,
+              classification.status,
+              geometryAssessment.insideArea,
+              explanation,
+            );
+
             return {
               id: randomUUID(),
               missionId,
@@ -717,6 +770,7 @@ export class TrafficConflictAssessmentService {
               severity,
               summary,
               explanation,
+              resolutionGuidance,
               overlayLabel,
               relatedSource: { ...overlay.source },
               measurementBasis: {
@@ -788,6 +842,13 @@ export class TrafficConflictAssessmentService {
             classification.severity,
             weather.steps,
           );
+          const explanation = buildExplanation(
+            overlay,
+            lateralDistanceMeters,
+            altitudeDeltaFt,
+            bearingToOverlayDegrees,
+            weather.reason,
+          );
 
           return {
             id: randomUUID(),
@@ -803,12 +864,13 @@ export class TrafficConflictAssessmentService {
               classification.status === "conflict_candidate"
                 ? `${overlayLabel} conflict candidate`
                 : `${overlayLabel} monitor candidate`,
-            explanation: buildExplanation(
-              overlay,
-              lateralDistanceMeters,
-              altitudeDeltaFt,
-              bearingToOverlayDegrees,
-              weather.reason,
+            explanation,
+            resolutionGuidance: buildResolutionGuidance(
+              overlay.kind,
+              severity,
+              classification.status,
+              null,
+              explanation,
             ),
             overlayLabel,
             relatedSource: { ...overlay.source },

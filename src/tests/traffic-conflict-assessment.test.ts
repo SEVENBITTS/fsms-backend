@@ -182,6 +182,11 @@ describe("traffic conflict assessment integration", () => {
             rangeMeters: expect.any(Number),
             bearingDegrees: expect.any(Number),
           }),
+          resolutionGuidance: expect.objectContaining({
+            mode: "decision_support",
+            recommendedAction: expect.any(String),
+            pilotInstructionStatus: "not_a_pilot_command",
+          }),
         }),
         expect.objectContaining({
           missionId,
@@ -196,6 +201,11 @@ describe("traffic conflict assessment integration", () => {
           metrics: expect.objectContaining({
             rangeMeters: expect.any(Number),
             bearingDegrees: expect.any(Number),
+          }),
+          resolutionGuidance: expect.objectContaining({
+            mode: "decision_support",
+            recommendedAction: expect.any(String),
+            pilotInstructionStatus: "not_a_pilot_command",
           }),
         }),
       ]),
@@ -307,6 +317,12 @@ describe("traffic conflict assessment integration", () => {
             rangeMeters: expect.any(Number),
             bearingDegrees: expect.any(Number),
             insideArea: expect.any(Boolean),
+          }),
+          resolutionGuidance: expect.objectContaining({
+            mode: "decision_support",
+            urgency: "immediate_review",
+            authorityRequired: "supervisor",
+            pilotInstructionStatus: "not_a_pilot_command",
           }),
         }),
         expect.objectContaining({

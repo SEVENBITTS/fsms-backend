@@ -4,6 +4,22 @@ export type TrafficConflictStatus = "monitor" | "conflict_candidate";
 
 export type TrafficConflictSeverity = "info" | "caution" | "critical";
 
+export type TrafficConflictGuidanceUrgency =
+  | "monitor"
+  | "review"
+  | "immediate_review";
+
+export type TrafficConflictGuidanceAuthority = "operator" | "supervisor";
+
+export interface TrafficConflictResolutionGuidance {
+  mode: "decision_support";
+  urgency: TrafficConflictGuidanceUrgency;
+  recommendedAction: string;
+  authorityRequired: TrafficConflictGuidanceAuthority;
+  pilotInstructionStatus: "not_a_pilot_command";
+  rationale: string;
+}
+
 export interface TrafficConflictReferencePoint {
   timestamp: string;
   lat: number | null;
@@ -29,6 +45,7 @@ export interface TrafficConflictAssessmentItem {
   severity: TrafficConflictSeverity;
   summary: string;
   explanation: string;
+  resolutionGuidance: TrafficConflictResolutionGuidance;
   overlayLabel: string;
   relatedSource: {
     provider: string;

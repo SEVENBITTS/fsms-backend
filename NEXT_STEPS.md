@@ -1,33 +1,39 @@
 # NEXT STEP
 
 ## Goal
-Build replay on top of telemetry history.
+Add operator-facing conflict resolution guidance as decision support.
 
 ---
 
 ## Build
 
-### 1. Replay service
-- read telemetry history for mission
-- return ordered records for time-window replay
+### 1. Conflict guidance model
+- extend conflict assessment responses with resolution guidance
+- keep guidance explicitly advisory, not a pilot command
+- include authority required and rationale
 
-### 2. Replay endpoint
-- `GET /missions/:id/replay?from=...&to=...`
+### 2. Live-ops presentation
+- show recommended attention
+- show authority required
+- show pilot instruction status
+- show guidance rationale
 
 ### 3. Tests
-- respects ordering
-- respects mission isolation
-- respects requested time range
+- conflict assessment includes guidance
+- critical conflicts escalate to immediate review
+- guidance remains marked as not a pilot command
 
 ---
 
 ## Do NOT do
-- No UI
-- No auth
-- No performance optimization yet
+- No direct aircraft control
+- No automated avoidance execution
+- No pilot command transmission
+- No BVLOS command authority yet
 
 ---
 
 ## Done When
-- Replay data can be fetched for a mission and range
-- Covered by integration tests
+- Conflict responses include auditable decision-support guidance
+- Live ops shows the guidance clearly
+- Build and focused conflict tests pass
