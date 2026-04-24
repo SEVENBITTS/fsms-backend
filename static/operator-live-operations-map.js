@@ -1052,9 +1052,7 @@ const deriveConflictAdvisories = () =>
       ...advisory,
       acknowledgement,
       acknowledgementStatus: acknowledgement
-        ? `Recorded by ${acknowledgement.acknowledgedBy} at ${formatDateTime(
-            acknowledgement.createdAt,
-          )}`
+        ? `Recorded by ${acknowledgement.acknowledgedBy} (${acknowledgement.acknowledgementRole}) at ${formatDateTime(acknowledgement.createdAt)}`
         : advisory.acknowledgementRequired
           ? "Required"
           : "Not required",
@@ -2763,6 +2761,7 @@ const renderConflictAdvisory = () => {
                     ? `
                       <div class="alert-window-meta">
                         Audit record: ${escapeHtml(primary.acknowledgement.id)}<br />
+                        Role: ${escapeHtml(primary.acknowledgement.acknowledgementRole)}<br />
                         Recorded at: ${escapeHtml(formatDateTime(primary.acknowledgement.createdAt))}<br />
                         Guidance summary: ${escapeHtml(primary.acknowledgement.guidanceSummary)}<br />
                         Pilot instruction status: ${escapeHtml(primary.acknowledgement.pilotInstructionStatus)}<br />
