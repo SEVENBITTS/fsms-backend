@@ -2877,6 +2877,11 @@ const recordConflictGuidanceAcknowledgement = async (button) => {
     setConnectionState("Conflict guidance acknowledgement recorded", "tone-ok");
   } catch (error) {
     button.disabled = false;
+    if (error?.type === "conflict_guidance_acknowledgement_already_exists") {
+      await loadConflictGuidanceAcknowledgements(missionId);
+      renderLiveOperations();
+    }
+
     const message =
       error?.type === "conflict_guidance_acknowledgement_already_exists"
         ? "Conflict guidance acknowledgement already recorded for this advisory"

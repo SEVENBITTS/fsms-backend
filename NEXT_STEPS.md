@@ -1,7 +1,7 @@
 # NEXT STEP
 
 ## Goal
-Show friendly duplicate acknowledgement errors in live operations.
+Refresh live-ops acknowledgement state after duplicate conflicts.
 
 ---
 
@@ -9,13 +9,14 @@ Show friendly duplicate acknowledgement errors in live operations.
 
 ### 1. API behavior
 - keep using the existing conflict-guidance acknowledgement API
-- preserve backend error type/status in the live-ops fetch helper
 - detect duplicate acknowledgement conflict responses in the acknowledgement flow
+- reload recorded acknowledgements after a duplicate conflict response
+- re-render live operations so the recorded audit state is shown
 - keep the acknowledgement action as evidence capture only
 
 ### 2. Operator clarity
-- show a clear "already recorded" message for duplicate acknowledgement attempts
-- avoid exposing raw backend conflict wording to operators
+- keep the clear "already recorded" message for duplicate attempts
+- replace stale buttons with the current recorded acknowledgement state
 - do not add any automated avoidance or direct-control behavior
 
 ### 3. Tests
@@ -34,6 +35,6 @@ Show friendly duplicate acknowledgement errors in live operations.
 ---
 
 ## Done When
-- Duplicate acknowledgement attempts display a clear live-ops message
-- Other fetch failures still show their original messages
+- Duplicate acknowledgement attempts refresh the local acknowledgement list
+- The live-ops panel re-renders to show the existing audit record
 - No operational authority or direct-control behavior changes
