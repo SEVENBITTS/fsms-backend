@@ -554,6 +554,8 @@ const buildResolutionGuidance = (
         "Do not transmit avoidance instructions from this advisory alone",
       ],
       authorityRequired: "supervisor",
+      acknowledgementRequired: true,
+      evidenceAction: "record_supervisor_review",
       pilotInstructionStatus: "not_a_pilot_command",
       rationale: `${explanation} This is decision-support guidance and does not directly command the pilot or aircraft.`,
     };
@@ -570,6 +572,8 @@ const buildResolutionGuidance = (
         "Do not ignore the conflict context without operator review",
       ],
       authorityRequired: "operator",
+      acknowledgementRequired: true,
+      evidenceAction: "record_operator_review",
       pilotInstructionStatus: "not_a_pilot_command",
       rationale: `${explanation} Operator review is recommended before continuing without further action.`,
     };
@@ -582,6 +586,8 @@ const buildResolutionGuidance = (
     recommendedAction: "Monitor conflict context",
     prohibitedActions: ["Do not treat this guidance as an aircraft command"],
     authorityRequired: "operator",
+    acknowledgementRequired: false,
+    evidenceAction: "none",
     pilotInstructionStatus: "not_a_pilot_command",
     rationale: `${explanation} Continue monitoring unless the operational picture changes.`,
   };

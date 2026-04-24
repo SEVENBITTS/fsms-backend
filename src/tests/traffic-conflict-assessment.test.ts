@@ -189,6 +189,8 @@ describe("traffic conflict assessment integration", () => {
             prohibitedActions: expect.arrayContaining([
               "Do not treat this guidance as an aircraft command",
             ]),
+            acknowledgementRequired: expect.any(Boolean),
+            evidenceAction: expect.any(String),
             pilotInstructionStatus: "not_a_pilot_command",
           }),
         }),
@@ -213,6 +215,8 @@ describe("traffic conflict assessment integration", () => {
             prohibitedActions: expect.arrayContaining([
               "Do not treat this guidance as an aircraft command",
             ]),
+            acknowledgementRequired: expect.any(Boolean),
+            evidenceAction: expect.any(String),
             pilotInstructionStatus: "not_a_pilot_command",
           }),
         }),
@@ -334,6 +338,8 @@ describe("traffic conflict assessment integration", () => {
             prohibitedActions: expect.arrayContaining([
               "Do not transmit avoidance instructions from this advisory alone",
             ]),
+            acknowledgementRequired: true,
+            evidenceAction: "record_supervisor_review",
             pilotInstructionStatus: "not_a_pilot_command",
           }),
         }),

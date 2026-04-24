@@ -958,6 +958,13 @@ const fallbackResolutionGuidance = (conflict) => ({
         : "monitor_context",
   prohibitedActions: ["Do not treat this guidance as an aircraft command"],
   authorityRequired: conflict?.severity === "critical" ? "supervisor" : "operator",
+  acknowledgementRequired: conflict?.severity === "critical" || conflict?.severity === "caution",
+  evidenceAction:
+    conflict?.severity === "critical"
+      ? "record_supervisor_review"
+      : conflict?.severity === "caution"
+        ? "record_operator_review"
+        : "none",
   pilotInstructionStatus: "not_a_pilot_command",
   rationale: conflict?.explanation ?? "No conflict rationale is currently available.",
 });
@@ -990,6 +997,8 @@ const deriveConflictAdvisories = () =>
       recommendation: guidance.recommendedAction,
       prohibitedActions: guidance.prohibitedActions ?? [],
       authorityRequired: guidance.authorityRequired,
+      acknowledgementRequired: Boolean(guidance.acknowledgementRequired),
+      evidenceAction: guidance.evidenceAction ?? "none",
       pilotInstructionStatus: guidance.pilotInstructionStatus,
       guidanceRationale: guidance.rationale,
       relatedObject: conflict.overlayLabel,
@@ -2658,6 +2667,8 @@ const renderConflictAdvisory = () => {
                   Recommended attention: ${escapeHtml(primary.recommendation)}<br />
                   Action code: ${escapeHtml(primary.actionCode)}<br />
                   Authority required: ${escapeHtml(primary.authorityRequired)}<br />
+                  Acknowledgement required: ${escapeHtml(primary.acknowledgementRequired ? "yes" : "no")}<br />
+                  Evidence action: ${escapeHtml(primary.evidenceAction)}<br />
                   Pilot instruction status: ${escapeHtml(primary.pilotInstructionStatus)}<br />
                   Related object: ${escapeHtml(primary.relatedObject)}<br />
                   Related source: ${escapeHtml(primary.relatedSource)}<br />
@@ -2683,7 +2694,7 @@ const renderConflictAdvisory = () => {
             : renderList(
                 secondary.map((advisory) => ({
                   label: `${advisory.actionCode} | ${advisory.relatedObject}`,
-                  value: `${advisory.recommendation} | ${advisory.authorityRequired} | ${advisory.summary}`,
+                  value: `${advisory.recommendation} | ${advisory.authorityRequired} | ${advisory.evidenceAction} | ${advisory.summary}`,
                 })),
                 "additional advisories",
               )

@@ -17,6 +17,11 @@ export type TrafficConflictGuidanceActionCode =
   | "prepare_deconfliction"
   | "hold_or_suspend";
 
+export type TrafficConflictGuidanceEvidenceAction =
+  | "none"
+  | "record_operator_review"
+  | "record_supervisor_review";
+
 export interface TrafficConflictResolutionGuidance {
   mode: "decision_support";
   urgency: TrafficConflictGuidanceUrgency;
@@ -24,6 +29,8 @@ export interface TrafficConflictResolutionGuidance {
   recommendedAction: string;
   prohibitedActions: string[];
   authorityRequired: TrafficConflictGuidanceAuthority;
+  acknowledgementRequired: boolean;
+  evidenceAction: TrafficConflictGuidanceEvidenceAction;
   pilotInstructionStatus: "not_a_pilot_command";
   rationale: string;
 }
