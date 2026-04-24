@@ -1,16 +1,16 @@
 # NEXT STEP
 
 ## Goal
-Add live-ops access to area refresh chronology review.
+Add live-ops visual indicators for area overlay freshness on the map.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- show the ordered area refresh run chronology from the live-ops page
-- expose transition/artifact review links for fresh, partial, and failed refreshes
-- keep the chronology read-only and separate from pilot command guidance
+- draw or label area overlays with fresh, partial, failed, or carried-forward status
+- make degraded overlay freshness visible without hiding the route or traffic picture
+- keep the map read-only and separate from pilot command guidance
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
@@ -18,13 +18,13 @@ Add live-ops access to area refresh chronology review.
 - keep provenance review informational and auditable
 
 ### 3. Tests
-- add focused API/UI assertions for refresh-run chronology access
+- add focused UI/static assertions for map freshness indicators
 - run live-ops and external-overlay focused tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Operators can open or review refresh chronology from live ops
-- Fresh, partial, and failed refresh transitions remain auditable
+- Operators can see area overlay freshness directly on the map surface
+- Degraded or carried-forward overlays are visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation

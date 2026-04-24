@@ -2018,6 +2018,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/telemetry/latest");
     expect(response.text).toContain("/alerts");
     expect(response.text).toContain("/external-overlays");
+    expect(response.text).toContain("/external-overlays/refresh-runs?chronology=true");
     expect(response.text).toContain("/conflict-assessment");
     expect(response.text).toContain("/planning-workspace");
     expect(response.text).toContain("/dispatch-workspace");
@@ -2121,7 +2122,17 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("areaOverlaySourceRefreshCardContext");
     expect(response.text).toContain("areaOverlayRefreshProvenanceDetail");
     expect(response.text).toContain("areaSourceProvenanceRows");
+    expect(response.text).toContain("areaRefreshChronology");
+    expect(response.text).toContain("areaRefreshRunRows");
+    expect(response.text).toContain("areaRefreshTransitionRows");
+    expect(response.text).toContain("renderAreaRefreshChronologyReview");
+    expect(response.text).toContain("areaRefreshTransitionUrl");
     expect(response.text).toContain("Area Source Provenance");
+    expect(response.text).toContain("Area Refresh Chronology");
+    expect(response.text).toContain("Open refresh run JSON");
+    expect(response.text).toContain("Open transition artifact JSON");
+    expect(response.text).toContain("Read-only audit review");
+    expect(response.text).toContain("does not trigger pilot instructions");
     expect(response.text).toContain("Area provenance boundary");
     expect(response.text).toContain("Synthetic/local demo provenance only");
     expect(response.text).toContain("not live CAA or NOTAM connectivity");

@@ -36,6 +36,7 @@ const uiState = {
   latestTelemetry: null,
   alerts: [],
   externalOverlays: [],
+  areaRefreshChronology: null,
   conflictAssessment: null,
   conflictGuidanceAcknowledgements: [],
   missionList: [],
@@ -352,6 +353,135 @@ const areaSourceProvenanceRows = () =>
     })
     .sort((left, right) => severityRank(right.tone) - severityRank(left.tone));
 
+const areaRefreshChronology = () =>
+  uiState.areaRefreshChronology?.chronology ?? null;
+
+const areaRefreshRunRows = () =>
+  (areaRefreshChronology()?.refreshRuns ?? []).map((refreshRun, index) => {
+    const createdCount = refreshRun.created?.length ?? 0;
+    const updatedCount = refreshRun.updated?.length ?? 0;
+    const partialCount = refreshRun.partial?.length ?? 0;
+    const failedCount = refreshRun.failed?.length ?? 0;
+    const activeCount = refreshRun.active?.length ?? 0;
+    const retiredCount = refreshRun.retired?.length ?? 0;
+    const tone =
+      failedCount > 0
+        ? "failed"
+        : partialCount > 0
+          ? "partial"
+          : createdCount + updatedCount + activeCount > 0
+            ? "fresh"
+            : "info";
+
+    return {
+      index,
+      refreshRunId: refreshRun.refreshRunId,
+      label: `Run ${index + 1} | ${tone}`,
+      tone,
+      detail: [
+        `${createdCount} created`,
+        `${updatedCount} updated`,
+        `${partialCount} partial`,
+        `${failedCount} failed`,
+        `${activeCount} active`,
+        retiredCount > 0 ? `${retiredCount} retired` : null,
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    };
+  });
+
+const areaRefreshTransitionRows = () =>
+  (areaRefreshChronology()?.transitions ?? []).map((transition, index) => {
+    const addedCount = transition.added?.length ?? 0;
+    const removedCount = transition.removed?.length ?? 0;
+    const persistedCount = transition.persisted?.length ?? 0;
+    const updatedCount = transition.changed?.updated?.length ?? 0;
+    const supersededCount = transition.changed?.superseded?.length ?? 0;
+    const retiredCount = transition.changed?.retired?.length ?? 0;
+    const tone = removedCount + retiredCount > 0 ? "warning" : "info";
+
+    return {
+      index,
+      fromRefreshRunId: transition.fromRefreshRunId,
+      toRefreshRunId: transition.toRefreshRunId,
+      label: `Transition ${index + 1}`,
+      tone,
+      detail: [
+        `${addedCount} added`,
+        `${updatedCount} updated`,
+        `${persistedCount} persisted`,
+        removedCount > 0 ? `${removedCount} removed` : null,
+        supersededCount > 0 ? `${supersededCount} superseded` : null,
+        retiredCount > 0 ? `${retiredCount} retired` : null,
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    };
+  });
+
+const areaRefreshRunUrl = (refreshRunId) =>
+  `/missions/${encodeURIComponent(uiState.missionId)}/external-overlays/refresh-runs?refreshRunId=${encodeURIComponent(refreshRunId)}`;
+
+const areaRefreshTransitionUrl = (transition) =>
+  `/missions/${encodeURIComponent(uiState.missionId)}/external-overlays/refresh-runs?transitionArtifact=true&transitionFromRefreshRunId=${encodeURIComponent(transition.fromRefreshRunId)}&transitionToRefreshRunId=${encodeURIComponent(transition.toRefreshRunId)}`;
+
+const renderAreaRefreshChronologyReview = () => {
+  const runs = areaRefreshRunRows();
+  const transitions = areaRefreshTransitionRows();
+
+  if (runs.length === 0) {
+    return '<div class="empty-state">No area refresh chronology is available for this mission.</div>';
+  }
+
+  return `
+    <div class="stack">
+      <div class="kv">
+        <div class="k">Refresh runs</div>
+        <div>${escapeHtml(String(runs.length))}</div>
+        <div class="k">Transitions</div>
+        <div>${escapeHtml(String(transitions.length))}</div>
+        <div class="k">Review mode</div>
+        <div>${escapeHtml("Read-only audit review; no pilot command or feed action is available here.")}</div>
+      </div>
+      <ul class="list">
+        ${runs
+          .map(
+            (run) => `
+              <li class="list-item">
+                <strong>${escapeHtml(run.label)}</strong>
+                <div>${renderBadge(run.tone)}</div>
+                <div>${escapeHtml(run.detail)}</div>
+                <a href="${escapeHtml(areaRefreshRunUrl(run.refreshRunId))}" target="_blank" rel="noopener">Open refresh run JSON</a>
+              </li>
+            `,
+          )
+          .join("")}
+      </ul>
+      ${
+        transitions.length === 0
+          ? '<div class="empty-state">No refresh transitions are available yet.</div>'
+          : `
+            <ul class="list">
+              ${transitions
+                .map(
+                  (transition) => `
+                    <li class="list-item">
+                      <strong>${escapeHtml(transition.label)}</strong>
+                      <div>${renderBadge(transition.tone)}</div>
+                      <div>${escapeHtml(transition.detail)}</div>
+                      <a href="${escapeHtml(areaRefreshTransitionUrl(transition))}" target="_blank" rel="noopener">Open transition artifact JSON</a>
+                    </li>
+                  `,
+                )
+                .join("")}
+            </ul>
+          `
+      }
+    </div>
+  `;
+};
+
 const areaSourceRefreshSummary = () => {
   const overlays = areaConflictOverlays();
   if (overlays.length === 0) {
@@ -606,6 +736,7 @@ const resetLiveOperationsState = () => {
   uiState.latestTelemetry = null;
   uiState.alerts = [];
   uiState.externalOverlays = [];
+  uiState.areaRefreshChronology = null;
   uiState.conflictAssessment = null;
   uiState.conflictGuidanceAcknowledgements = [];
   uiState.replayPlayback.index = 0;
@@ -2609,6 +2740,13 @@ const renderStatus = () => {
           Synthetic/local demo provenance only. Review against authoritative CAA, NOTAM, and airspace feeds before operational use.
         </div>
       </section>
+      <section class="summary-block">
+        <h4>Area Refresh Chronology</h4>
+        ${renderAreaRefreshChronologyReview()}
+        <div class="alert-window-meta">
+          Chronology review is read-only and audit-facing. It does not trigger pilot instructions, update airspace feeds, or connect to live CAA/NOTAM services.
+        </div>
+      </section>
     </div>
     <div style="margin-top: 14px;">
       ${renderList(riskSignals, "live operation signals")}
@@ -3166,6 +3304,7 @@ const loadLiveOperationsView = async (missionId) => {
       latestTelemetryResponse,
       alertsResponse,
       externalOverlayResponse,
+      areaRefreshChronologyResponse,
       conflictAssessmentResponse,
       conflictGuidanceAcknowledgementsResponse,
     ] = await Promise.all([
@@ -3176,6 +3315,9 @@ const loadLiveOperationsView = async (missionId) => {
       fetchJson(`/missions/${normalizedMissionId}/telemetry/latest`),
       fetchJson(`/missions/${normalizedMissionId}/alerts`),
       fetchJson(`/missions/${normalizedMissionId}/external-overlays`),
+      fetchJson(
+        `/missions/${normalizedMissionId}/external-overlays/refresh-runs?chronology=true`,
+      ),
       fetchJson(`/missions/${normalizedMissionId}/conflict-assessment`),
       fetchJson(`/missions/${normalizedMissionId}/conflict-guidance-acknowledgements`),
     ]);
@@ -3187,6 +3329,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.latestTelemetry = latestTelemetryResponse;
     uiState.alerts = alertsResponse.alerts ?? [];
     uiState.externalOverlays = externalOverlayResponse.overlays ?? [];
+    uiState.areaRefreshChronology = areaRefreshChronologyResponse;
     uiState.conflictAssessment = conflictAssessmentResponse;
     uiState.conflictGuidanceAcknowledgements =
       conflictGuidanceAcknowledgementsResponse.acknowledgements ?? [];
@@ -3204,6 +3347,7 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.latestTelemetry = null;
     uiState.alerts = [];
     uiState.externalOverlays = [];
+    uiState.areaRefreshChronology = null;
     uiState.conflictAssessment = null;
     uiState.conflictGuidanceAcknowledgements = [];
     uiState.replayPlayback.index = 0;
