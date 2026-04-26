@@ -225,11 +225,12 @@
       "Validated schema-backed SOP recommendation review decision creation/listing, accountable-manager role access, TypeScript build, and operational-authority integration tests",
       "Validated role-controlled SOP recommendation visibility and mission workspace decision display copy with TypeScript build, operational-authority tests, and mission-planning UI bundle tests",
       "Validated live-ops mission heading telemetry display and toggle copy with TypeScript build and mission-planning UI bundle tests",
-      "Validated dynamic conflict range/bearing vector wording in the live-ops UI bundle tests"
+      "Validated dynamic conflict range/bearing vector wording in the live-ops UI bundle tests",
+      "Validated conflict bearing wording as true bearing from mission aircraft plus relative left/right bearing against mission heading"
     ]
 
   },
-  "nextBuildStep": "Add explicit traffic bearing and CPA conflict labels in live operations.",
+  "nextBuildStep": "Add reciprocal-bearing guardrails to live operations conflict labels.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

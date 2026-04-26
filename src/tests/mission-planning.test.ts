@@ -2141,8 +2141,10 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Heading is ownship mission telemetry");
     expect(response.text).toContain("CPA is a future closest-approach calculation");
     expect(response.text).toContain("conflict-range-bearing-vector");
-    expect(response.text).toContain("Range/bearing to conflict");
+    expect(response.text).toContain("Conflict from mission aircraft");
+    expect(response.text).toContain("true /");
     expect(response.text).toContain("Dynamic from current mission aircraft position to active conflict object");
+    expect(response.text).toContain("relative bearing is left/right of mission heading");
     expect(response.text).toContain("rangeMeters");
     expect(response.text).toContain("bearingDegrees");
     expect(response.text).toContain("insideArea");

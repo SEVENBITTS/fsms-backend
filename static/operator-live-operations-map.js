@@ -874,10 +874,35 @@ const formatRangeBearing = (metrics) => {
 };
 
 const formatConflictRangeBearing = (conflict) => {
-  const formatted = formatRangeBearing(conflict?.metrics);
-  return formatted === "Not recorded"
-    ? "Range/bearing to conflict not recorded"
-    : `Range/bearing to conflict: ${formatted}`;
+  const rangeMeters =
+    conflict?.metrics?.rangeMeters ?? conflict?.metrics?.lateralDistanceMeters;
+  const trueBearing = conflict?.metrics?.bearingDegrees;
+  const missionHeading =
+    activeReplayPoint()?.headingDeg ?? uiState.latestTelemetry?.telemetry?.headingDeg;
+
+  if (rangeMeters == null && trueBearing == null) {
+    return "Conflict bearing from mission aircraft not recorded";
+  }
+
+  const rangeText =
+    rangeMeters == null || Number.isNaN(rangeMeters)
+      ? "unknown range"
+      : `${Math.round(rangeMeters)} m`;
+  const trueBearingText = formatBearingDegrees(trueBearing ?? null);
+  const relativeBearing =
+    trueBearing == null || missionHeading == null
+      ? null
+      : ((trueBearing - missionHeading + 540) % 360) - 180;
+  const relativeBearingText =
+    relativeBearing == null || Number.isNaN(relativeBearing)
+      ? "relative bearing unavailable"
+      : relativeBearing === 0
+        ? "dead ahead"
+        : `${Math.abs(Math.round(relativeBearing))}\u00B0 ${
+            relativeBearing > 0 ? "right" : "left"
+          }`;
+
+  return `Conflict from mission aircraft: ${rangeText} / ${trueBearingText} true / ${relativeBearingText}`;
 };
 
 const fetchJson = async (url, options = {}) => {
@@ -2990,6 +3015,13 @@ const buildMapMarkup = () => {
                 font-size="10"
                 font-weight="700"
               >Dynamic from current mission aircraft position to active conflict object</text>
+              <text
+                x="${midpoint.x + 12}"
+                y="${midpoint.y + 22}"
+                fill="#d8ecff"
+                font-size="10"
+                font-weight="700"
+              >True bearing is from mission aircraft to conflict; relative bearing is left/right of mission heading</text>
             </g>
           `;
         })()
