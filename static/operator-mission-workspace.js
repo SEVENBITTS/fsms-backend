@@ -17,6 +17,8 @@ const planningPanel = document.getElementById("planning-panel");
 const dispatchPanel = document.getElementById("dispatch-panel");
 const timelinePanel = document.getElementById("timeline-panel");
 
+const SESSION_STORAGE_KEY = "verityatlas_document_portal_session_token";
+
 const ACTION_ORDER = ["submit", "approve", "launch", "complete", "abort"];
 const ACTION_DEFINITIONS = {
   submit: {
@@ -164,6 +166,8 @@ const uiState = {
   postOperationEvidenceReport: null,
   postOperationEvidenceReadiness: null,
   postOperationEvidenceReportError: "",
+  sopChangeRecommendations: [],
+  sopChangeRecommendationError: "",
   missionList: [],
   missionQuery: "",
   transitionChecks: {},
@@ -633,6 +637,114 @@ const renderReportReadinessSummary = () => {
   `;
 };
 
+const formatSopRecommendationDecision = (decision) => {
+  const labels = {
+    accepted_for_action: "Accepted for action",
+    rejected: "Rejected",
+    deferred: "Deferred",
+    closed: "Closed",
+  };
+
+  return labels[decision] ?? "Awaiting accountable review";
+};
+
+const renderSopRecommendationDecisionSummary = () => {
+  const recommendations = uiState.sopChangeRecommendations ?? [];
+  const decidedCount = recommendations.filter(
+    (recommendation) => recommendation.latestReview,
+  ).length;
+  const openCount = recommendations.length - decidedCount;
+
+  if (uiState.sopChangeRecommendationError) {
+    return `
+      <section id="sop-recommendation-decision-summary" class="summary-block">
+        <h4>SOP Recommendation Decisions</h4>
+        <div class="empty-state">
+          ${escapeHtml(uiState.sopChangeRecommendationError)}
+        </div>
+        <div class="action-meta" style="margin-top: 12px;">
+          SOP change recommendation visibility is role-controlled. This panel is advisory/accountable review support only and does not authorise operators to use draft changes.
+        </div>
+      </section>
+    `;
+  }
+
+  if (recommendations.length === 0) {
+    return `
+      <section id="sop-recommendation-decision-summary" class="summary-block">
+        <h4>SOP Recommendation Decisions</h4>
+        <div class="kv">
+          <div class="k">Recommendations</div>
+          <div>${renderBadge("None recorded")}</div>
+          <div class="k">Decision state</div>
+          <div>${renderBadge("No accountable review needed")}</div>
+        </div>
+        <div class="action-meta" style="margin-top: 12px;">
+          No schema-backed SOP change recommendations are recorded for this mission.
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section id="sop-recommendation-decision-summary" class="summary-block">
+      <h4>SOP Recommendation Decisions</h4>
+      <div class="kv">
+        <div class="k">Recommendations</div>
+        <div>${renderBadge(`${recommendations.length} recorded`)}</div>
+        <div class="k">Latest decisions</div>
+        <div>${renderBadge(`${decidedCount} decided`)}</div>
+        <div class="k">Awaiting review</div>
+        <div>${renderBadge(openCount > 0 ? `${openCount} open` : "Clear")}</div>
+        <div class="k">Boundary</div>
+        <div>Role-controlled accountable review record only; no automatic SOP amendment, operational authorisation, or regulatory submission.</div>
+      </div>
+      <div class="list" style="margin-top: 12px;">
+        ${recommendations
+          .map((recommendation) => {
+            const latestReview = recommendation.latestReview;
+            const decisionLabel = formatSopRecommendationDecision(
+              latestReview?.decision,
+            );
+            const reviewDetail = latestReview
+              ? `${latestReview.reviewedBy} | ${formatDateTime(
+                  latestReview.reviewedAt,
+                )} | ${latestReview.reviewRationale}`
+              : recommendation.reviewError ??
+                "Awaiting accountable-manager review decision before sign-off.";
+
+            return `
+              <article class="list-item">
+                <strong>${escapeHtml(recommendation.sopCode ?? "SOP not linked")}</strong>
+                <div>
+                  ${renderBadge(decisionLabel)}
+                  ${renderBadge(recommendation.status ?? "draft")}
+                  ${recommendation.sopClauseRef ? renderBadge(recommendation.sopClauseRef) : ""}
+                </div>
+                <div style="margin-top: 8px;">
+                  ${escapeHtml(recommendation.findingSummary)}
+                </div>
+                <div class="timeline-meta" style="margin-top: 8px;">
+                  Recommendation: ${escapeHtml(recommendation.recommendation)}<br />
+                  Latest review: ${escapeHtml(reviewDetail)}
+                  ${
+                    latestReview?.evidenceRef
+                      ? `<br />Evidence reference: ${escapeHtml(latestReview.evidenceRef)}`
+                      : ""
+                  }
+                </div>
+              </article>
+            `;
+          })
+          .join("")}
+      </div>
+      <div class="action-meta" style="margin-top: 12px;">
+        Decision states make accountable review visible before sign-off while preserving SOP change control outside the automated evidence pack. Draft recommendations are not operating instructions.
+      </div>
+    </section>
+  `;
+};
+
 const postOperationExportLinks = (snapshotId) => {
   if (!uiState.missionId || !snapshotId) {
     return { renderUrl: "", pdfUrl: "" };
@@ -721,11 +833,17 @@ const getMissionIdFromLocation = () => {
   return queryMissionId?.trim() || "";
 };
 
+const getSessionHeaders = () => {
+  const sessionToken = window.localStorage.getItem(SESSION_STORAGE_KEY) ?? "";
+  return sessionToken ? { "X-Session-Token": sessionToken } : {};
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
       Accept: "application/json",
       ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...getSessionHeaders(),
       ...(options.headers ?? {}),
     },
     ...options,
@@ -738,6 +856,50 @@ const fetchJson = async (url, options = {}) => {
   }
 
   return payload;
+};
+
+const loadSopRecommendationDecisionState = async (missionId) => {
+  if (!window.localStorage.getItem(SESSION_STORAGE_KEY)) {
+    return {
+      recommendations: [],
+      error:
+        "Sign in with an authorised governance or management role to load schema-backed SOP recommendation decisions.",
+    };
+  }
+
+  const listed = await fetchJson(
+    `/missions/${encodeURIComponent(missionId)}/sop-change-recommendations`,
+  );
+  const recommendations = listed.recommendations ?? [];
+  const enriched = await Promise.all(
+    recommendations.map(async (recommendation) => {
+      try {
+        const reviewState = await fetchJson(
+          `/operational-authority-sop-change-recommendations/${encodeURIComponent(
+            recommendation.id,
+          )}/reviews`,
+        );
+        const reviews = reviewState.reviews ?? [];
+        return {
+          ...recommendation,
+          reviews,
+          latestReview: reviews[0] ?? null,
+        };
+      } catch (error) {
+        return {
+          ...recommendation,
+          reviews: [],
+          latestReview: null,
+          reviewError:
+            error instanceof Error
+              ? error.message
+              : "Review decision history unavailable",
+        };
+      }
+    }),
+  );
+
+  return { recommendations: enriched, error: "" };
 };
 
 const collectActionPayload = (action) => {
@@ -1156,6 +1318,7 @@ const renderEvidenceHelpers = () => {
         <h4>Rendered Report Readiness Summary</h4>
         ${renderReportReadinessSummary()}
       </section>
+      ${renderSopRecommendationDecisionSummary()}
     </div>
     ${renderReadinessDrilldowns({
       mapEvidenceUrl,
@@ -1846,6 +2009,8 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.postOperationEvidenceReport = null;
     uiState.postOperationEvidenceReadiness = null;
     uiState.postOperationEvidenceReportError = "";
+    uiState.sopChangeRecommendations = [];
+    uiState.sopChangeRecommendationError = "";
     renderMissionBrowser();
     uiState.transitionChecks = {};
     uiState.actionStatus = {};
@@ -1881,12 +2046,20 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
       timelineResponse,
       regulatoryReviewImpactResponse,
       postOperationSnapshotsResponse,
+      sopRecommendationDecisionState,
     ] = await Promise.all([
       fetchJson(`/missions/${missionId}/planning-workspace`),
       fetchJson(`/missions/${missionId}/dispatch-workspace`),
       fetchJson(`/missions/${missionId}/operations-timeline`),
       fetchJson(`/missions/${missionId}/regulatory-review-impact`),
       fetchJson(`/missions/${missionId}/post-operation/evidence-snapshots`),
+      loadSopRecommendationDecisionState(missionId).catch((error) => ({
+        recommendations: [],
+        error:
+          error instanceof Error
+            ? error.message
+            : "SOP recommendation decision state unavailable",
+      })),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -1894,6 +2067,10 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.timeline = timelineResponse.timeline;
     uiState.regulatoryReviewImpact = regulatoryReviewImpactResponse;
     uiState.postOperationSnapshots = postOperationSnapshotsResponse.snapshots ?? [];
+    uiState.sopChangeRecommendations =
+      sopRecommendationDecisionState.recommendations ?? [];
+    uiState.sopChangeRecommendationError =
+      sopRecommendationDecisionState.error ?? "";
     uiState.postOperationEvidenceReport = null;
     uiState.postOperationEvidenceReadiness = null;
     uiState.postOperationEvidenceReportError = "";
@@ -1940,6 +2117,8 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
     uiState.postOperationEvidenceReport = null;
     uiState.postOperationEvidenceReadiness = null;
     uiState.postOperationEvidenceReportError = "";
+    uiState.sopChangeRecommendations = [];
+    uiState.sopChangeRecommendationError = "";
     uiState.transitionChecks = {};
     renderMissionBrowser();
     uiState.helperStatus = {};

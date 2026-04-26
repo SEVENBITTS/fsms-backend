@@ -168,8 +168,6 @@ export class OperationalAuthorityController {
         user.id,
         organisationId,
         [
-          "viewer",
-          "operator",
           "operations_manager",
           "compliance_manager",
           "accountable_manager",
@@ -233,8 +231,6 @@ export class OperationalAuthorityController {
         user.id,
         organisationId,
         [
-          "viewer",
-          "operator",
           "operations_manager",
           "compliance_manager",
           "accountable_manager",

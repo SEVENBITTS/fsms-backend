@@ -53,7 +53,9 @@
       "Added focused safety/SOP and regulatory source-record detail panels inside the mission workspace timeline and regulatory review sections",
       "Documented the OA/SOP hierarchy as OA controlling approval envelope with SOPs as distinct linked procedures used for recommendation targeting",
       "Added mission routes for creating and listing SOP-linked change recommendations as accountable review prompts",
-      "Added authenticated accountable-manager routes for recording and listing SOP recommendation review decisions"
+      "Added authenticated accountable-manager routes for recording and listing SOP recommendation review decisions",
+      "Added mission workspace SOP recommendation decision display that loads schema-backed recommendation review state when an authorised governance session is present",
+      "Restricted SOP recommendation and review-history read access to governance and management roles so draft SOP changes are not exposed as operator instructions"
     ],
     "removed": [],
     "fixed": [
@@ -141,7 +143,8 @@
       "Operators can review safety/SOP and regulatory source-record IDs, summaries, timestamps, source JSON links, and review surfaces without manually hunting through the workspace",
       "Compliance teams can record SOP documents as distinct linked procedures under the OA profile so later change recommendations can target the relevant SOP",
       "Governance users can record draft SOP change recommendations against mission evidence without amending the SOP automatically",
-      "Accountable managers can record review decisions against SOP recommendations while preserving the recommendation history as advisory evidence"
+      "Accountable managers can record review decisions against SOP recommendations while preserving the recommendation history as advisory evidence",
+      "Authorised governance users can see SOP recommendation decision state in the mission workspace before sign-off; unauthorised users see controlled-access advisory wording instead"
     ]
   },
   "complianceImplications": {
@@ -166,7 +169,8 @@
       "Safety/SOP and regulatory drill-down sections now display source-record detail as accountable review support, not compliance certification or automatic closure",
       "Linked SOP documents create the first traceable target for future post-operation SOP amendment recommendations",
       "SOP change recommendations now preserve mission evidence source, SOP clause, and parent OA condition context as draft accountable review records",
-      "SOP recommendation review decisions now preserve who reviewed the recommendation, why they decided, and any supporting evidence reference without automatically amending SOP content"
+      "SOP recommendation review decisions now preserve who reviewed the recommendation, why they decided, and any supporting evidence reference without automatically amending SOP content",
+      "SOP recommendation decision visibility is now treated as role-controlled accountable review support, not operational instruction to pilots or operators"
     ]
   },
   "risksLimitations": {
@@ -212,11 +216,12 @@
       "Validated safety/SOP and regulatory focused source-record detail panels with TypeScript build and mission-planning UI tests",
       "Validated OA-linked SOP document creation/listing, role access, TypeScript build, and operational-authority integration tests",
       "Validated schema-backed SOP change recommendation creation/listing, role access, TypeScript build, and operational-authority integration tests",
-      "Validated schema-backed SOP recommendation review decision creation/listing, accountable-manager role access, TypeScript build, and operational-authority integration tests"
+      "Validated schema-backed SOP recommendation review decision creation/listing, accountable-manager role access, TypeScript build, and operational-authority integration tests",
+      "Validated role-controlled SOP recommendation visibility and mission workspace decision display copy with TypeScript build, operational-authority tests, and mission-planning UI bundle tests"
     ]
 
   },
-  "nextBuildStep": "Add schema-backed mission workspace display for SOP recommendation decisions.",
+  "nextBuildStep": "Add accountable-manager workspace controls for SOP recommendation decisions.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -836,6 +836,20 @@ describe("operational authority integration", () => {
         version: "1.0",
       });
 
+    const recommendationResponse = await request(app)
+      .post(`/missions/${missionId}/sop-change-recommendations`)
+      .set("X-Session-Token", admin.sessionToken)
+      .send({
+        profileId: createResponse.body.profile.id,
+        sopDocumentId: sopResponse.body.sopDocument.id,
+        recommendationType: "sop_review_recommended",
+        evidenceSourceType: "timeline",
+        evidenceSourceId: "timeline-admin",
+        findingSummary: "Governance-owned recommendation for read access test.",
+        recommendation: "Only governance roles should read this.",
+        createdBy: "admin",
+      });
+
     const response = await request(app)
       .post(`/missions/${missionId}/sop-change-recommendations`)
       .set("X-Session-Token", operator.sessionToken)
@@ -852,6 +866,26 @@ describe("operational authority integration", () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error).toMatchObject({
+      type: "organisation_membership_forbidden",
+    });
+
+    const listRecommendationsResponse = await request(app)
+      .get(`/missions/${missionId}/sop-change-recommendations`)
+      .set("X-Session-Token", operator.sessionToken);
+
+    expect(listRecommendationsResponse.status).toBe(403);
+    expect(listRecommendationsResponse.body.error).toMatchObject({
+      type: "organisation_membership_forbidden",
+    });
+
+    const listReviewsResponse = await request(app)
+      .get(
+        `/operational-authority-sop-change-recommendations/${recommendationResponse.body.recommendation.id}/reviews`,
+      )
+      .set("X-Session-Token", operator.sessionToken);
+
+    expect(listReviewsResponse.status).toBe(403);
+    expect(listReviewsResponse.body.error).toMatchObject({
       type: "organisation_membership_forbidden",
     });
   });
@@ -961,7 +995,7 @@ describe("operational authority integration", () => {
     );
   });
 
-  it("prevents non-accountable roles from reviewing SOP change recommendations", async () => {
+  it("prevents non-governance roles from viewing or reviewing SOP change recommendations", async () => {
     const organisationId = randomUUID();
     const missionId = await insertMission({ organisationId });
     const validity = buildDateWindow(-30, 365);
