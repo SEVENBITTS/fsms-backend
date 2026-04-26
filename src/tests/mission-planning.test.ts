@@ -2132,6 +2132,13 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("formatTemporalContext");
     expect(response.text).toContain("formatVerticalContext");
     expect(response.text).toContain("formatBearingDegrees");
+    expect(response.text).toContain("formatHeadingDegrees");
+    expect(response.text).toContain("Mission Telemetry Display");
+    expect(response.text).toContain("Mission heading");
+    expect(response.text).toContain("Latest live heading");
+    expect(response.text).toContain("data-telemetry-display-toggle");
+    expect(response.text).toContain("Heading is ownship mission telemetry");
+    expect(response.text).toContain("CPA is a future closest-approach calculation");
     expect(response.text).toContain("rangeMeters");
     expect(response.text).toContain("bearingDegrees");
     expect(response.text).toContain("insideArea");

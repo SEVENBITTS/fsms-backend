@@ -66,6 +66,12 @@ const uiState = {
     snapshotId: null,
     createdAt: null,
   },
+  telemetryDisplay: {
+    heading: true,
+    speed: true,
+    altitude: true,
+    progress: true,
+  },
 };
 
 const toneClass = (value) => {
@@ -768,6 +774,32 @@ const formatBearingDegrees = (value) => {
 
   return `${Math.round(value)}\u00B0 ${cardinalFromBearing(value)}`;
 };
+
+const normalizeHeadingDegrees = (value) => {
+  if (value == null || Number.isNaN(value)) {
+    return null;
+  }
+
+  return ((Number(value) % 360) + 360) % 360;
+};
+
+const formatHeadingDegrees = (value) => {
+  const normalized = normalizeHeadingDegrees(value);
+  if (normalized == null) {
+    return "Not recorded";
+  }
+
+  return `${Math.round(normalized)}\u00B0 ${cardinalFromBearing(normalized)}`;
+};
+
+const formatTelemetrySpeed = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : `${value} m/s`;
+
+const formatTelemetryAltitude = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : `${value} m`;
+
+const formatTelemetryProgress = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : `${value}%`;
 
 const formatVerticalSeparation = (value) =>
   value == null || Number.isNaN(value) ? "Not recorded" : `${Math.round(value)} ft`;
@@ -2970,6 +3002,83 @@ const renderMap = () => {
   mapPanel.innerHTML = buildMapMarkup();
 };
 
+const renderTelemetryDisplayToggle = (key, label) => `
+  <button
+    type="button"
+    class="secondary-button ${uiState.telemetryDisplay[key] ? "tone-ok" : "tone-muted"}"
+    data-telemetry-display-toggle="${escapeHtml(key)}"
+  >
+    ${escapeHtml(label)} ${uiState.telemetryDisplay[key] ? "shown" : "hidden"}
+  </button>
+`;
+
+const renderMissionTelemetryStrip = (currentReplayPoint, latestTelemetry) => {
+  const telemetrySource = currentReplayPoint ?? latestTelemetry ?? {};
+  const display = uiState.telemetryDisplay;
+  const fields = [
+    display.heading
+      ? {
+          label: "Mission heading",
+          value: formatHeadingDegrees(telemetrySource.headingDeg),
+          meta: "Track/heading of mission aircraft, not relative bearing to traffic.",
+        }
+      : null,
+    display.speed
+      ? {
+          label: "Mission speed",
+          value: formatTelemetrySpeed(telemetrySource.speedMps),
+          meta: "Mission aircraft ground/telemetry speed.",
+        }
+      : null,
+    display.altitude
+      ? {
+          label: "Mission altitude",
+          value: formatTelemetryAltitude(telemetrySource.altitudeM),
+          meta: "Mission aircraft telemetry altitude.",
+        }
+      : null,
+    display.progress
+      ? {
+          label: "Mission progress",
+          value: formatTelemetryProgress(telemetrySource.progressPct),
+          meta: "Recorded mission progress percentage.",
+        }
+      : null,
+  ].filter(Boolean);
+
+  return `
+    <section class="summary-block" style="margin-bottom: 14px;">
+      <h4>Mission Telemetry Display</h4>
+      <div class="action-footer" style="justify-content: flex-start; margin-bottom: 12px;">
+        ${renderTelemetryDisplayToggle("heading", "Heading")}
+        ${renderTelemetryDisplayToggle("speed", "Speed")}
+        ${renderTelemetryDisplayToggle("altitude", "Altitude")}
+        ${renderTelemetryDisplayToggle("progress", "Progress")}
+      </div>
+      <div class="kv">
+        ${
+          fields.length === 0
+            ? `
+              <div class="k">Display</div>
+              <div>No telemetry fields selected.</div>
+            `
+            : fields
+                .map(
+                  (field) => `
+                    <div class="k">${escapeHtml(field.label)}</div>
+                    <div>${escapeHtml(field.value)}<br /><span class="meta">${escapeHtml(field.meta)}</span></div>
+                  `,
+                )
+                .join("")
+        }
+      </div>
+      <div class="alert-window-meta">
+        Heading is ownship mission telemetry. Range/bearing elsewhere is relative position to traffic or an assessed conflict object, and CPA is a future closest-approach calculation.
+      </div>
+    </section>
+  `;
+};
+
 const renderStatus = () => {
   if (!uiState.planningWorkspace || !uiState.dispatchWorkspace) {
     statusPanel.innerHTML =
@@ -3046,6 +3155,7 @@ const renderStatus = () => {
   ];
 
   statusPanel.innerHTML = `
+    ${renderMissionTelemetryStrip(currentReplayPoint, latestTelemetry)}
     <div class="summary-grid">
       <section class="summary-block">
         <h4>Replay State</h4>
@@ -3060,11 +3170,15 @@ const renderStatus = () => {
           )}</div>
           <div class="k">Altitude</div>
           <div>${escapeHtml(
-            currentReplayPoint?.altitudeM != null ? `${currentReplayPoint.altitudeM} m` : "Not recorded",
+            formatTelemetryAltitude(currentReplayPoint?.altitudeM),
           )}</div>
           <div class="k">Speed</div>
           <div>${escapeHtml(
-            currentReplayPoint?.speedMps != null ? `${currentReplayPoint.speedMps} m/s` : "Not recorded",
+            formatTelemetrySpeed(currentReplayPoint?.speedMps),
+          )}</div>
+          <div class="k">Mission heading</div>
+          <div>${escapeHtml(
+            formatHeadingDegrees(currentReplayPoint?.headingDeg),
           )}</div>
           <div class="k">Replay progress</div>
           <div>${escapeHtml(
@@ -3074,6 +3188,8 @@ const renderStatus = () => {
           )}</div>
           <div class="k">Latest live telemetry</div>
           <div>${escapeHtml(formatDateTime(latestTelemetry?.timestamp))}</div>
+          <div class="k">Latest live heading</div>
+          <div>${escapeHtml(formatHeadingDegrees(latestTelemetry?.headingDeg))}</div>
         </div>
       </section>
       <section class="summary-block">
@@ -4049,6 +4165,16 @@ jumpControlsPanel.addEventListener("click", (event) => {
 statusPanel.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const telemetryToggle = target.closest("[data-telemetry-display-toggle]");
+  if (telemetryToggle instanceof HTMLElement) {
+    const key = telemetryToggle.getAttribute("data-telemetry-display-toggle");
+    if (key && Object.prototype.hasOwnProperty.call(uiState.telemetryDisplay, key)) {
+      uiState.telemetryDisplay[key] = !uiState.telemetryDisplay[key];
+      renderStatus();
+    }
     return;
   }
 
