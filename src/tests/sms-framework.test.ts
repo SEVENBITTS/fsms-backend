@@ -50,6 +50,17 @@ describe("SMS framework reference data", () => {
         sourceType: "external_guidance_reference",
         versionLabel: "Version 2, 07-Dec-2022",
       }),
+      expect.objectContaining({
+        code: "CAA_CAP_722_2024",
+        sourceType: "external_guidance_reference",
+        versionLabel: "Version 9.2, 16-Apr-2024",
+      }),
+      expect.objectContaining({
+        code: "UK_UAS_REGULATIONS",
+        sourceType: "external_regulatory_reference",
+        versionLabel:
+          "UK Regulation (EU) 2019/947 and UK Regulation (EU) 2019/945",
+      }),
     ]);
     expect(
       response.body.framework.pillars.map(

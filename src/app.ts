@@ -457,6 +457,12 @@ app.use(
   "/missions",
   createTrafficConflictAssessmentRouter(trafficConflictAssessmentController),
 );
+app.use("/missions", createMissionRiskRouter(missionRiskController));
+app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
+app.use("/missions", createAuditEvidenceRouter(auditEvidenceController));
+app.use("/missions", createMissionReplayRouter(missionReplayController));
+app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
+app.use("/missions", createAlertRouter(alertController));
 app.use(
   "/missions",
   authMiddleware,
@@ -465,12 +471,6 @@ app.use(
 app.use("/missions", authMiddleware, createInsuranceMissionRouter(insuranceController));
 app.use("/missions", authMiddleware, createMissionGovernanceRouter(missionGovernanceController));
 app.use("/missions", authMiddleware, createRiskMapRouter(riskMapController));
-app.use("/missions", createMissionRiskRouter(missionRiskController));
-app.use("/missions", createAirspaceComplianceRouter(airspaceComplianceController));
-app.use("/missions", createAuditEvidenceRouter(auditEvidenceController));
-app.use("/missions", createMissionReplayRouter(missionReplayController));
-app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
-app.use("/missions", createAlertRouter(alertController));
 app.use("/platforms", createPlatformRouter(platformController));
 app.use("/pilots", createPilotRouter(pilotController));
 app.use("/timeline", createTimelineRouter(timelineService));
