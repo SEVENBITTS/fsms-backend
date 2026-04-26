@@ -33,6 +33,7 @@ import type {
   PostOperationEvidencePdf,
   PostOperationEvidenceReadiness,
   PostOperationEvidenceReadinessCategory,
+  PostOperationEvidenceReadinessSourceRecord,
   PostOperationEvidenceRenderedReport,
   PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
@@ -667,6 +668,8 @@ export class AuditEvidenceService {
   private buildPostOperationEvidenceReadinessCategories(
     evidenceExport: PostOperationEvidenceExportPackage,
   ): PostOperationEvidenceReadinessCategory[] {
+    const missionId = evidenceExport.missionId;
+
     return [
       {
         key: "live_ops_map_view_state_snapshots",
@@ -680,6 +683,17 @@ export class AuditEvidenceService {
           evidenceExport.liveOpsMapViewStateSnapshots.length > 0
             ? "Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance."
             : "No live-ops map view-state metadata is recorded in this evidence pack; this is a review prompt only, not an automatic rejection or compliance certificate.",
+        sourceRecords: evidenceExport.liveOpsMapViewStateSnapshots.map(
+          (snapshot) =>
+            this.buildReadinessSourceRecord({
+              id: snapshot.id,
+              label: "Map view-state snapshot",
+              summary: `${snapshot.captureScope}; ${snapshot.visibleAreaOverlayCount}/${snapshot.totalAreaOverlayCount} area overlays visible; ${snapshot.degradedAreaOverlayCount} degraded`,
+              recordedAt: snapshot.createdAt,
+              apiUrl: `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+              reviewUrl: `/operator/missions/${missionId}/live-operations?mapEvidenceId=${snapshot.id}`,
+            }),
+        ),
       },
       {
         key: "conflict_guidance_acknowledgements",
@@ -693,6 +707,17 @@ export class AuditEvidenceService {
           evidenceExport.conflictGuidanceAcknowledgements.length > 0
             ? "Live conflict guidance acknowledgements are included for review."
             : "No live conflict guidance acknowledgements are recorded in this evidence pack.",
+        sourceRecords: evidenceExport.conflictGuidanceAcknowledgements.map(
+          (acknowledgement) =>
+            this.buildReadinessSourceRecord({
+              id: acknowledgement.id,
+              label: "Conflict acknowledgement",
+              summary: `${acknowledgement.conflictId}; ${acknowledgement.guidanceActionCode}; ${acknowledgement.acknowledgementRole}`,
+              recordedAt: acknowledgement.createdAt,
+              apiUrl: `/missions/${missionId}/conflict-guidance-acknowledgements`,
+              reviewUrl: `/operator/missions/${missionId}/live-operations?conflictAcknowledgementId=${acknowledgement.id}`,
+            }),
+        ),
       },
       {
         key: "safety_action_closure_evidence",
@@ -706,6 +731,17 @@ export class AuditEvidenceService {
           evidenceExport.safetyActionClosureEvidence.length > 0
             ? "Safety action closure evidence is included for review."
             : "No safety action closure evidence is recorded in this evidence pack.",
+        sourceRecords: evidenceExport.safetyActionClosureEvidence.map(
+          (evidence) =>
+            this.buildReadinessSourceRecord({
+              id: evidence.implementationEvidenceId,
+              label: "Safety action implementation evidence",
+              summary: `${evidence.evidenceCategory}; ${evidence.proposalType}; ${evidence.implementationSummary}`,
+              recordedAt: evidence.completedAt,
+              apiUrl: `/safety-events/${evidence.safetyEventId}/agenda-links/${evidence.safetyEventAgendaLinkId}/action-proposals/${evidence.safetyActionProposalId}/implementation-evidence`,
+              reviewUrl: `/operator/mission-workspace?missionId=${missionId}#timeline-panel`,
+            }),
+        ),
       },
       {
         key: "regulatory_amendment_reviews",
@@ -719,8 +755,24 @@ export class AuditEvidenceService {
           evidenceExport.regulatoryAmendmentAlerts.length > 0
             ? "Regulatory amendment review records are included for review."
             : "No regulatory amendment review records are recorded in this evidence pack.",
+        sourceRecords: evidenceExport.regulatoryAmendmentAlerts.map((alert) =>
+          this.buildReadinessSourceRecord({
+            id: alert.id,
+            label: "Regulatory amendment alert",
+            summary: `${alert.status}; ${alert.severity}; ${alert.message}`,
+            recordedAt: alert.triggeredAt,
+            apiUrl: `/missions/${missionId}/alerts`,
+            reviewUrl: `/operator/mission-workspace?missionId=${missionId}#regulatory-matrix-panel`,
+          }),
+        ),
       },
     ];
+  }
+
+  private buildReadinessSourceRecord(
+    record: PostOperationEvidenceReadinessSourceRecord,
+  ): PostOperationEvidenceReadinessSourceRecord {
+    return record;
   }
 
   private buildReadinessEvidenceSnapshot(
