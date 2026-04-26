@@ -66,6 +66,12 @@ const uiState = {
     snapshotId: null,
     createdAt: null,
   },
+  telemetryDisplay: {
+    heading: true,
+    speed: true,
+    altitude: true,
+    progress: true,
+  },
 };
 
 const toneClass = (value) => {
@@ -769,6 +775,32 @@ const formatBearingDegrees = (value) => {
   return `${Math.round(value)}\u00B0 ${cardinalFromBearing(value)}`;
 };
 
+const normalizeHeadingDegrees = (value) => {
+  if (value == null || Number.isNaN(value)) {
+    return null;
+  }
+
+  return ((Number(value) % 360) + 360) % 360;
+};
+
+const formatHeadingDegrees = (value) => {
+  const normalized = normalizeHeadingDegrees(value);
+  if (normalized == null) {
+    return "Not recorded";
+  }
+
+  return `${Math.round(normalized)}\u00B0 ${cardinalFromBearing(normalized)}`;
+};
+
+const formatTelemetrySpeed = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : `${value} m/s`;
+
+const formatTelemetryAltitude = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : `${value} m`;
+
+const formatTelemetryProgress = (value) =>
+  value == null || Number.isNaN(value) ? "Not recorded" : `${value}%`;
+
 const formatVerticalSeparation = (value) =>
   value == null || Number.isNaN(value) ? "Not recorded" : `${Math.round(value)} ft`;
 
@@ -839,6 +871,13 @@ const formatRangeBearing = (metrics) => {
     return `Inside area | ${rangeText} to boundary @ ${bearingText}`;
   }
   return `${rangeText} @ ${bearingText}`;
+};
+
+const formatConflictRangeBearing = (conflict) => {
+  const formatted = formatRangeBearing(conflict?.metrics);
+  return formatted === "Not recorded"
+    ? "Range/bearing to conflict not recorded"
+    : `Range/bearing to conflict: ${formatted}`;
 };
 
 const fetchJson = async (url, options = {}) => {
@@ -2624,6 +2663,7 @@ const buildMapMarkup = () => {
   const conflictWindowSummary = currentConflictWindowSummary();
   const conflictEnvelopeSummary = conflictProximityEnvelopeSummary();
   const conflictEnvelopeTargets = activeConflictEnvelopeTargets();
+  const primaryConflictTarget = conflictEnvelopeTargets[0] ?? null;
   const conflictTrackWindow = conflictTrackWindowPoints();
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
@@ -2909,6 +2949,51 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
+  const conflictRangeBearingVector =
+    currentMapPoint && primaryConflictTarget
+      ? (() => {
+          const targetPoint = toPoint(
+            Number(primaryConflictTarget.lat),
+            Number(primaryConflictTarget.lng),
+          );
+          const stroke = severityStroke(primaryConflictTarget.conflict.severity);
+          const midpoint = {
+            x: (currentMapPoint.x + targetPoint.x) / 2,
+            y: (currentMapPoint.y + targetPoint.y) / 2,
+          };
+
+          return `
+            <g class="conflict-range-bearing-vector">
+              <line
+                x1="${currentMapPoint.x}"
+                y1="${currentMapPoint.y}"
+                x2="${targetPoint.x}"
+                y2="${targetPoint.y}"
+                stroke="${stroke}"
+                stroke-width="3"
+                stroke-dasharray="10 8"
+                stroke-linecap="round"
+                opacity="0.92"
+              />
+              <circle cx="${targetPoint.x}" cy="${targetPoint.y}" r="7" fill="${stroke}" fill-opacity="0.86" stroke="#edf3fb" stroke-width="2" />
+              <text
+                x="${midpoint.x + 12}"
+                y="${midpoint.y - 10}"
+                fill="${stroke}"
+                font-size="12"
+                font-weight="800"
+              >${escapeHtml(formatConflictRangeBearing(primaryConflictTarget.conflict))}</text>
+              <text
+                x="${midpoint.x + 12}"
+                y="${midpoint.y + 6}"
+                fill="#d8ecff"
+                font-size="10"
+                font-weight="700"
+              >Dynamic from current mission aircraft position to active conflict object</text>
+            </g>
+          `;
+        })()
+      : "";
 
   return `
     <div class="map-grid"></div>
@@ -2928,6 +3013,7 @@ const buildMapMarkup = () => {
       ${completedReplayPath ? `<polyline points="${completedReplayPath}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />` : ""}
       ${conflictTrackHighlight}
       ${alertTrackHighlight}
+      ${conflictRangeBearingVector}
       ${replayDots}
       ${weatherMarker}
       ${conflictSeverityBands}
@@ -2968,6 +3054,83 @@ const buildMapMarkup = () => {
 
 const renderMap = () => {
   mapPanel.innerHTML = buildMapMarkup();
+};
+
+const renderTelemetryDisplayToggle = (key, label) => `
+  <button
+    type="button"
+    class="secondary-button ${uiState.telemetryDisplay[key] ? "tone-ok" : "tone-muted"}"
+    data-telemetry-display-toggle="${escapeHtml(key)}"
+  >
+    ${escapeHtml(label)} ${uiState.telemetryDisplay[key] ? "shown" : "hidden"}
+  </button>
+`;
+
+const renderMissionTelemetryStrip = (currentReplayPoint, latestTelemetry) => {
+  const telemetrySource = currentReplayPoint ?? latestTelemetry ?? {};
+  const display = uiState.telemetryDisplay;
+  const fields = [
+    display.heading
+      ? {
+          label: "Mission heading",
+          value: formatHeadingDegrees(telemetrySource.headingDeg),
+          meta: "Track/heading of mission aircraft, not relative bearing to traffic.",
+        }
+      : null,
+    display.speed
+      ? {
+          label: "Mission speed",
+          value: formatTelemetrySpeed(telemetrySource.speedMps),
+          meta: "Mission aircraft ground/telemetry speed.",
+        }
+      : null,
+    display.altitude
+      ? {
+          label: "Mission altitude",
+          value: formatTelemetryAltitude(telemetrySource.altitudeM),
+          meta: "Mission aircraft telemetry altitude.",
+        }
+      : null,
+    display.progress
+      ? {
+          label: "Mission progress",
+          value: formatTelemetryProgress(telemetrySource.progressPct),
+          meta: "Recorded mission progress percentage.",
+        }
+      : null,
+  ].filter(Boolean);
+
+  return `
+    <section class="summary-block" style="margin-bottom: 14px;">
+      <h4>Mission Telemetry Display</h4>
+      <div class="action-footer" style="justify-content: flex-start; margin-bottom: 12px;">
+        ${renderTelemetryDisplayToggle("heading", "Heading")}
+        ${renderTelemetryDisplayToggle("speed", "Speed")}
+        ${renderTelemetryDisplayToggle("altitude", "Altitude")}
+        ${renderTelemetryDisplayToggle("progress", "Progress")}
+      </div>
+      <div class="kv">
+        ${
+          fields.length === 0
+            ? `
+              <div class="k">Display</div>
+              <div>No telemetry fields selected.</div>
+            `
+            : fields
+                .map(
+                  (field) => `
+                    <div class="k">${escapeHtml(field.label)}</div>
+                    <div>${escapeHtml(field.value)}<br /><span class="meta">${escapeHtml(field.meta)}</span></div>
+                  `,
+                )
+                .join("")
+        }
+      </div>
+      <div class="alert-window-meta">
+        Heading is ownship mission telemetry. Range/bearing elsewhere is relative position to traffic or an assessed conflict object, and CPA is a future closest-approach calculation.
+      </div>
+    </section>
+  `;
 };
 
 const renderStatus = () => {
@@ -3046,6 +3209,7 @@ const renderStatus = () => {
   ];
 
   statusPanel.innerHTML = `
+    ${renderMissionTelemetryStrip(currentReplayPoint, latestTelemetry)}
     <div class="summary-grid">
       <section class="summary-block">
         <h4>Replay State</h4>
@@ -3060,11 +3224,15 @@ const renderStatus = () => {
           )}</div>
           <div class="k">Altitude</div>
           <div>${escapeHtml(
-            currentReplayPoint?.altitudeM != null ? `${currentReplayPoint.altitudeM} m` : "Not recorded",
+            formatTelemetryAltitude(currentReplayPoint?.altitudeM),
           )}</div>
           <div class="k">Speed</div>
           <div>${escapeHtml(
-            currentReplayPoint?.speedMps != null ? `${currentReplayPoint.speedMps} m/s` : "Not recorded",
+            formatTelemetrySpeed(currentReplayPoint?.speedMps),
+          )}</div>
+          <div class="k">Mission heading</div>
+          <div>${escapeHtml(
+            formatHeadingDegrees(currentReplayPoint?.headingDeg),
           )}</div>
           <div class="k">Replay progress</div>
           <div>${escapeHtml(
@@ -3074,6 +3242,8 @@ const renderStatus = () => {
           )}</div>
           <div class="k">Latest live telemetry</div>
           <div>${escapeHtml(formatDateTime(latestTelemetry?.timestamp))}</div>
+          <div class="k">Latest live heading</div>
+          <div>${escapeHtml(formatHeadingDegrees(latestTelemetry?.headingDeg))}</div>
         </div>
       </section>
       <section class="summary-block">
@@ -3246,7 +3416,7 @@ const renderStatus = () => {
           <div class="k">Range / bearing</div>
           <div>${escapeHtml(
             primaryConflict
-              ? formatRangeBearing(primaryConflict.metrics)
+              ? formatConflictRangeBearing(primaryConflict)
               : "Not recorded",
           )}</div>
           <div class="k">Time relevance</div>
@@ -3479,7 +3649,7 @@ const renderConflictAssessment = () => {
                   <br />`
                       : ""
                   }
-                  Range / bearing: ${escapeHtml(formatRangeBearing(primaryConflict.metrics))}<br />
+                  ${escapeHtml(formatConflictRangeBearing(primaryConflict))}<br />
                   Time relevance: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatTemporalContext(primaryConflict) : "Not applicable")}<br />
                   Vertical context: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatVerticalContext(primaryConflict) : formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt))}<br />
                   Replay relevance: ${escapeHtml(primaryConflict.replayRelevant ? "Current replay window" : `${primaryConflict.replayTimeDeltaSeconds} s from replay cursor`)}
@@ -4049,6 +4219,16 @@ jumpControlsPanel.addEventListener("click", (event) => {
 statusPanel.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const telemetryToggle = target.closest("[data-telemetry-display-toggle]");
+  if (telemetryToggle instanceof HTMLElement) {
+    const key = telemetryToggle.getAttribute("data-telemetry-display-toggle");
+    if (key && Object.prototype.hasOwnProperty.call(uiState.telemetryDisplay, key)) {
+      uiState.telemetryDisplay[key] = !uiState.telemetryDisplay[key];
+      renderStatus();
+    }
     return;
   }
 
