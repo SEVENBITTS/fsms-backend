@@ -421,6 +421,75 @@ const readinessCategoryLabel = (category) =>
 const latestReadinessSourceRecord = (category) =>
   category?.sourceRecords?.[0] ?? null;
 
+const renderSourceRecordActions = (sourceRecord) => `
+  <div class="action-footer" style="justify-content: flex-start; margin-top: 10px;">
+    ${
+      sourceRecord.reviewUrl
+        ? `<a class="action-button link-button" href="${escapeHtml(sourceRecord.reviewUrl)}">
+            Open review surface
+          </a>`
+        : ""
+    }
+    ${
+      sourceRecord.apiUrl
+        ? `<a class="action-button link-button" href="${escapeHtml(sourceRecord.apiUrl)}" target="_blank" rel="noopener">
+            Open source JSON
+          </a>`
+        : ""
+    }
+  </div>
+`;
+
+const renderFocusedSourceRecordDetails = ({
+  categoryKey,
+  title,
+  emptyMessage,
+  relatedReviewDetail = "",
+}) => {
+  const category = readinessCategory(categoryKey);
+  const sourceRecords = category?.sourceRecords ?? [];
+
+  return `
+    <section class="summary-block focus-target" style="margin-bottom: 14px;">
+      <h4>${escapeHtml(title)}</h4>
+      <div>${renderBadge(readinessCategoryLabel(category))}</div>
+      <div class="action-meta" style="margin-top: 10px;">
+        ${escapeHtml(
+          category?.message ??
+            "Source-record readiness is not loaded for this mission yet.",
+        )}
+        <br />These records support accountable review only; they do not certify compliance or automatically close safety, SOP, or regulatory actions.
+        ${relatedReviewDetail ? `<br />${escapeHtml(relatedReviewDetail)}` : ""}
+      </div>
+      ${
+        sourceRecords.length === 0
+          ? `<div class="empty-state" style="margin-top: 12px;">${escapeHtml(emptyMessage)}</div>`
+          : `<div class="action-grid" style="margin-top: 12px;">
+              ${sourceRecords
+                .map(
+                  (sourceRecord, index) => `
+                    <article class="action-card${index === 0 ? " focus-target" : ""}">
+                      <h4>${escapeHtml(sourceRecord.label)}</h4>
+                      <div>${index === 0 ? renderBadge("Latest source record") : renderBadge("Source record")}</div>
+                      <div class="kv" style="margin-top: 10px;">
+                        <div class="k">Record ID</div>
+                        <div>${escapeHtml(sourceRecord.id)}</div>
+                        <div class="k">Recorded</div>
+                        <div>${escapeHtml(formatDateTime(sourceRecord.recordedAt))}</div>
+                        <div class="k">Summary</div>
+                        <div>${escapeHtml(sourceRecord.summary)}</div>
+                      </div>
+                      ${renderSourceRecordActions(sourceRecord)}
+                    </article>
+                  `,
+                )
+                .join("")}
+            </div>`
+      }
+    </section>
+  `;
+};
+
 const renderReadinessDrilldownCard = ({
   title,
   category,
@@ -1221,6 +1290,19 @@ const renderRegulatoryMatrix = () => {
         ? renderWorkspaceFocusNote("Regulatory matrix")
         : ""
     }
+    ${
+      isWorkspaceFocusTarget("regulatory-matrix-panel")
+        ? renderFocusedSourceRecordDetails({
+            categoryKey: "regulatory_amendment_reviews",
+            title: "Regulatory Source Records",
+            emptyMessage:
+              "No regulatory amendment source records are captured in the latest post-operation readiness view.",
+            relatedReviewDetail: reviewImpact
+              ? `${reviewImpact.impactedMappingCount} requirement rows are currently linked to amendment review impact.`
+              : "Load a mission to connect amendment records to impacted requirement rows.",
+          })
+        : ""
+    }
     <div class="summary-grid" style="margin-bottom: 14px;">
       <section class="summary-block">
         <h4>Matrix Status</h4>
@@ -1639,6 +1721,17 @@ const renderTimeline = () => {
   timelinePanel.innerHTML = `${
     isWorkspaceFocusTarget("timeline-panel")
       ? renderWorkspaceFocusNote("Operations timeline")
+      : ""
+  }${
+    isWorkspaceFocusTarget("timeline-panel")
+      ? renderFocusedSourceRecordDetails({
+          categoryKey: "safety_action_closure_evidence",
+          title: "Safety and SOP Source Records",
+          emptyMessage:
+            "No safety action or SOP follow-up source records are captured in the latest post-operation readiness view.",
+          relatedReviewDetail:
+            "Review the mission timeline below to connect safety/SOP evidence to the operational sequence.",
+        })
       : ""
   }${phaseSummary}${renderedItems}`;
 };

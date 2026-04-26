@@ -1,32 +1,32 @@
 # NEXT STEP
 
 ## Goal
-Add deeper source-record detail panels for safety and regulatory review.
+Add accountable review outcomes for safety and regulatory source records.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- show source-record context inside the focused timeline and regulatory sections
-- surface latest safety/SOP follow-up cues with linked timeline evidence
-- surface regulatory amendment source records with affected requirement rows and review state
+- add lightweight review outcome controls to safety/SOP and regulatory source-record panels
+- capture review state such as noted, needs action, or accepted for evidence pack
+- show latest review outcome next to the source record before accountable-manager sign-off
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- keep source-record details framed as accountable review support, not compliance certification or automated closure
+- keep review outcomes framed as internal accountable review notes, not compliance certification or regulatory submission
 
 ### 3. Tests
-- add mission workspace UI tests for focused safety and regulatory source-record detail context
+- add backend and mission workspace UI tests for source-record review outcomes
 - run mission-planning UI tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Timeline and regulatory focus sections show the most relevant source-record detail without manual hunting
-- Safety/SOP and regulatory review prompts remain linked to evidence and review state
+- Safety/SOP and regulatory source records can carry an explicit accountable review outcome
+- Mission workspace shows latest outcome state without implying certification or automatic closure
 - Copy remains explicit that links support audit review, not compliance certification
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation
