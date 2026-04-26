@@ -23,6 +23,10 @@ type MissionIdParams = {
   missionId: string;
 };
 
+type SopChangeRecommendationIdParams = {
+  recommendationId: string;
+};
+
 export class OperationalAuthorityController {
   constructor(
     private readonly operationalAuthorityService: OperationalAuthorityService,
@@ -206,6 +210,66 @@ export class OperationalAuthorityController {
       const created =
         await this.operationalAuthorityService.createSopChangeRecommendation(
           req.params.missionId,
+          req.body,
+        );
+      res.status(201).json(created);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listSopChangeRecommendationReviews = async (
+    req: Request<SopChangeRecommendationIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const user = requireCurrentUser(req);
+      const organisationId =
+        await this.operationalAuthorityService.getSopChangeRecommendationOrganisationId(
+          req.params.recommendationId,
+        );
+      await this.organisationMembershipsService.requireMembership(
+        user.id,
+        organisationId,
+        [
+          "viewer",
+          "operator",
+          "operations_manager",
+          "compliance_manager",
+          "accountable_manager",
+          "admin",
+        ],
+      );
+      const listed =
+        await this.operationalAuthorityService.listSopChangeRecommendationReviews(
+          req.params.recommendationId,
+        );
+      res.status(200).json(listed);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createSopChangeRecommendationReview = async (
+    req: Request<SopChangeRecommendationIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const user = requireCurrentUser(req);
+      const organisationId =
+        await this.operationalAuthorityService.getSopChangeRecommendationOrganisationId(
+          req.params.recommendationId,
+        );
+      await this.organisationMembershipsService.requireMembership(
+        user.id,
+        organisationId,
+        ["accountable_manager", "admin"],
+      );
+      const created =
+        await this.operationalAuthorityService.createSopChangeRecommendationReview(
+          req.params.recommendationId,
           req.body,
         );
       res.status(201).json(created);

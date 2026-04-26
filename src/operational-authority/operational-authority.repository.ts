@@ -7,6 +7,7 @@ import type {
   OperationalAuthorityPilotAuthorisationReview,
   OperationalAuthorityProfile,
   OperationalAuthoritySopChangeRecommendation,
+  OperationalAuthoritySopChangeRecommendationReview,
   OperationalAuthoritySopDocument,
 } from "./operational-authority.types";
 
@@ -100,6 +101,19 @@ interface OperationalAuthoritySopChangeRecommendationRow extends QueryResultRow 
   created_by: string;
   created_at: Date;
   updated_at: Date;
+}
+
+interface OperationalAuthoritySopChangeRecommendationReviewRow extends QueryResultRow {
+  id: string;
+  operational_authority_sop_change_recommendation_id: string;
+  mission_id: string;
+  organisation_id: string;
+  decision: OperationalAuthoritySopChangeRecommendationReview["decision"];
+  reviewed_by: string;
+  review_rationale: string;
+  evidence_ref: string | null;
+  reviewed_at: Date;
+  created_at: Date;
 }
 
 interface OperationalAuthorityPilotAuthorisationRow extends QueryResultRow {
@@ -223,6 +237,22 @@ const toSopChangeRecommendation = (
   createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
+});
+
+const toSopChangeRecommendationReview = (
+  row: OperationalAuthoritySopChangeRecommendationReviewRow,
+): OperationalAuthoritySopChangeRecommendationReview => ({
+  id: row.id,
+  operationalAuthoritySopChangeRecommendationId:
+    row.operational_authority_sop_change_recommendation_id,
+  missionId: row.mission_id,
+  organisationId: row.organisation_id,
+  decision: row.decision,
+  reviewedBy: row.reviewed_by,
+  reviewRationale: row.review_rationale,
+  evidenceRef: row.evidence_ref,
+  reviewedAt: row.reviewed_at.toISOString(),
+  createdAt: row.created_at.toISOString(),
 });
 
 const toPilotAuthorisation = (
@@ -741,6 +771,104 @@ export class OperationalAuthorityRepository {
     );
 
     return result.rows.map((row) => toSopChangeRecommendation(row));
+  }
+
+  async getSopChangeRecommendationById(
+    tx: PoolClient,
+    recommendationId: string,
+  ): Promise<OperationalAuthoritySopChangeRecommendation | null> {
+    const result = await tx.query<OperationalAuthoritySopChangeRecommendationRow>(
+      `
+      select *
+      from operational_authority_sop_change_recommendations
+      where id = $1
+      `,
+      [recommendationId],
+    );
+
+    return result.rows[0] ? toSopChangeRecommendation(result.rows[0]) : null;
+  }
+
+  async updateSopChangeRecommendationStatus(
+    tx: PoolClient,
+    recommendationId: string,
+    status: OperationalAuthoritySopChangeRecommendation["status"],
+  ): Promise<OperationalAuthoritySopChangeRecommendation> {
+    const result = await tx.query<OperationalAuthoritySopChangeRecommendationRow>(
+      `
+      update operational_authority_sop_change_recommendations
+      set
+        status = $2,
+        updated_at = now()
+      where id = $1
+      returning *
+      `,
+      [recommendationId, status],
+    );
+
+    return toSopChangeRecommendation(result.rows[0]);
+  }
+
+  async insertSopChangeRecommendationReview(
+    tx: PoolClient,
+    params: {
+      recommendationId: string;
+      missionId: string;
+      organisationId: string;
+      decision: OperationalAuthoritySopChangeRecommendationReview["decision"];
+      reviewedBy: string;
+      reviewRationale: string;
+      evidenceRef: string | null;
+      reviewedAt: string | null;
+    },
+  ): Promise<OperationalAuthoritySopChangeRecommendationReview> {
+    const result = await tx.query<OperationalAuthoritySopChangeRecommendationReviewRow>(
+      `
+      insert into operational_authority_sop_change_recommendation_reviews (
+        id,
+        operational_authority_sop_change_recommendation_id,
+        mission_id,
+        organisation_id,
+        decision,
+        reviewed_by,
+        review_rationale,
+        evidence_ref,
+        reviewed_at
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, coalesce($9::timestamptz, now()))
+      returning *
+      `,
+      [
+        randomUUID(),
+        params.recommendationId,
+        params.missionId,
+        params.organisationId,
+        params.decision,
+        params.reviewedBy,
+        params.reviewRationale,
+        params.evidenceRef,
+        params.reviewedAt,
+      ],
+    );
+
+    return toSopChangeRecommendationReview(result.rows[0]);
+  }
+
+  async listSopChangeRecommendationReviews(
+    tx: PoolClient,
+    recommendationId: string,
+  ): Promise<OperationalAuthoritySopChangeRecommendationReview[]> {
+    const result = await tx.query<OperationalAuthoritySopChangeRecommendationReviewRow>(
+      `
+      select *
+      from operational_authority_sop_change_recommendation_reviews
+      where operational_authority_sop_change_recommendation_id = $1
+      order by reviewed_at desc, created_at desc, id desc
+      `,
+      [recommendationId],
+    );
+
+    return result.rows.map((row) => toSopChangeRecommendationReview(row));
   }
 
   async getPilotAuthorisationForProfile(

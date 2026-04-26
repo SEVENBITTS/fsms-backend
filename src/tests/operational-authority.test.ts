@@ -12,6 +12,7 @@ const clearTables = async () => {
   await pool.query("delete from organisation_documents");
   await pool.query("delete from operational_authority_pilot_authorisation_reviews");
   await pool.query("delete from operational_authority_pilot_authorisations");
+  await pool.query("delete from operational_authority_sop_change_recommendation_reviews");
   await pool.query("delete from operational_authority_sop_change_recommendations");
   await pool.query("delete from operational_authority_sop_documents");
   await pool.query("delete from operational_authority_conditions");
@@ -847,6 +848,175 @@ describe("operational authority integration", () => {
         findingSummary: "Operator should not be able to create this.",
         recommendation: "Should be blocked.",
         createdBy: "operator",
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatchObject({
+      type: "organisation_membership_forbidden",
+    });
+  });
+
+  it("records accountable review decisions for SOP change recommendations", async () => {
+    const organisationId = randomUUID();
+    const missionId = await insertMission({ organisationId });
+    const validity = buildDateWindow(-30, 365);
+    const auth = await createUserAndSession("oa-sop-decision@example.com");
+    await createMembership(organisationId, auth.user.id, "accountable_manager");
+
+    const createResponse = await request(app)
+      .post(`/organisations/${organisationId}/operational-authority-documents`)
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        authorityName: "CAA",
+        referenceNumber: "OA-SOP-DEC-001",
+        issueDate: validity.issueDate,
+        effectiveFrom: validity.effectiveFrom,
+        expiresAt: validity.expiresAt,
+        uploadedBy: "accountable-manager",
+        conditions: [
+          {
+            conditionCode: "ALLOWED_OPERATION_TYPE",
+            conditionTitle: "Permitted inspections",
+            clauseReference: "OA 9.1",
+            conditionPayload: { allowedOperationTypes: ["inspection"] },
+          },
+        ],
+      });
+
+    const conditionId = createResponse.body.conditions[0].id;
+    const sopResponse = await request(app)
+      .post(
+        `/operational-authority-profiles/${createResponse.body.profile.id}/sop-documents`,
+      )
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        sopCode: "SOP-FLT-010",
+        title: "Accountable SOP decision procedure",
+        version: "1.0",
+        status: "active",
+        sourceClauseRefs: ["SOP 10.1"],
+        linkedOaConditionIds: [conditionId],
+        changeRecommendationScope: ["post_operation_learning"],
+      });
+
+    const recommendationResponse = await request(app)
+      .post(`/missions/${missionId}/sop-change-recommendations`)
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        profileId: createResponse.body.profile.id,
+        sopDocumentId: sopResponse.body.sopDocument.id,
+        parentOaConditionId: conditionId,
+        sopClauseRef: "SOP 10.1",
+        recommendationType: "sop_review_recommended",
+        evidenceSourceType: "post_operation_evidence_snapshot",
+        evidenceSourceId: "snapshot-010",
+        findingSummary: "Review found repeated dispatch evidence delay.",
+        recommendation:
+          "Accountable manager should decide whether SOP 10.1 needs amendment.",
+        createdBy: "accountable-manager",
+      });
+
+    const recommendationId = recommendationResponse.body.recommendation.id;
+    const reviewResponse = await request(app)
+      .post(
+        `/operational-authority-sop-change-recommendations/${recommendationId}/reviews`,
+      )
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        decision: "accepted_for_action",
+        reviewedBy: "Accountable Manager",
+        reviewRationale:
+          "Accepted for action as an internal SOP review task; no automatic SOP amendment is made.",
+        evidenceRef: "AM-SOP-DEC-001",
+      });
+
+    expect(reviewResponse.status).toBe(201);
+    expect(reviewResponse.body.recommendation).toMatchObject({
+      id: recommendationId,
+      status: "accepted_for_action",
+    });
+    expect(reviewResponse.body.review).toMatchObject({
+      operationalAuthoritySopChangeRecommendationId: recommendationId,
+      missionId,
+      organisationId,
+      decision: "accepted_for_action",
+      reviewedBy: "Accountable Manager",
+      evidenceRef: "AM-SOP-DEC-001",
+    });
+
+    const listResponse = await request(app)
+      .get(
+        `/operational-authority-sop-change-recommendations/${recommendationId}/reviews`,
+      )
+      .set("X-Session-Token", auth.sessionToken);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.reviews).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: reviewResponse.body.review.id,
+          decision: "accepted_for_action",
+        }),
+      ]),
+    );
+  });
+
+  it("prevents non-accountable roles from reviewing SOP change recommendations", async () => {
+    const organisationId = randomUUID();
+    const missionId = await insertMission({ organisationId });
+    const validity = buildDateWindow(-30, 365);
+    const admin = await createUserAndSession("oa-sop-decision-admin@example.com");
+    const operator = await createUserAndSession("oa-sop-decision-operator@example.com");
+    await createMembership(organisationId, admin.user.id, "admin");
+    await createMembership(organisationId, operator.user.id, "operator");
+
+    const createResponse = await request(app)
+      .post(`/organisations/${organisationId}/operational-authority-documents`)
+      .set("X-Session-Token", admin.sessionToken)
+      .send({
+        authorityName: "CAA",
+        referenceNumber: "OA-SOP-DEC-DENIED-001",
+        issueDate: validity.issueDate,
+        effectiveFrom: validity.effectiveFrom,
+        expiresAt: validity.expiresAt,
+        uploadedBy: "admin",
+        conditions: [],
+      });
+
+    const sopResponse = await request(app)
+      .post(
+        `/operational-authority-profiles/${createResponse.body.profile.id}/sop-documents`,
+      )
+      .set("X-Session-Token", admin.sessionToken)
+      .send({
+        sopCode: "SOP-DEC-DENIED",
+        title: "Denied decision SOP",
+        version: "1.0",
+      });
+
+    const recommendationResponse = await request(app)
+      .post(`/missions/${missionId}/sop-change-recommendations`)
+      .set("X-Session-Token", admin.sessionToken)
+      .send({
+        profileId: createResponse.body.profile.id,
+        sopDocumentId: sopResponse.body.sopDocument.id,
+        recommendationType: "sop_review_recommended",
+        evidenceSourceType: "timeline",
+        evidenceSourceId: "timeline-denied",
+        findingSummary: "Operator should not decide this.",
+        recommendation: "Should be blocked.",
+        createdBy: "admin",
+      });
+
+    const response = await request(app)
+      .post(
+        `/operational-authority-sop-change-recommendations/${recommendationResponse.body.recommendation.id}/reviews`,
+      )
+      .set("X-Session-Token", operator.sessionToken)
+      .send({
+        decision: "accepted_for_action",
+        reviewedBy: "Operator",
+        reviewRationale: "Should not be accepted from this role.",
       });
 
     expect(response.status).toBe(403);
