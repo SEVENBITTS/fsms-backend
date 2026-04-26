@@ -1166,6 +1166,8 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
 
     const submitResponse = await request(app)
       .post(`/missions/${missionId}/submit`)
+      .set("X-Request-Id", "req-submit-1")
+      .set("X-Correlation-Id", "corr-mission-lifecycle-1")
       .send({
         userId: "user-1",
       });
@@ -1176,6 +1178,8 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
 
     const approveResponse = await request(app)
       .post(`/missions/${missionId}/approve`)
+      .set("X-Request-Id", "req-approve-1")
+      .set("X-Correlation-Id", "corr-mission-lifecycle-1")
       .send({
         reviewerId: "reviewer-1",
         decisionEvidenceLinkId: approvalEvidenceLink.id,
@@ -1188,6 +1192,8 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
 
     const launchResponse = await request(app)
       .post(`/missions/${missionId}/launch`)
+      .set("X-Request-Id", "req-launch-1")
+      .set("X-Correlation-Id", "corr-mission-lifecycle-1")
       .send({
         operatorId: "operator-1",
         vehicleId: "vehicle-1",
@@ -1324,6 +1330,39 @@ it("POST mission lifecycle submit -> approve -> launch -> complete writes ordere
       { event_type: "mission.completed", count: 1 },
       { event_type: "mission.launched", count: 1 },
       { event_type: "mission.submitted", count: 1 },
+    ]);
+
+    const traceResult = await pool.query(
+      `
+      SELECT event_type, request_id, correlation_id
+      FROM mission_events
+      WHERE mission_id = $1
+      ORDER BY sequence_no ASC
+      `,
+      [missionId],
+    );
+
+    expect(traceResult.rows).toEqual([
+      {
+        event_type: "mission.submitted",
+        request_id: "req-submit-1",
+        correlation_id: "corr-mission-lifecycle-1",
+      },
+      {
+        event_type: "mission.approved",
+        request_id: "req-approve-1",
+        correlation_id: "corr-mission-lifecycle-1",
+      },
+      {
+        event_type: "mission.launched",
+        request_id: "req-launch-1",
+        correlation_id: "corr-mission-lifecycle-1",
+      },
+      {
+        event_type: "mission.completed",
+        request_id: null,
+        correlation_id: null,
+      },
     ]);
   });
 });

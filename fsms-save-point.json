@@ -85,11 +85,13 @@
       "Validated complete after aborted returns 409 and appends no mission.completed event",
       "Validated rejected lifecycle transitions leave mission event counts and mission state unchanged",
       "Validated shared mission lifecycle transition guard preserves existing mission and timeline behavior with full test suite green",
-      "Validated transition preflight endpoint returns allowed true for valid actions, allowed false for invalid actions, and 400 for unsupported actions without mutating mission state or appending events"
+      "Validated transition preflight endpoint returns allowed true for valid actions, allowed false for invalid actions, and 400 for unsupported actions without mutating mission state or appending events",
+      "Validated mission lifecycle request and correlation IDs are persisted on submitted, approved, and launched audit events",
+      "Stabilized the default Vitest command by disabling file parallelism for database-backed integration suites"
     ]
 
   },
-  "nextBuildStep": "Add operator-facing Q-line index summary context so coarse NOTAM index metadata is clearer at a glance in live operations review.",
+  "nextBuildStep": "Validate the recovered migration chain against a clean Postgres test database and document any seed-data or ordering assumptions.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
