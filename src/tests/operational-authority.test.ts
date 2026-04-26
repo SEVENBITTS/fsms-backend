@@ -12,6 +12,7 @@ const clearTables = async () => {
   await pool.query("delete from organisation_documents");
   await pool.query("delete from operational_authority_pilot_authorisation_reviews");
   await pool.query("delete from operational_authority_pilot_authorisations");
+  await pool.query("delete from operational_authority_sop_change_recommendations");
   await pool.query("delete from operational_authority_sop_documents");
   await pool.query("delete from operational_authority_conditions");
   await pool.query("delete from operational_authority_profiles");
@@ -699,6 +700,153 @@ describe("operational authority integration", () => {
         sopCode: "SOP-DENIED",
         title: "Operator-created SOP",
         version: "1.0",
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatchObject({
+      type: "organisation_membership_forbidden",
+    });
+  });
+
+  it("creates and lists schema-backed SOP change recommendations against mission evidence", async () => {
+    const organisationId = randomUUID();
+    const missionId = await insertMission({ organisationId });
+    const validity = buildDateWindow(-30, 365);
+    const auth = await createUserAndSession("oa-sop-change@example.com");
+    await createMembership(organisationId, auth.user.id, "operations_manager");
+
+    const createResponse = await request(app)
+      .post(`/organisations/${organisationId}/operational-authority-documents`)
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        authorityName: "CAA",
+        referenceNumber: "OA-SOP-REC-001",
+        issueDate: validity.issueDate,
+        effectiveFrom: validity.effectiveFrom,
+        expiresAt: validity.expiresAt,
+        uploadedBy: "ops-manager",
+        conditions: [
+          {
+            conditionCode: "ALLOWED_OPERATION_TYPE",
+            conditionTitle: "Permitted inspections",
+            clauseReference: "OA 8.1",
+            conditionPayload: { allowedOperationTypes: ["inspection"] },
+          },
+        ],
+      });
+
+    const conditionId = createResponse.body.conditions[0].id;
+    const sopResponse = await request(app)
+      .post(
+        `/operational-authority-profiles/${createResponse.body.profile.id}/sop-documents`,
+      )
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        sopCode: "SOP-FLT-009",
+        title: "Post-operation review procedure",
+        version: "1.0",
+        status: "active",
+        sourceClauseRefs: ["SOP 9.4"],
+        linkedOaConditionIds: [conditionId],
+        changeRecommendationScope: ["post_operation_learning"],
+      });
+
+    expect(sopResponse.status).toBe(201);
+
+    const createRecommendationResponse = await request(app)
+      .post(`/missions/${missionId}/sop-change-recommendations`)
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        profileId: createResponse.body.profile.id,
+        sopDocumentId: sopResponse.body.sopDocument.id,
+        parentOaConditionId: conditionId,
+        sopClauseRef: "SOP 9.4",
+        recommendationType: "sop_amendment_recommended",
+        evidenceSourceType: "post_operation_evidence_snapshot",
+        evidenceSourceId: "snapshot-001",
+        findingSummary:
+          "Post-operation review found repeated late weather evidence capture.",
+        recommendation:
+          "Review SOP 9.4 to clarify weather evidence timing before future inspections.",
+        createdBy: "ops-manager",
+      });
+
+    expect(createRecommendationResponse.status).toBe(201);
+    expect(createRecommendationResponse.body.recommendation).toMatchObject({
+      missionId,
+      organisationId,
+      operationalAuthorityProfileId: createResponse.body.profile.id,
+      operationalAuthoritySopDocumentId: sopResponse.body.sopDocument.id,
+      parentOaConditionId: conditionId,
+      sopCode: "SOP-FLT-009",
+      sopClauseRef: "SOP 9.4",
+      recommendationType: "sop_amendment_recommended",
+      status: "draft",
+      evidenceSourceType: "post_operation_evidence_snapshot",
+      evidenceSourceId: "snapshot-001",
+    });
+
+    const listResponse = await request(app)
+      .get(`/missions/${missionId}/sop-change-recommendations`)
+      .set("X-Session-Token", auth.sessionToken);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.recommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createRecommendationResponse.body.recommendation.id,
+          sopCode: "SOP-FLT-009",
+          status: "draft",
+        }),
+      ]),
+    );
+  });
+
+  it("prevents operators from creating SOP change recommendations", async () => {
+    const organisationId = randomUUID();
+    const missionId = await insertMission({ organisationId });
+    const validity = buildDateWindow(-30, 365);
+    const admin = await createUserAndSession("oa-sop-change-admin@example.com");
+    const operator = await createUserAndSession("oa-sop-change-operator@example.com");
+    await createMembership(organisationId, admin.user.id, "admin");
+    await createMembership(organisationId, operator.user.id, "operator");
+
+    const createResponse = await request(app)
+      .post(`/organisations/${organisationId}/operational-authority-documents`)
+      .set("X-Session-Token", admin.sessionToken)
+      .send({
+        authorityName: "CAA",
+        referenceNumber: "OA-SOP-REC-DENIED-001",
+        issueDate: validity.issueDate,
+        effectiveFrom: validity.effectiveFrom,
+        expiresAt: validity.expiresAt,
+        uploadedBy: "admin",
+        conditions: [],
+      });
+
+    const sopResponse = await request(app)
+      .post(
+        `/operational-authority-profiles/${createResponse.body.profile.id}/sop-documents`,
+      )
+      .set("X-Session-Token", admin.sessionToken)
+      .send({
+        sopCode: "SOP-DENIED-REC",
+        title: "Operator denied recommendation",
+        version: "1.0",
+      });
+
+    const response = await request(app)
+      .post(`/missions/${missionId}/sop-change-recommendations`)
+      .set("X-Session-Token", operator.sessionToken)
+      .send({
+        profileId: createResponse.body.profile.id,
+        sopDocumentId: sopResponse.body.sopDocument.id,
+        recommendationType: "sop_review_recommended",
+        evidenceSourceType: "timeline",
+        evidenceSourceId: "timeline-1",
+        findingSummary: "Operator should not be able to create this.",
+        recommendation: "Should be blocked.",
+        createdBy: "operator",
       });
 
     expect(response.status).toBe(403);

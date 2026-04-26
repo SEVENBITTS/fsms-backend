@@ -7,11 +7,13 @@ import type {
   CreateOperationalAuthorityDocumentInput,
   CreateOperationalAuthorityPilotAuthorisationInput,
   CreateOperationalAuthorityPilotAuthorisationReviewInput,
+  CreateOperationalAuthoritySopChangeRecommendationInput,
   CreateOperationalAuthoritySopDocumentInput,
   MissionOperationType,
   OperationalAuthorityConditionCode,
   OperationalAuthorityPilotAuthorisationReviewDecision,
   OperationalAuthorityPilotAuthorisationState,
+  OperationalAuthoritySopChangeRecommendationType,
   OperationalAuthoritySopDocumentStatus,
   UpdateOperationalAuthorityPilotAuthorisationInput,
   UploadOperationalAuthorityDocumentInput,
@@ -54,6 +56,14 @@ const SOP_DOCUMENT_STATUSES = new Set<OperationalAuthoritySopDocumentStatus>([
   "under_review",
   "superseded",
 ]);
+
+const SOP_CHANGE_RECOMMENDATION_TYPES =
+  new Set<OperationalAuthoritySopChangeRecommendationType>([
+    "sop_review_recommended",
+    "sop_amendment_recommended",
+    "new_sop_required",
+    "oa_variation_review_recommended",
+  ]);
 
 function requiredTrimmed(value: unknown, fieldName: string): string {
   if (typeof value !== "string") {
@@ -297,6 +307,23 @@ function validateSopDocumentStatus(
   return value as OperationalAuthoritySopDocumentStatus;
 }
 
+function validateSopChangeRecommendationType(
+  value: unknown,
+): OperationalAuthoritySopChangeRecommendationType {
+  if (
+    typeof value !== "string" ||
+    !SOP_CHANGE_RECOMMENDATION_TYPES.has(
+      value as OperationalAuthoritySopChangeRecommendationType,
+    )
+  ) {
+    throw new OperationalAuthorityValidationError(
+      "recommendationType is not supported",
+    );
+  }
+
+  return value as OperationalAuthoritySopChangeRecommendationType;
+}
+
 export function validateCreateOperationalAuthorityDocumentInput(
   input: CreateOperationalAuthorityDocumentInput | undefined,
 ) {
@@ -415,6 +442,38 @@ export function validateCreateOperationalAuthoritySopDocumentInput(
       "changeRecommendationScope",
     ),
     reviewNotes: optionalTrimmed(input.reviewNotes, "reviewNotes"),
+  };
+}
+
+export function validateCreateOperationalAuthoritySopChangeRecommendationInput(
+  input: CreateOperationalAuthoritySopChangeRecommendationInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new OperationalAuthorityValidationError("Request body must be an object");
+  }
+
+  return {
+    profileId: requiredTrimmed(input.profileId, "profileId"),
+    sopDocumentId: requiredTrimmed(input.sopDocumentId, "sopDocumentId"),
+    parentOaConditionId: optionalTrimmed(
+      input.parentOaConditionId,
+      "parentOaConditionId",
+    ),
+    sopClauseRef: optionalTrimmed(input.sopClauseRef, "sopClauseRef"),
+    recommendationType: validateSopChangeRecommendationType(
+      input.recommendationType,
+    ),
+    evidenceSourceType: requiredTrimmed(
+      input.evidenceSourceType,
+      "evidenceSourceType",
+    ),
+    evidenceSourceId: requiredTrimmed(
+      input.evidenceSourceId,
+      "evidenceSourceId",
+    ),
+    findingSummary: requiredTrimmed(input.findingSummary, "findingSummary"),
+    recommendation: requiredTrimmed(input.recommendation, "recommendation"),
+    createdBy: requiredTrimmed(input.createdBy, "createdBy"),
   };
 }
 
