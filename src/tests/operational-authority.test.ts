@@ -12,6 +12,7 @@ const clearTables = async () => {
   await pool.query("delete from organisation_documents");
   await pool.query("delete from operational_authority_pilot_authorisation_reviews");
   await pool.query("delete from operational_authority_pilot_authorisations");
+  await pool.query("delete from operational_authority_sop_documents");
   await pool.query("delete from operational_authority_conditions");
   await pool.query("delete from operational_authority_profiles");
   await pool.query("delete from operational_authority_documents");
@@ -577,6 +578,132 @@ describe("operational authority integration", () => {
       authorisationState: "authorised",
       bvlosAuthorised: true,
       requiresAccountableReview: false,
+    });
+  });
+
+  it("models SOPs as distinct linked documents under an OA profile", async () => {
+    const organisationId = randomUUID();
+    const validity = buildDateWindow(-30, 365);
+    const auth = await createUserAndSession("oa-sop-admin@example.com");
+    await createMembership(organisationId, auth.user.id, "compliance_manager");
+
+    const createResponse = await request(app)
+      .post(`/organisations/${organisationId}/operational-authority-documents`)
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        authorityName: "CAA",
+        referenceNumber: "OA-SOP-001",
+        issueDate: validity.issueDate,
+        effectiveFrom: validity.effectiveFrom,
+        expiresAt: validity.expiresAt,
+        uploadedBy: "compliance-lead",
+        conditions: [
+          {
+            conditionCode: "ALLOWED_OPERATION_TYPE",
+            conditionTitle: "Permitted operations",
+            clauseReference: "OA 7.1",
+            conditionPayload: { allowedOperationTypes: ["inspection"] },
+          },
+        ],
+      });
+
+    expect(createResponse.status).toBe(201);
+    const conditionId = createResponse.body.conditions[0].id;
+
+    const createSopResponse = await request(app)
+      .post(
+        `/operational-authority-profiles/${createResponse.body.profile.id}/sop-documents`,
+      )
+      .set("X-Session-Token", auth.sessionToken)
+      .send({
+        sopCode: "SOP-FLT-003",
+        title: "Infrastructure Inspection Flight Procedure",
+        version: "2.1",
+        status: "active",
+        owner: "Head of Flight Operations",
+        sourceDocumentId: "stored-file-sop-003",
+        sourceDocumentType: "standard_operating_procedure",
+        sourceClauseRefs: ["SOP 3.2", "SOP 5.4"],
+        linkedOaConditionIds: [conditionId],
+        changeRecommendationScope: [
+          "weather_review",
+          "pilot_briefing",
+          "post_operation_learning",
+        ],
+        reviewNotes:
+          "Linked below the OA so change recommendations can point at the relevant SOP.",
+      });
+
+    expect(createSopResponse.status).toBe(201);
+    expect(createSopResponse.body.sopDocument).toMatchObject({
+      operationalAuthorityProfileId: createResponse.body.profile.id,
+      organisationId,
+      sopCode: "SOP-FLT-003",
+      title: "Infrastructure Inspection Flight Procedure",
+      version: "2.1",
+      status: "active",
+      sourceClauseRefs: ["SOP 3.2", "SOP 5.4"],
+      linkedOaConditionIds: [conditionId],
+      changeRecommendationScope: [
+        "weather_review",
+        "pilot_briefing",
+        "post_operation_learning",
+      ],
+    });
+
+    const listResponse = await request(app)
+      .get(
+        `/operational-authority-profiles/${createResponse.body.profile.id}/sop-documents`,
+      )
+      .set("X-Session-Token", auth.sessionToken);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.sopDocuments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createSopResponse.body.sopDocument.id,
+          sopCode: "SOP-FLT-003",
+          linkedOaConditionIds: [conditionId],
+        }),
+      ]),
+    );
+  });
+
+  it("prevents non-governance roles from creating OA-linked SOP documents", async () => {
+    const organisationId = randomUUID();
+    const validity = buildDateWindow(-30, 365);
+    const admin = await createUserAndSession("oa-sop-owner@example.com");
+    const operator = await createUserAndSession("oa-sop-operator@example.com");
+    await createMembership(organisationId, admin.user.id, "admin");
+    await createMembership(organisationId, operator.user.id, "operator");
+
+    const createResponse = await request(app)
+      .post(`/organisations/${organisationId}/operational-authority-documents`)
+      .set("X-Session-Token", admin.sessionToken)
+      .send({
+        authorityName: "CAA",
+        referenceNumber: "OA-SOP-DENIED-001",
+        issueDate: validity.issueDate,
+        effectiveFrom: validity.effectiveFrom,
+        expiresAt: validity.expiresAt,
+        uploadedBy: "admin",
+        conditions: [],
+      });
+
+    const response = await request(app)
+      .post(
+        `/operational-authority-profiles/${createResponse.body.profile.id}/sop-documents`,
+      )
+      .set("X-Session-Token", operator.sessionToken)
+      .send({
+        sopCode: "SOP-DENIED",
+        title: "Operator-created SOP",
+        version: "1.0",
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatchObject({
+      type: "organisation_membership_forbidden",
     });
   });
 

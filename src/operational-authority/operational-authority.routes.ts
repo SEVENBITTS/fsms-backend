@@ -50,6 +50,14 @@ export function createOperationalAuthorityProfileRouter(
     "/:profileId/pilot-authorisations",
     controller.createPilotAuthorisation,
   );
+  router.get(
+    "/:profileId/sop-documents",
+    controller.listSopDocuments,
+  );
+  router.post(
+    "/:profileId/sop-documents",
+    controller.createSopDocument,
+  );
   router.post(
     "/:profileId/activate",
     controller.activateOperationalAuthorityProfile,
