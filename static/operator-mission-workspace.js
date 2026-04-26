@@ -352,6 +352,31 @@ const renderList = (items, title) => {
 const renderBadge = (value) =>
   `<span class="badge ${toneClass(value)}">${escapeHtml(value ?? "Unknown")}</span>`;
 
+const workspaceFocusTarget = () =>
+  new URL(window.location.href).hash.replace("#", "");
+
+const isWorkspaceFocusTarget = (targetId) => workspaceFocusTarget() === targetId;
+
+const focusClass = (isFocused) => (isFocused ? " focus-target" : "");
+
+const renderWorkspaceFocusNote = (targetLabel) => `
+  <div class="focus-note">
+    ${escapeHtml(targetLabel)} opened from a post-operation source-record drill-down for accountable review.
+    This focus does not certify compliance, close evidence, or replace operator judgement.
+  </div>
+`;
+
+const applyWorkspaceFocusState = () => {
+  regulatoryMatrixPanel?.classList.toggle(
+    "focus-target",
+    isWorkspaceFocusTarget("regulatory-matrix-panel"),
+  );
+  timelinePanel?.classList.toggle(
+    "focus-target",
+    isWorkspaceFocusTarget("timeline-panel"),
+  );
+};
+
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
 
@@ -1159,11 +1184,16 @@ const renderRegulatoryMatrix = () => {
   if (!regulatoryMatrixPanel) {
     return;
   }
+  applyWorkspaceFocusState();
 
   const mappings = uiState.regulatoryMatrix ?? [];
   if (mappings.length === 0) {
     regulatoryMatrixPanel.innerHTML =
-      '<div class="empty-state">Regulatory requirement matrix is not loaded.</div>';
+      `${
+        isWorkspaceFocusTarget("regulatory-matrix-panel")
+          ? renderWorkspaceFocusNote("Regulatory matrix")
+          : ""
+      }<div class="empty-state">Regulatory requirement matrix is not loaded.</div>`;
     return;
   }
 
@@ -1186,6 +1216,11 @@ const renderRegulatoryMatrix = () => {
   });
 
   regulatoryMatrixPanel.innerHTML = `
+    ${
+      isWorkspaceFocusTarget("regulatory-matrix-panel")
+        ? renderWorkspaceFocusNote("Regulatory matrix")
+        : ""
+    }
     <div class="summary-grid" style="margin-bottom: 14px;">
       <section class="summary-block">
         <h4>Matrix Status</h4>
@@ -1542,9 +1577,14 @@ const renderDispatch = () => {
 
 const renderTimeline = () => {
   const timeline = uiState.timeline;
+  applyWorkspaceFocusState();
 
   if (!timeline) {
-    timelinePanel.innerHTML = `<div class="empty-state">Operations timeline is not available.</div>`;
+    timelinePanel.innerHTML = `${
+      isWorkspaceFocusTarget("timeline-panel")
+        ? renderWorkspaceFocusNote("Operations timeline")
+        : ""
+    }<div class="empty-state">Operations timeline is not available.</div>`;
     return;
   }
 
@@ -1596,7 +1636,11 @@ const renderTimeline = () => {
             .join("")}
         </div>`;
 
-  timelinePanel.innerHTML = `${phaseSummary}${renderedItems}`;
+  timelinePanel.innerHTML = `${
+    isWorkspaceFocusTarget("timeline-panel")
+      ? renderWorkspaceFocusNote("Operations timeline")
+      : ""
+  }${phaseSummary}${renderedItems}`;
 };
 
 const renderActions = () => {

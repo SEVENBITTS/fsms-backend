@@ -49,6 +49,10 @@ const uiState = {
   mapViewStateEvidenceSnapshots: [],
   missionList: [],
   missionQuery: "",
+  focusTargets: {
+    mapEvidenceId: "",
+    conflictAcknowledgementId: "",
+  },
   replayPlayback: {
     index: 0,
     playing: false,
@@ -114,6 +118,25 @@ const escapeHtml = (value) =>
 
 const renderBadge = (value) =>
   `<span class="badge ${toneClass(value)}">${escapeHtml(value ?? "Unknown")}</span>`;
+
+const focusClass = (isFocused) => (isFocused ? " focus-target" : "");
+
+const getDrilldownFocusFromLocation = () => {
+  const current = new URL(window.location.href);
+
+  return {
+    mapEvidenceId: current.searchParams.get("mapEvidenceId")?.trim() ?? "",
+    conflictAcknowledgementId:
+      current.searchParams.get("conflictAcknowledgementId")?.trim() ?? "",
+  };
+};
+
+const renderFocusNote = (message) => `
+  <div class="focus-note">
+    ${escapeHtml(message)}
+    This focus supports accountable audit review only; it does not certify compliance, close evidence, or replace operator judgement.
+  </div>
+`;
 
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
@@ -1786,6 +1809,21 @@ const updateUrl = (missionId) => {
     next.searchParams.set("areaFreshnessFilter", uiState.areaFreshnessFilter);
   }
 
+  if (uiState.focusTargets.mapEvidenceId) {
+    next.searchParams.set("mapEvidenceId", uiState.focusTargets.mapEvidenceId);
+  } else {
+    next.searchParams.delete("mapEvidenceId");
+  }
+
+  if (uiState.focusTargets.conflictAcknowledgementId) {
+    next.searchParams.set(
+      "conflictAcknowledgementId",
+      uiState.focusTargets.conflictAcknowledgementId,
+    );
+  } else {
+    next.searchParams.delete("conflictAcknowledgementId");
+  }
+
   window.history.replaceState({}, "", next);
 };
 
@@ -1932,9 +1970,20 @@ const recordMapViewStateEvidenceSnapshot = async () => {
 
 const renderMapViewStateEvidenceHistory = () => {
   const snapshots = (uiState.mapViewStateEvidenceSnapshots ?? []).slice(0, 3);
+  const focusedMapEvidenceId = uiState.focusTargets.mapEvidenceId;
+  const focusedSnapshotFound = snapshots.some(
+    (snapshot) => snapshot.id === focusedMapEvidenceId,
+  );
 
   if (snapshots.length === 0) {
     return `
+      ${
+        focusedMapEvidenceId
+          ? renderFocusNote(
+              `Map evidence snapshot ${focusedMapEvidenceId} was requested from a source-record drill-down but is not present in recent history.`,
+            )
+          : ""
+      }
       <div class="empty-state">
         No backend-recorded map view-state evidence snapshots yet.
       </div>
@@ -1942,14 +1991,27 @@ const renderMapViewStateEvidenceHistory = () => {
   }
 
   return `
+    ${
+      focusedMapEvidenceId
+        ? renderFocusNote(
+            focusedSnapshotFound
+              ? `Focused map evidence snapshot ${focusedMapEvidenceId} from the post-operation source-record drill-down.`
+              : `Map evidence snapshot ${focusedMapEvidenceId} was requested from a source-record drill-down but is not present in recent history.`,
+          )
+        : ""
+    }
     <div class="list compact-list">
       ${snapshots
         .map(
-          (snapshot, index) => `
-            <article class="list-card">
+          (snapshot, index) => {
+            const isFocused = snapshot.id === focusedMapEvidenceId;
+
+            return `
+            <article class="list-card${focusClass(isFocused)}" data-map-evidence-id="${escapeHtml(snapshot.id ?? "")}">
               <div class="list-card-title">
                 Snapshot ${escapeHtml(snapshot.id ?? "unknown")}
                 ${index === 0 ? renderBadge("Latest metadata snapshot") : renderBadge("Older metadata snapshot")}
+                ${isFocused ? renderBadge("Focused source record") : ""}
               </div>
               <div class="kv">
                 <div class="k">Captured</div>
@@ -1973,7 +2035,8 @@ const renderMapViewStateEvidenceHistory = () => {
                 Review cue: latest/older status supports post-operation review only; this remains metadata-only evidence, not screenshot evidence, and not pilot command guidance.
               </div>
             </article>
-          `,
+          `;
+          },
         )
         .join("")}
     </div>
@@ -3466,6 +3529,33 @@ const formatSecondaryAdvisoryValue = (advisory) =>
     .filter(Boolean)
     .join(" | ");
 
+const renderSecondaryAdvisories = (secondary, focusedAcknowledgementId) => {
+  if (secondary.length === 0) {
+    return '<div class="empty-state">No additional advisory items are currently derived.</div>';
+  }
+
+  return `
+    <div class="list compact-list">
+      ${secondary
+        .map((advisory) => {
+          const isFocused =
+            advisory.acknowledgement?.id === focusedAcknowledgementId;
+
+          return `
+            <article class="list-card${focusClass(isFocused)}" data-conflict-acknowledgement-id="${escapeHtml(advisory.acknowledgement?.id ?? "")}">
+              <div class="list-card-title">
+                ${escapeHtml(`${advisory.actionCode} | ${advisory.relatedObject}`)}
+                ${isFocused ? renderBadge("Focused source record") : ""}
+              </div>
+              <div class="alert-window-meta">${escapeHtml(formatSecondaryAdvisoryValue(advisory))}</div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
+
 const prohibitedActionText = (advisory) =>
   advisory.prohibitedActions.join(" | ") || "No additional constraints recorded";
 
@@ -3482,6 +3572,12 @@ const renderConflictAdvisory = () => {
   const replayConflictRelation = currentConflictReplayRelation();
   const primary = advisories[0] ?? null;
   const secondary = advisories.slice(1, 4);
+  const focusedAcknowledgementId = uiState.focusTargets.conflictAcknowledgementId;
+  const focusedAcknowledgementFound = advisories.some(
+    (advisory) => advisory.acknowledgement?.id === focusedAcknowledgementId,
+  );
+  const primaryFocused =
+    primary?.acknowledgement?.id === focusedAcknowledgementId;
 
   if (advisories.length === 0) {
     conflictAdvisoryPanel.innerHTML =
@@ -3491,6 +3587,15 @@ const renderConflictAdvisory = () => {
 
   conflictAdvisoryPanel.innerHTML = `
     <div class="stack">
+      ${
+        focusedAcknowledgementId
+          ? renderFocusNote(
+              focusedAcknowledgementFound
+                ? `Focused conflict acknowledgement ${focusedAcknowledgementId} from the post-operation source-record drill-down.`
+                : `Conflict acknowledgement ${focusedAcknowledgementId} was requested from a source-record drill-down but is not visible in the current advisory set.`,
+            )
+          : ""
+      }
       <section class="correlation-card">
         <h4>Replay Relation</h4>
         <div class="kv">
@@ -3505,8 +3610,9 @@ const renderConflictAdvisory = () => {
         ${
           primary
             ? `
-              <article class="alert-window ${toneClass(primary.tone)}">
+              <article class="alert-window ${toneClass(primary.tone)}${focusClass(primaryFocused)}" data-conflict-acknowledgement-id="${escapeHtml(primary.acknowledgement?.id ?? "")}">
                 <strong>${escapeHtml(primary.headline)}</strong>
+                ${primaryFocused ? renderBadge("Focused source record") : ""}
                 <div>${escapeHtml(primary.reasoning)}</div>
                 <div class="alert-window-meta">
                   Recommended attention: ${escapeHtml(primary.recommendation)}<br />
@@ -3567,15 +3673,7 @@ const renderConflictAdvisory = () => {
       <section class="correlation-card">
         <h4>Additional Advisories</h4>
         ${
-          secondary.length === 0
-            ? '<div class="empty-state">No additional advisory items are currently derived.</div>'
-            : renderList(
-                secondary.map((advisory) => ({
-                  label: `${advisory.actionCode} | ${advisory.relatedObject}`,
-                  value: formatSecondaryAdvisoryValue(advisory),
-                })),
-                "additional advisories",
-              )
+          renderSecondaryAdvisories(secondary, focusedAcknowledgementId)
         }
       </section>
     </div>
@@ -4018,6 +4116,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 const initialMissionId = normalizeMissionId(getMissionIdFromLocation());
+uiState.focusTargets = getDrilldownFocusFromLocation();
 uiState.areaFreshnessFilter = getAreaFreshnessFilterFromLocation();
 if (initialMissionId) {
   missionIdInput.value = initialMissionId;

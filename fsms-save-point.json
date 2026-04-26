@@ -45,7 +45,8 @@
       "Updated package dependencies to patch known vulnerable dev dependency versions",
       "Adjusted organisation document portal test expectations to remain stable with expanded seeded pilot data",
       "Added mission workspace drill-down links from post-operation readiness categories to live-ops map evidence, conflict review context, operations timeline, regulatory matrix, and rendered audit report",
-      "Extended post-operation evidence readiness categories with source record metadata for latest map, conflict, safety, and regulatory evidence"
+      "Extended post-operation evidence readiness categories with source record metadata for latest map, conflict, safety, and regulatory evidence",
+      "Added URL-driven visual focus for source-record drill-downs into live-ops map evidence, conflict acknowledgements, operations timeline, and regulatory matrix review sections"
     ],
     "removed": [],
     "fixed": [
@@ -121,7 +122,8 @@
       "Operators can see why an OA, insurance policy, or pilot authorisation needs review before mission dispatch",
       "Accountable managers can inspect headline risk pressure earlier from a single dashboard surface",
       "Operators can jump from post-operation readiness prompts to the relevant evidence review surface instead of manually hunting through the workspace",
-      "Operators can open the latest source record or source JSON behind each populated post-operation readiness category"
+      "Operators can open the latest source record or source JSON behind each populated post-operation readiness category",
+      "Operators now see a focused review cue when a source-record drill-down lands on the relevant live-ops or mission-workspace evidence area"
     ]
   },
   "complianceImplications": {
@@ -139,7 +141,8 @@
     "auditTraceabilityImpact": [
       "Mission governance joins OA and insurance state into dispatch evidence",
       "Document preview/download and evidence-pack concepts preserve source-document accountability",
-      "Post-operation readiness now carries source record IDs, review URLs, and API URLs so audit prompts remain traceable to underlying evidence"
+      "Post-operation readiness now carries source record IDs, review URLs, and API URLs so audit prompts remain traceable to underlying evidence",
+      "Source-record drill-down review URLs preserve evidence IDs and highlight the relevant review surface without treating the item as certified, closed, or automatically resolved"
     ]
   },
   "risksLimitations": {
@@ -180,11 +183,12 @@
       "Validated external overlay tests after preserving main-branch live-ops and map evidence work",
       "Validated mission lifecycle request and correlation IDs are persisted on submitted, approved, and launched audit events",
       "Validated recovered migrations with npm run migrate:test against the configured Postgres test database after PR 238 merged",
-      "Validated source-record drill-down metadata with audit evidence and mission planning focused tests"
+      "Validated source-record drill-down metadata with audit evidence and mission planning focused tests",
+      "Validated source-record drill-down focus state with TypeScript build and mission-planning UI tests"
     ]
 
   },
-  "nextBuildStep": "Add visual focus handling for source-record drill-down targets.",
+  "nextBuildStep": "Add deeper source-record detail panels for safety and regulatory review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
