@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FSMS Operator Live Operations</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09111b;
+      --bg-band: #0f1b2b;
+      --bg-soft: #142337;
+      --bg-accent: #1b2e46;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #edf3fb;
+      --muted: #9eb0c6;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --info: #38bdf8;
+      --radius: 8px;
+      --shadow: 0 20px 45px rgba(0, 0, 0, 0.3);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 28%),
+        linear-gradient(180deg, #08101a 0%, #0b1521 100%);
+      color: var(--text);
+    }
+
+    .page-shell { min-height: 100vh; }
+    .hero {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(11, 21, 33, 0.94), rgba(11, 21, 33, 0.82));
+    }
+    .hero-inner, .band-inner {
+      width: min(1380px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+    .hero-top {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.05;
+      font-weight: 800;
+    }
+    .hero p {
+      margin: 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(160px, 1fr)) 180px;
+      gap: 12px;
+      align-items: end;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .field label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .field input, .field button {
+      min-height: 48px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font: inherit;
+    }
+    .field input {
+      padding: 0 14px;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+    }
+    .field button {
+      padding: 0 16px;
+      cursor: pointer;
+      color: var(--text);
+      background: var(--bg-accent);
+      font-weight: 700;
+    }
+    .field button.secondary {
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+    }
+    .entry-browser {
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      box-shadow: var(--shadow);
+    }
+    .entry-browser-header {
+      display: flex;
+      align-items: end;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .entry-browser-header .field {
+      flex: 1;
+    }
+    .entry-browser-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 0;
+    }
+    .entry-browser-list,
+    .entry-browser-detail {
+      min-height: 220px;
+      padding: 16px 18px;
+    }
+    .entry-browser-detail {
+      border-left: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .mission-row {
+      padding: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+    }
+    .mission-row-title {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .mission-row-meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .action-button {
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-accent);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .band { padding: 18px 0; }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .metric, .panel {
+      border: 1px solid var(--border);
+      background: var(--bg-band);
+      box-shadow: var(--shadow);
+    }
+    .metric {
+      min-height: 128px;
+      padding: 18px;
+    }
+    .metric .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .metric .value {
+      margin-top: 12px;
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.05;
+    }
+    .metric .meta {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .panel-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .panel-header h3 {
+      margin: 0;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .panel-header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .panel-body { padding: 18px; }
+    .live-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(340px, 0.8fr);
+      gap: 16px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .summary-block {
+      min-height: 138px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+    }
+    .summary-block h4 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 8px 12px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .kv .k { color: var(--muted); }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .list-item {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .list-item strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tone-ok { color: var(--ok); }
+    .tone-warn { color: var(--warn); }
+    .tone-bad { color: var(--bad); }
+    .tone-info { color: var(--info); }
+    .tone-muted { color: var(--muted); }
+    .empty-state {
+      padding: 26px 18px;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+      background: rgba(255,255,255,0.02);
+    }
+    .map-shell {
+      position: relative;
+      min-height: 620px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(18,32,50,0.94), rgba(10,18,28,0.98));
+      overflow: hidden;
+    }
+    .replay-controls {
+      display: grid;
+      grid-template-columns: auto auto auto auto minmax(0, 1fr) auto auto auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .replay-slider-stack {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+    .control-button {
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .control-select {
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+    }
+    .control-button:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+    .replay-readout {
+      min-width: 168px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .replay-slider {
+      width: 100%;
+      accent-color: var(--info);
+    }
+    .replay-markers {
+      position: relative;
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      overflow: hidden;
+    }
+    .replay-marker {
+      position: absolute;
+      top: 2px;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(9,17,27,0.92);
+      box-shadow: 0 0 0 2px rgba(9,17,27,0.38);
+    }
+    .replay-marker.info { background: var(--info); }
+    .replay-marker.warning { background: var(--warn); }
+    .replay-marker.critical { background: var(--bad); }
+    .replay-marker.conflict {
+      width: 12px;
+      height: 12px;
+      top: 1px;
+      background: transparent;
+      border: 2px solid #f8fafc;
+      box-shadow: 0 0 0 2px rgba(9,17,27,0.48);
+    }
+    .replay-marker.conflict.info { border-color: var(--info); }
+    .replay-marker.conflict.caution { border-color: var(--warn); }
+    .replay-marker.conflict.critical { border-color: var(--bad); }
+    .replay-progress {
+      min-width: 126px;
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .map-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 56px 56px;
+    }
+    .map-terrain {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 16% 18%, rgba(34,197,94,0.08), transparent 24%),
+        radial-gradient(circle at 82% 22%, rgba(56,189,248,0.1), transparent 20%),
+        radial-gradient(circle at 68% 74%, rgba(245,158,11,0.08), transparent 24%),
+        radial-gradient(circle at 28% 78%, rgba(255,255,255,0.04), transparent 18%);
+      pointer-events: none;
+    }
+    .map-contours {
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle at 22% 26%, transparent 0 62px, rgba(255,255,255,0.05) 63px, transparent 66px),
+        radial-gradient(circle at 22% 26%, transparent 0 100px, rgba(255,255,255,0.035) 101px, transparent 104px),
+        radial-gradient(circle at 74% 62%, transparent 0 76px, rgba(255,255,255,0.05) 77px, transparent 80px),
+        radial-gradient(circle at 74% 62%, transparent 0 126px, rgba(255,255,255,0.03) 127px, transparent 130px);
+      pointer-events: none;
+      opacity: 0.6;
+    }
+    .map-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .map-overlay {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .overlay-pill {
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(9,17,27,0.72);
+      display: inline-flex;
+      align-items: center;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .map-alert-stack {
+      position: absolute;
+      right: 16px;
+      top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: min(340px, calc(100% - 32px));
+      z-index: 2;
+    }
+    .map-alert-card {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: rgba(9,17,27,0.84);
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .map-alert-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .map-window-summary {
+      position: absolute;
+      left: 16px;
+      bottom: 62px;
+      z-index: 2;
+      width: min(360px, calc(100% - 32px));
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: rgba(9,17,27,0.84);
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .map-window-summary strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .map-window-summary .meta {
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .map-envelope-summary {
+      bottom: 186px;
+    }
+    .conflict-severity-band {
+      pointer-events: none;
+      mix-blend-mode: screen;
+    }
+    .conflict-proximity-envelope-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .map-legend {
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      z-index: 2;
+    }
+    .map-compass {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      width: 74px;
+      height: 74px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(9,17,27,0.78);
+      display: grid;
+      place-items: center;
+      z-index: 2;
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 146px 110px 1fr;
+      gap: 12px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-band);
+    }
+    .timeline-item.conflict-relevant {
+      border-color: rgba(245, 158, 11, 0.45);
+      box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.85);
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.08), var(--bg-band) 24%);
+    }
+    .timeline-item.conflict-critical {
+      border-color: rgba(239, 68, 68, 0.45);
+      box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.92);
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.08), var(--bg-band) 24%);
+    }
+    .timeline-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .correlation-card {
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+    }
+    .correlation-card h4 {
+      margin: 0 0 10px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .jump-control-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .alert-window-list {
+      display: grid;
+      gap: 10px;
+    }
+    .alert-window {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    .alert-window strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .alert-window-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .timeline-time { color: var(--muted); font-size: 13px; }
+    .timeline-phase {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+    .timeline-summary {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .timeline-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    @media (max-width: 1120px) {
+      .controls-grid,
+      .entry-browser-grid,
+      .metric-grid,
+      .live-grid,
+      .summary-grid,
+      .timeline-item {
+        grid-template-columns: 1fr;
+      }
+      .kv { grid-template-columns: 1fr; }
+      .map-shell { min-height: 480px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-inner">
+        <div class="hero-top">
+          <div>
+            <h1>Operator Live Operations View</h1>
+            <p>
+              Read-only mission map surface for replay and future live telemetry, separated from planning and dispatch controls.
+            </p>
+          </div>
+          <div id="live-ops-connection-status" class="status-pill">No mission loaded</div>
+        </div>
+        <div class="controls-grid">
+          <div class="field">
+            <label for="live-ops-mission-id-input">Mission ID</label>
+            <input id="live-ops-mission-id-input" type="text" placeholder="Enter mission UUID" />
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="load-live-ops-btn" type="button">Load live ops view</button>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="open-workspace-btn" class="secondary" type="button">Open workspace</button>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="open-replay-api-btn" class="secondary" type="button">Open replay JSON</button>
+          </div>
+          <div class="field">
+            <label>Loaded mission</label>
+            <div id="live-ops-loaded-mission-pill" class="status-pill">None</div>
+          </div>
+        </div>
+        <section class="entry-browser">
+          <div class="entry-browser-header">
+            <div class="field">
+              <label for="live-ops-mission-search-input">Mission search</label>
+              <input id="live-ops-mission-search-input" type="text" placeholder="Search missions by plan ID, status, platform, or pilot" />
+            </div>
+            <div class="field" style="max-width: 180px;">
+              <label>&nbsp;</label>
+              <button id="live-ops-mission-search-btn" class="secondary" type="button">Search missions</button>
+            </div>
+          </div>
+          <div class="entry-browser-grid">
+            <div id="live-ops-mission-browser-list" class="entry-browser-list"></div>
+            <div id="live-ops-mission-browser-detail" class="entry-browser-detail"></div>
+          </div>
+        </section>
+      </div>
+    </header>
+
+    <section class="band">
+      <div class="band-inner">
+        <div id="live-ops-overview" class="metric-grid"></div>
+      </div>
+    </section>
+
+      <section class="band">
+      <div class="band-inner live-grid">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Map and Replay Surface</h3>
+            <p>Mission replay track, latest telemetry position, and current live-ops overlays.</p>
+          </div>
+          <div class="panel-body">
+            <div class="replay-controls">
+              <button id="live-ops-replay-play-btn" class="control-button" type="button">Play</button>
+              <button id="live-ops-replay-pause-btn" class="control-button" type="button" disabled>Pause</button>
+              <button id="live-ops-replay-step-back-btn" class="control-button" type="button">Back</button>
+              <button id="live-ops-replay-step-forward-btn" class="control-button" type="button">Forward</button>
+              <div class="replay-slider-stack">
+                <input id="live-ops-replay-slider" class="replay-slider" type="range" min="0" max="0" step="1" value="0" />
+                <div id="live-ops-replay-markers" class="replay-markers"></div>
+              </div>
+              <div id="live-ops-replay-time" class="replay-readout">Replay time: not loaded</div>
+              <div id="live-ops-replay-progress" class="replay-progress">0 / 0</div>
+              <select id="live-ops-replay-speed" class="control-select" aria-label="Replay speed">
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="2">2x</option>
+                <option value="4">4x</option>
+              </select>
+            </div>
+            <div id="live-ops-map" class="map-shell"></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Replay Milestones</h3>
+              <p>Jump directly to launch, completion, abort, and alert-linked moments.</p>
+            </div>
+            <div id="live-ops-jump-controls" class="panel-body"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Telemetry and Risk Status</h3>
+              <p>Current telemetry context, readiness posture, and operator-relevant launch risk signals.</p>
+            </div>
+            <div id="live-ops-status" class="panel-body"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Alert Timeline Correlation</h3>
+              <p>Current replay-point alert state, alert windows, and nearby mission events.</p>
+            </div>
+            <div id="live-ops-alert-correlation" class="panel-body"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Conflict Assessment</h3>
+              <p>Interpreted crewed and drone traffic proximity candidates over the current mission track.</p>
+            </div>
+            <div id="live-ops-conflict-assessment" class="panel-body"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Conflict Advisory Guidance</h3>
+              <p>Presentation-only operator guidance derived from the current interpreted conflict picture.</p>
+            </div>
+            <div id="live-ops-conflict-advisory" class="panel-body"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Event Context</h3>
+              <p>Recent mission narrative items to keep flight picture and timeline context together.</p>
+            </div>
+            <div id="live-ops-timeline" class="panel-body"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="/static/operator-live-operations-map.js"></script>
+</body>
+</html>

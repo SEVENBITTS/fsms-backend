@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FSMS Operator Document Portal</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09111b;
+      --bg-band: #0f1b2b;
+      --bg-soft: #142337;
+      --bg-accent: #1b2e46;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #edf3fb;
+      --muted: #9eb0c6;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --shadow: 0 20px 45px rgba(0, 0, 0, 0.3);
+      --radius: 8px;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 28%),
+        linear-gradient(180deg, #08101a 0%, #0b1521 100%);
+      color: var(--text);
+    }
+
+    .shell { min-height: 100vh; }
+    .hero {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(11, 21, 33, 0.94), rgba(11, 21, 33, 0.82));
+    }
+
+    .inner {
+      width: min(1380px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+
+    .hero-top, .controls {
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero-top {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+    }
+
+    h1, h2, h3, h4, p { margin: 0; }
+    h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.05; margin-bottom: 8px; }
+    .hero p, .panel-header p, .field-note, .status-text { color: var(--muted); line-height: 1.55; }
+    .status-pill, .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .controls {
+      margin-top: 20px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .field, .form-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field-note {
+      font-size: 12px;
+    }
+
+    .field label, .form-grid label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    input, textarea, select, button {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font: inherit;
+      padding: 10px 12px;
+    }
+
+    textarea { min-height: 100px; resize: vertical; }
+    input[type="file"] {
+      padding: 10px;
+    }
+    button {
+      background: var(--bg-accent);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button.secondary { background: rgba(255,255,255,0.04); }
+    .section { padding: 18px 0; }
+    .grid-4 { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid-3 { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .panel, .metric, .doc-card {
+      border: 1px solid var(--border);
+      background: var(--bg-band);
+      box-shadow: var(--shadow);
+    }
+
+    .metric, .doc-card { padding: 18px; }
+    .metric .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .metric .value { margin-top: 10px; font-size: 30px; font-weight: 800; }
+    .metric .meta { margin-top: 8px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .panel-header { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+    .panel-body { padding: 18px; }
+    .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .tone-ok { color: var(--ok); }
+    .tone-warn { color: var(--warn); }
+    .tone-bad { color: var(--bad); }
+
+    .doc-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .doc-card h4 {
+      margin-bottom: 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .doc-meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      margin-top: 8px;
+    }
+
+    .doc-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .doc-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .doc-action-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .doc-action-link:hover,
+    .doc-action-link:focus-visible {
+      border-color: rgba(56, 189, 248, 0.45);
+      background: rgba(255,255,255,0.08);
+      outline: none;
+    }
+
+    .empty-state {
+      padding: 20px;
+      border: 1px dashed var(--border);
+      background: rgba(255,255,255,0.02);
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1100px) {
+      .controls, .grid-4, .grid-3, .form-grid { grid-template-columns: 1fr; }
+      .hero-top { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="inner">
+        <div class="hero-top">
+          <div>
+            <h1>Operator Document Portal</h1>
+            <p>
+              Administrative upload space for Operational Authorisation, insurance, and supporting company documents.
+              This keeps the source record, review notes, and renewal pressure visible in one place.
+            </p>
+          </div>
+          <div style="display: grid; gap: 10px; justify-items: end;">
+            <div id="portal-status" class="status-pill">No organisation loaded</div>
+            <div id="auth-status" class="status-pill">No active session</div>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="field">
+            <label for="organisation-id-input">Organisation ID</label>
+            <input id="organisation-id-input" type="text" placeholder="Enter organisation UUID" />
+          </div>
+          <div class="field">
+            <label for="auth-email-input">Auth email</label>
+            <input id="auth-email-input" type="email" placeholder="user@company.com" />
+          </div>
+          <div class="field">
+            <label for="auth-password-input">Auth password</label>
+            <input id="auth-password-input" type="password" placeholder="Enter password" />
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="login-btn" type="button">Login</button>
+            <div class="field-note">Current authenticated session and organisation membership control file upload, preview, and download access.</div>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="load-portal-btn" type="button">Load document portal</button>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="copy-portal-link-btn" class="secondary" type="button">Copy direct link</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="inner">
+        <div id="portal-metrics" class="grid-4"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="inner grid-3">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>OA Upload</h3>
+            <p>Record the company Operational Authorisation and its source file metadata for later structured assurance.</p>
+          </div>
+          <div class="panel-body">
+            <form id="oa-upload-form" class="form-grid"></form>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Insurance Upload</h3>
+            <p>Record the insurance policy source so cover checks can be assessed against the uploaded policy and schedule.</p>
+          </div>
+          <div class="panel-body">
+            <form id="insurance-upload-form" class="form-grid"></form>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Supporting Documents</h3>
+            <p>Upload certificates, manuals, policies, training evidence, maintenance records, and other supporting documents.</p>
+          </div>
+          <div class="panel-body">
+            <form id="supporting-upload-form" class="form-grid"></form>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="inner grid-3">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Operational Authority Records</h3>
+            <p>Current and historical OA records for the loaded organisation. File actions follow the current authenticated session and organisation membership.</p>
+          </div>
+          <div id="oa-list" class="panel-body"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Insurance Records</h3>
+            <p>Current and historical insurance records for the loaded organisation. File actions follow the current authenticated session and organisation membership.</p>
+          </div>
+          <div id="insurance-list" class="panel-body"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <h3>Supporting Records</h3>
+            <p>Certificates, manuals, training, maintenance, contracts, and other supporting company records. File actions follow the current authenticated session and organisation membership.</p>
+          </div>
+          <div id="supporting-list" class="panel-body"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="inner grid-3">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>OA Pilot Authorisations</h3>
+            <p>Manage pilot authorisation states against a specific OA profile, including pending amendment and accountable review cases.</p>
+          </div>
+          <div class="panel-body">
+            <form id="oa-pilot-authorisation-form" class="form-grid"></form>
+          </div>
+        </section>
+        <section class="panel" style="grid-column: span 2;">
+          <div class="panel-header">
+            <h3>OA Pilot Authorisation List</h3>
+            <p>Load a profile to review the pilots currently recorded inside the OA personnel envelope.</p>
+          </div>
+          <div id="oa-pilot-authorisation-list" class="panel-body"></div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="/static/operator-document-portal.js"></script>
+</body>
+</html>

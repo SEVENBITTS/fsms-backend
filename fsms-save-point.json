@@ -89,7 +89,7 @@
     ]
 
   },
- "nextBuildStep": "Add a stable mission lifecycle metadata read model that exposes supported actions, target states, and action labels for clients so operator workflows can use shared lifecycle rules without duplicating logic.",
+  "nextBuildStep": "Add operator-facing Q-line index summary context so coarse NOTAM index metadata is clearer at a glance in live operations review.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { MissionService } from "./mission.service";
 import { InvalidMissionTransitionError } from "./errors";
 import { MissionLifecycleAction } from "../modules/missions/domain/missionLifecycle";
+import { MissionPlanningService } from "../mission-planning/mission-planning.service";
 
 const VALID_ACTIONS = new Set<MissionLifecycleAction>([
   "submit",
@@ -12,7 +13,74 @@ const VALID_ACTIONS = new Set<MissionLifecycleAction>([
 ]);
 
 export class MissionController {
-  constructor(private readonly missionService: MissionService) {}
+  constructor(
+    private readonly missionService: MissionService,
+    private readonly missionPlanningService: MissionPlanningService,
+  ) {}
+
+  getPlanningWorkspace = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireUuid(req.params.missionId, "missionId");
+      const workspace =
+        await this.missionPlanningService.getWorkspace(missionId);
+
+      res.status(200).json({ workspace });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listMissions = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const query = this.optionalString(req.query.q);
+      const limit = this.optionalPositiveInteger(req.query.limit);
+      const result = await this.missionService.listMissions({ query, limit });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getDispatchWorkspace = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireUuid(req.params.missionId, "missionId");
+      const workspace =
+        await this.missionPlanningService.getDispatchWorkspace(missionId);
+
+      res.status(200).json({ workspace });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getOperationsTimeline = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireUuid(req.params.missionId, "missionId");
+      const timeline =
+        await this.missionPlanningService.getOperationsTimeline(missionId);
+
+      res.status(200).json({ timeline });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   getMissionEvents = async (
     req: Request,
@@ -67,6 +135,28 @@ export class MissionController {
     }
   };
 
+  checkReadiness = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const missionId = this.requireString(req.params.missionId, "missionId");
+      const platformId = this.optionalString(req.query.platformId);
+      const pilotId = this.optionalString(req.query.pilotId);
+
+      const result = await this.missionService.checkMissionReadiness({
+        missionId,
+        platformId,
+        pilotId,
+      });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   submitMission = async (
     req: Request,
     res: Response,
@@ -101,6 +191,7 @@ export class MissionController {
           (req as any).user?.id ?? req.body.reviewerId,
           "reviewerId",
         ),
+        decisionEvidenceLinkId: this.optionalString(req.body.decisionEvidenceLinkId),
         notes: this.optionalString(req.body.notes),
         requestId: this.optionalString(req.headers["x-request-id"]),
         correlationId: this.optionalString(req.headers["x-correlation-id"]),
@@ -127,6 +218,7 @@ export class MissionController {
         vehicleId: this.requireString(req.body.vehicleId, "vehicleId"),
         lat: this.requireNumber(req.body.lat, "lat"),
         lng: this.requireNumber(req.body.lng, "lng"),
+        decisionEvidenceLinkId: this.optionalString(req.body.decisionEvidenceLinkId),
         requestId: this.optionalString(req.headers["x-request-id"]),
         correlationId: this.optionalString(req.headers["x-correlation-id"]),
       });
@@ -283,6 +375,22 @@ export class MissionController {
 
     if (!Number.isFinite(num)) {
       throw new Error(`${fieldName} must be a valid number`);
+    }
+
+    return num;
+  }
+
+  private optionalPositiveInteger(value: unknown): number | undefined {
+    const normalized = this.optionalString(value);
+
+    if (!normalized) {
+      return undefined;
+    }
+
+    const num = Number(normalized);
+
+    if (!Number.isInteger(num) || num <= 0) {
+      throw new Error("limit must be a positive integer");
     }
 
     return num;

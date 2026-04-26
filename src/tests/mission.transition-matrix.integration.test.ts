@@ -77,6 +77,140 @@ const countMissionEventsByType = async (
   return result.rows[0].count as number;
 };
 
+const createDecisionEvidenceLink = async (
+  missionId: string,
+  decisionType: "approval" | "dispatch",
+) => {
+  const snapshotResponse = await request(app)
+    .post(`/missions/${missionId}/readiness/audit-snapshots`)
+    .send({});
+
+  expect(snapshotResponse.status).toBe(201);
+
+  const linkResponse = await request(app)
+    .post(`/missions/${missionId}/decision-evidence-links`)
+    .send({
+      snapshotId: snapshotResponse.body.snapshot.id,
+      decisionType,
+      createdBy: "reviewer-1",
+    });
+
+  expect(linkResponse.status).toBe(201);
+
+  return linkResponse.body.link as {
+    id: string;
+    auditEvidenceSnapshotId: string;
+  };
+};
+
+const createPlanningApprovalHandoffTrace = async (
+  missionId: string,
+  link: { id: string; auditEvidenceSnapshotId: string },
+) => {
+  await pool.query(
+    `
+    insert into mission_planning_approval_handoffs (
+      id,
+      mission_id,
+      audit_evidence_snapshot_id,
+      mission_decision_evidence_link_id,
+      planning_review,
+      created_by
+    )
+    values ($1, $2, $3, $4, $5::jsonb, $6)
+    `,
+    [
+      randomUUID(),
+      missionId,
+      link.auditEvidenceSnapshotId,
+      link.id,
+      JSON.stringify({
+        missionId,
+        readyForApproval: true,
+        blockingReasons: [],
+        checklist: [],
+      }),
+      "reviewer-1",
+    ],
+  );
+};
+
+const createApprovalEvidenceLink = async (missionId: string) => {
+  const link = await createDecisionEvidenceLink(missionId, "approval");
+  await createPlanningApprovalHandoffTrace(missionId, link);
+  return link;
+};
+
+const createDispatchEvidenceLink = async (missionId: string) =>
+  createDecisionEvidenceLink(missionId, "dispatch");
+
+const recordPlanningBackedApprovalEvent = async (missionId: string) => {
+  const approvalLink = await createApprovalEvidenceLink(missionId);
+
+  await pool.query(
+    `
+    insert into mission_events (
+      mission_id,
+      mission_plan_id,
+      event_type,
+      event_version,
+      event_ts,
+      recorded_at,
+      sequence_no,
+      actor_type,
+      actor_id,
+      from_state,
+      to_state,
+      summary,
+      details,
+      source_component,
+      source,
+      severity,
+      safety_relevant,
+      compliance_relevant,
+      metadata
+    )
+    values (
+      $1,
+      'plan-1',
+      'mission.approved',
+      1,
+      now(),
+      now(),
+      1,
+      'user',
+      'reviewer-1',
+      'submitted',
+      'approved',
+      'Mission approved',
+      $2::jsonb,
+      'mission-review-service',
+      'mission-review-service',
+      'info',
+      false,
+      true,
+      '{}'::jsonb
+    )
+    `,
+    [
+      missionId,
+      JSON.stringify({
+        decision: "approved",
+        decision_evidence_link_id: approvalLink.id,
+        notes: "planning-backed approval fixture",
+      }),
+    ],
+  );
+  await pool.query(
+    `
+    update missions
+    set last_event_sequence_no = greatest(last_event_sequence_no, 1)
+    where id = $1
+    `,
+    [missionId],
+  );
+};
+
 type TransitionCase = {
   name: string;
   route: (missionId: string) => string;
@@ -276,10 +410,22 @@ describe("mission transition matrix integration", () => {
 
       const stateBefore = await getMissionState(missionId);
       const eventsBefore = await getMissionEvents(missionId);
+      const requestBody = { ...testCase.requestBody };
+
+      if (testCase.expectedEventType === "mission.approved" && testCase.allowed) {
+        const link = await createApprovalEvidenceLink(missionId);
+        requestBody.decisionEvidenceLinkId = link.id;
+      }
+
+      if (testCase.expectedEventType === "mission.launched" && testCase.allowed) {
+        await recordPlanningBackedApprovalEvent(missionId);
+        const link = await createDispatchEvidenceLink(missionId);
+        requestBody.decisionEvidenceLinkId = link.id;
+      }
 
       const response = await request(app)
         .post(testCase.route(missionId))
-        .send(testCase.requestBody);
+        .send(requestBody);
 
       if (testCase.allowed) {
         expect(response.status).toBe(204);

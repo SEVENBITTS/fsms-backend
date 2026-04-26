@@ -100,6 +100,50 @@ fsms-backend/
 
 # Running the Backend
 
+## Current TypeScript dev startup
+
+For the current Express/TypeScript operator UI work, use:
+
+```powershell
+npm run dev
+```
+
+This dev entrypoint now:
+
+- compiles runtime server output into `dist/`
+- starts the server with plain `node`
+- skips startup migrations in local dev by default so static operator routes can still be rendered when local PostgreSQL credentials are not configured
+
+This is intended for UI rendering and route verification. API-backed mission data still requires a working local database setup.
+
+## Live ops demo seed
+
+To create a mission with replay, alerts, external overlays, and conflict-relevant context for operator UI review, run:
+
+```powershell
+npm run seed:liveops-demo
+```
+
+The script:
+
+- runs migrations
+- creates a mission with planning/approval/dispatch state
+- launches the mission
+- records replay telemetry
+- creates weather, crewed traffic, and drone traffic overlays
+- prints the mission UUID and local review URLs
+
+After the seed finishes, start the app:
+
+```powershell
+npm run dev
+```
+
+Then open the seeded mission in:
+
+- `/operator/missions/<mission-id>/live-operations`
+- `/operator/missions/<mission-id>`
+
 Activate the virtual environment:
 
 
@@ -225,6 +269,14 @@ Planned improvements include:
 - collision prediction
 - multi-flight monitoring
 - production deployment
+
+---
+
+# Product Direction
+
+The current FSMS product direction and prototype boundaries are documented in:
+
+- `docs/FSMS_DIRECTION.md`
 
 ---
 

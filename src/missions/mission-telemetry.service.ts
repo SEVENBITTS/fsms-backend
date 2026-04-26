@@ -13,8 +13,7 @@ import type {
 } from "./mission-telemetry.types";
 import { validateMissionTelemetryBatch } from "./mission-telemetry.validators";
 import { validateMissionTelemetryHistoryQuery } from "./mission-telemetry-history.validators";
-
-
+import { AlertService } from "../alerts/alert.service";
 
 export class MissionTelemetryService {
   constructor(
@@ -22,6 +21,7 @@ export class MissionTelemetryService {
     private readonly missionRepo: MissionRepository,
     private readonly telemetryRepo: MissionTelemetryRepository,
     private readonly lifecyclePolicy: MissionLifecyclePolicy,
+    private readonly alertService: AlertService,
   ) {}
 
   async recordTelemetry(
@@ -47,6 +47,19 @@ export class MissionTelemetryService {
 
       await this.telemetryRepo.insertMany(rows, client);
 
+      for (const record of input.records) {
+        await this.alertService.evaluateTelemetryInTx(client, missionId, {
+          timestamp: record.timestamp,
+          lat: record.lat ?? null,
+          lng: record.lng ?? null,
+          altitudeM: record.altitudeM ?? null,
+          speedMps: record.speedMps ?? null,
+          headingDeg: record.headingDeg ?? null,
+          progressPct: record.progressPct ?? null,
+          payload: record.payload ?? {},
+        });
+      }
+
       await client.query("commit");
 
       return {
@@ -60,6 +73,7 @@ export class MissionTelemetryService {
       client.release();
     }
   }
+
   async getLatestTelemetry(
     missionId: string,
   ): Promise<LatestMissionTelemetryResult> {
@@ -98,7 +112,7 @@ export class MissionTelemetryService {
     }
   }
 
-    async getTelemetryHistory(
+  async getTelemetryHistory(
     missionId: string,
     query: MissionTelemetryHistoryQuery,
   ): Promise<MissionTelemetryHistoryResult> {

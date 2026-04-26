@@ -1,12 +1,14 @@
 {
   "scripts": {
-    "dev": "tsx src/server.ts",
+    "dev": "node scripts/dev-server.mjs",
     "build": "tsc",
+    "build:runtime": "tsc -p tsconfig.runtime.json",
     "start": "node dist/server.js",
     "test": "vitest run",
     "validate:savepoint": "node scripts/validate-save-point.mjs",
     "migrate": "tsx src/scripts/run-migrations.ts",
     "migrate:test": "dotenv -e .env.test -- tsx src/scripts/run-migrations.ts",
+    "seed:liveops-demo": "tsx src/scripts/seed-live-ops-demo.ts",
     "suggest:nextstep": "node scripts/suggest-next-build-step.mjs origin/main"
   },
   "dependencies": {
