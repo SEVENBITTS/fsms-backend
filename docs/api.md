@@ -1,4 +1,4 @@
-# FSMS Backend API
+# VerityAtlas Backend API
 
 Base URL:
 

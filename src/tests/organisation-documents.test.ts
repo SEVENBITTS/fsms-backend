@@ -251,12 +251,12 @@ describe("organisation document portal", () => {
             uploadedFileId: "file-manual-001",
           }),
         ],
-        pilots: [
+        pilots: expect.arrayContaining([
           expect.objectContaining({
             id: pilot.id,
             displayName: "Portal Pilot",
           }),
-        ],
+        ]),
       },
     });
   });

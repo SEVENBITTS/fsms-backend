@@ -2,6 +2,8 @@ import type { Pool, PoolClient } from "pg";
 import type { MissionReadinessCheck } from "../missions/mission-readiness.types";
 import { MissionService } from "../missions/mission.service";
 import {
+  ConflictGuidanceAcknowledgementAlreadyExistsError,
+  ConflictGuidanceOverlayNotFoundError,
   AuditEvidenceMissionNotCompletedError,
   AuditEvidenceMissionNotFoundError,
   AuditEvidenceSnapshotNotFoundError,
@@ -14,21 +16,30 @@ import type {
   AuditEvidenceReadinessSnapshot,
   AuditReportSection,
   AuditReportSmsControlMapping,
+  ConflictGuidanceAcknowledgement,
   CreateAuditEvidenceSnapshotInput,
+  CreateConflictGuidanceAcknowledgementInput,
+  CreateLiveOpsMapViewStateSnapshotInput,
   CreateMissionDecisionEvidenceLinkInput,
   CreatePostOperationAuditSignoffInput,
   CreatePostOperationEvidenceSnapshotInput,
+  LiveOpsMapAreaFreshnessFilter,
+  LiveOpsMapViewStateSnapshot,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PostOperationAuditSignoff,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceExportPackage,
   PostOperationEvidencePdf,
+  PostOperationEvidenceReadiness,
+  PostOperationEvidenceReadinessCategory,
   PostOperationEvidenceRenderedReport,
   PostOperationEvidenceSnapshot,
 } from "./audit-evidence.types";
 import {
   validateCreateAuditEvidenceSnapshotInput,
+  validateCreateConflictGuidanceAcknowledgementInput,
+  validateCreateLiveOpsMapViewStateSnapshotInput,
   validateCreateMissionDecisionEvidenceLinkInput,
   validateCreatePostOperationAuditSignoffInput,
   validateCreatePostOperationEvidenceSnapshotInput,
@@ -161,6 +172,143 @@ export class AuditEvidenceService {
     }
   }
 
+  async createLiveOpsMapViewStateSnapshot(
+    missionId: string,
+    input: CreateLiveOpsMapViewStateSnapshotInput | undefined,
+  ): Promise<LiveOpsMapViewStateSnapshot> {
+    const validated = validateCreateLiveOpsMapViewStateSnapshotInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      return await this.auditEvidenceRepository.insertLiveOpsMapViewStateSnapshot(
+        client,
+        {
+          missionId,
+          ...validated,
+          snapshotMetadata: this.buildLiveOpsMapViewStateSnapshotMetadata(
+            missionId,
+            validated,
+          ),
+        },
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async listLiveOpsMapViewStateSnapshots(
+    missionId: string,
+  ): Promise<LiveOpsMapViewStateSnapshot[]> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      return await this.auditEvidenceRepository.listLiveOpsMapViewStateSnapshots(
+        client,
+        missionId,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async createConflictGuidanceAcknowledgement(
+    missionId: string,
+    input: CreateConflictGuidanceAcknowledgementInput | undefined,
+  ): Promise<ConflictGuidanceAcknowledgement> {
+    const validated = validateCreateConflictGuidanceAcknowledgementInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      const overlayExists =
+        await this.auditEvidenceRepository.overlayExistsForMission(
+          client,
+          missionId,
+          validated.overlayId,
+        );
+
+      if (!overlayExists) {
+        throw new ConflictGuidanceOverlayNotFoundError(validated.overlayId);
+      }
+
+      try {
+        return await this.auditEvidenceRepository.insertConflictGuidanceAcknowledgement(
+          client,
+          {
+            missionId,
+            conflictId: validated.conflictId,
+            overlayId: validated.overlayId,
+            guidanceActionCode: validated.guidanceActionCode,
+            evidenceAction: validated.evidenceAction,
+            acknowledgementRole: validated.acknowledgementRole,
+            acknowledgedBy: validated.acknowledgedBy,
+            acknowledgementNote: validated.acknowledgementNote,
+            guidanceSummary: validated.guidanceSummary,
+          },
+        );
+      } catch (error) {
+        if (this.isUniqueViolation(error)) {
+          throw new ConflictGuidanceAcknowledgementAlreadyExistsError(
+            validated.overlayId,
+          );
+        }
+        throw error;
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  async listConflictGuidanceAcknowledgements(
+    missionId: string,
+  ): Promise<ConflictGuidanceAcknowledgement[]> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.auditEvidenceRepository.missionExists(
+        client,
+        missionId,
+      );
+
+      if (!exists) {
+        throw new AuditEvidenceMissionNotFoundError(missionId);
+      }
+
+      return await this.auditEvidenceRepository.listConflictGuidanceAcknowledgements(
+        client,
+        missionId,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
   async createPostOperationEvidenceSnapshot(
     missionId: string,
     input: CreatePostOperationEvidenceSnapshotInput | undefined,
@@ -269,6 +417,19 @@ export class AuditEvidenceService {
       const safetyActionClosureEvidence =
         await this.auditEvidenceRepository
           .listSafetyActionClosureEvidenceForMissionExport(client, missionId);
+      const liveOpsMapViewStateSnapshots =
+        await this.auditEvidenceRepository.listLiveOpsMapViewStateSnapshots(
+          client,
+          missionId,
+        );
+      const conflictGuidanceAcknowledgements =
+        await this.auditEvidenceRepository.listConflictGuidanceAcknowledgements(
+          client,
+          missionId,
+        );
+      const regulatoryAmendmentAlerts =
+        await this.auditEvidenceRepository
+          .listRegulatoryAmendmentAlertsForMissionExport(client, missionId);
 
       return {
         exportType: "post_operation_completion_evidence",
@@ -281,7 +442,10 @@ export class AuditEvidenceService {
         createdBy: snapshot.createdBy,
         createdAt: snapshot.createdAt,
         completionSnapshot: snapshot.completionSnapshot,
+        liveOpsMapViewStateSnapshots,
+        conflictGuidanceAcknowledgements,
         safetyActionClosureEvidence,
+        regulatoryAmendmentAlerts,
       };
     } finally {
       client.release();
@@ -338,6 +502,56 @@ export class AuditEvidenceService {
       fileName: `mission-${missionId}-post-operation-evidence-${snapshotId}.pdf`,
       contentType: "application/pdf",
       content,
+    };
+  }
+
+  async getPostOperationEvidenceReadiness(
+    missionId: string,
+    snapshotId: string,
+  ): Promise<PostOperationEvidenceReadiness> {
+    const evidenceExport = await this.exportPostOperationEvidenceSnapshot(
+      missionId,
+      snapshotId,
+    );
+    const signoff = await this.getPostOperationAuditSignoff(
+      evidenceExport.missionId,
+      evidenceExport.snapshotId,
+    );
+    const categories = this.buildPostOperationEvidenceReadinessCategories(
+      evidenceExport,
+    );
+    const emptyCategoryCount = categories.filter(
+      (category) => category.status === "not_recorded",
+    ).length;
+
+    return {
+      missionId: evidenceExport.missionId,
+      snapshotId: evidenceExport.snapshotId,
+      lifecycleState: evidenceExport.lifecycleState,
+      completionStatus: evidenceExport.completionSnapshot.status,
+      evidenceCapturedAt: evidenceExport.createdAt,
+      signoff: {
+        status: signoff ? "recorded" : "pending",
+        reviewDecision: signoff?.reviewDecision ?? null,
+        signoffId: signoff?.id ?? null,
+        signedAt: signoff?.signedAt ?? null,
+      },
+      categories,
+      summary: {
+        hasLiveOpsMapViewStateSnapshots:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0,
+        hasConflictGuidanceAcknowledgements:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0,
+        hasSafetyActionClosureEvidence:
+          evidenceExport.safetyActionClosureEvidence.length > 0,
+        hasRegulatoryAmendmentReviews:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0,
+        emptyCategoryCount,
+        message:
+          emptyCategoryCount === 0
+            ? "All tracked evidence categories have records for accountable-manager review."
+            : "Empty categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+      },
     };
   }
 
@@ -450,6 +664,65 @@ export class AuditEvidenceService {
     }
   }
 
+  private buildPostOperationEvidenceReadinessCategories(
+    evidenceExport: PostOperationEvidenceExportPackage,
+  ): PostOperationEvidenceReadinessCategory[] {
+    return [
+      {
+        key: "live_ops_map_view_state_snapshots",
+        label: "Live-ops map view-state snapshots",
+        count: evidenceExport.liveOpsMapViewStateSnapshots.length,
+        status:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0
+            ? "Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance."
+            : "No live-ops map view-state metadata is recorded in this evidence pack; this is a review prompt only, not an automatic rejection or compliance certificate.",
+      },
+      {
+        key: "conflict_guidance_acknowledgements",
+        label: "Conflict guidance acknowledgements",
+        count: evidenceExport.conflictGuidanceAcknowledgements.length,
+        status:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0
+            ? "Live conflict guidance acknowledgements are included for review."
+            : "No live conflict guidance acknowledgements are recorded in this evidence pack.",
+      },
+      {
+        key: "safety_action_closure_evidence",
+        label: "Safety action closure evidence",
+        count: evidenceExport.safetyActionClosureEvidence.length,
+        status:
+          evidenceExport.safetyActionClosureEvidence.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.safetyActionClosureEvidence.length > 0
+            ? "Safety action closure evidence is included for review."
+            : "No safety action closure evidence is recorded in this evidence pack.",
+      },
+      {
+        key: "regulatory_amendment_reviews",
+        label: "Regulatory amendment reviews",
+        count: evidenceExport.regulatoryAmendmentAlerts.length,
+        status:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0
+            ? "present"
+            : "not_recorded",
+        message:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0
+            ? "Regulatory amendment review records are included for review."
+            : "No regulatory amendment review records are recorded in this evidence pack.",
+      },
+    ];
+  }
+
   private buildReadinessEvidenceSnapshot(
     readinessCheck: MissionReadinessCheck,
     smsControlMappings: AuditReportSmsControlMapping[],
@@ -457,6 +730,46 @@ export class AuditEvidenceService {
     return {
       ...readinessCheck,
       smsControlMappings,
+    };
+  }
+
+  private buildLiveOpsMapViewStateSnapshotMetadata(
+    missionId: string,
+    input: {
+      replayCursor: string;
+      replayTimestamp: string | null;
+      areaFreshnessFilter: LiveOpsMapAreaFreshnessFilter;
+      visibleAreaOverlayCount: number;
+      totalAreaOverlayCount: number;
+      degradedAreaOverlayCount: number;
+      openAlertCount: number;
+      activeConflictCount: number;
+      areaRefreshRunCount: number;
+      viewStateUrl: string | null;
+    },
+  ): Record<string, unknown> {
+    return {
+      formatVersion: 1,
+      missionId,
+      evidenceType: "live_ops_map_view_state",
+      captureScope: "metadata_only",
+      pilotInstructionStatus: "not_a_pilot_command",
+      screenshotStatus: "not_captured",
+      fileGenerationStatus: "not_requested",
+      viewState: {
+        replayCursor: input.replayCursor,
+        replayTimestamp: input.replayTimestamp,
+        areaFreshnessFilter: input.areaFreshnessFilter,
+        visibleAreaOverlayCount: input.visibleAreaOverlayCount,
+        totalAreaOverlayCount: input.totalAreaOverlayCount,
+        degradedAreaOverlayCount: input.degradedAreaOverlayCount,
+        openAlertCount: input.openAlertCount,
+        activeConflictCount: input.activeConflictCount,
+        areaRefreshRunCount: input.areaRefreshRunCount,
+        viewStateUrl: input.viewStateUrl,
+      },
+      assuranceBoundary:
+        "Live-ops map view-state capture is audit metadata only and does not issue pilot instructions or certify live regulatory compliance.",
     };
   }
 
@@ -659,6 +972,165 @@ export class AuditEvidenceService {
         ],
       },
       {
+        heading: "Evidence readiness summary",
+        fields: [
+          {
+            label: "Readiness boundary",
+            value:
+              "Evidence readiness categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+          },
+          {
+            label: "Sign-off separation",
+            value:
+              "Accountable-manager sign-off remains separate from evidence category readiness.",
+          },
+          ...this.buildPostOperationEvidenceReadinessCategories(
+            evidenceExport,
+          ).flatMap((category) => [
+            {
+              label: `${category.label} count`,
+              value: category.count,
+            },
+            {
+              label: `${category.label} status`,
+              value: category.status,
+            },
+            {
+              label: `${category.label} review prompt`,
+              value: category.message,
+            },
+          ]),
+        ],
+      },
+      {
+        heading: "Live-ops map view-state evidence",
+        fields:
+          evidenceExport.liveOpsMapViewStateSnapshots.length > 0
+            ? evidenceExport.liveOpsMapViewStateSnapshots.flatMap(
+                (snapshot, index) => [
+                  {
+                    label: `Map view-state snapshot ${index + 1} ID`,
+                    value: snapshot.id,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} replay cursor`,
+                    value: snapshot.replayCursor,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} replay timestamp`,
+                    value: snapshot.replayTimestamp,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} area freshness filter`,
+                    value: snapshot.areaFreshnessFilter,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} area overlays`,
+                    value: `${snapshot.visibleAreaOverlayCount}/${snapshot.totalAreaOverlayCount} visible; ${snapshot.degradedAreaOverlayCount} degraded`,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} alerts and conflicts`,
+                    value: `${snapshot.openAlertCount} open alerts; ${snapshot.activeConflictCount} active conflicts`,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} refresh runs`,
+                    value: snapshot.areaRefreshRunCount,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} capture scope`,
+                    value: snapshot.captureScope,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} pilot instruction status`,
+                    value: snapshot.pilotInstructionStatus,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} view state URL`,
+                    value: snapshot.viewStateUrl,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} recorded at`,
+                    value: snapshot.createdAt,
+                  },
+                  {
+                    label: `Map view-state snapshot ${index + 1} evidence boundary`,
+                    value:
+                      "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+                  },
+                ],
+              )
+            : [
+                {
+                  label: "Live-ops map view-state evidence",
+                  value: "No live-ops map view-state snapshots recorded",
+                },
+                {
+                  label: "Map view-state evidence boundary",
+                  value:
+                    "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+                },
+              ],
+      },
+      {
+        heading: "Live conflict guidance acknowledgements",
+        fields:
+          evidenceExport.conflictGuidanceAcknowledgements.length > 0
+            ? evidenceExport.conflictGuidanceAcknowledgements.flatMap(
+                (acknowledgement, index) => [
+                  {
+                    label: `Conflict acknowledgement ${index + 1} ID`,
+                    value: acknowledgement.id,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} conflict ID`,
+                    value: acknowledgement.conflictId,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} overlay ID`,
+                    value: acknowledgement.overlayId,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} action code`,
+                    value: acknowledgement.guidanceActionCode,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} evidence action`,
+                    value: acknowledgement.evidenceAction,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} guidance summary`,
+                    value: acknowledgement.guidanceSummary,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} role`,
+                    value: acknowledgement.acknowledgementRole,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} acknowledged by`,
+                    value: acknowledgement.acknowledgedBy,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} recorded at`,
+                    value: acknowledgement.createdAt,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} pilot instruction status`,
+                    value: acknowledgement.pilotInstructionStatus,
+                  },
+                  {
+                    label: `Conflict acknowledgement ${index + 1} note`,
+                    value: acknowledgement.acknowledgementNote,
+                  },
+                ],
+              )
+            : [
+                {
+                  label: "Live conflict guidance acknowledgements",
+                  value: "No live conflict guidance acknowledgements recorded",
+                },
+              ],
+      },
+      {
         heading: "Safety action closure evidence",
         fields:
           evidenceExport.safetyActionClosureEvidence.length > 0
@@ -716,6 +1188,78 @@ export class AuditEvidenceService {
                 {
                   label: "Safety action closure evidence",
                   value: "No safety action closure evidence recorded",
+                },
+              ],
+      },
+      {
+        heading: "Regulatory amendment alert review",
+        fields:
+          evidenceExport.regulatoryAmendmentAlerts.length > 0
+            ? evidenceExport.regulatoryAmendmentAlerts.flatMap(
+                (alert, index) => [
+                  {
+                    label: `Regulatory amendment alert ${index + 1} ID`,
+                    value: alert.id,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} status`,
+                    value: alert.status,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} severity`,
+                    value: alert.severity,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} source`,
+                    value: alert.sourceDocument,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} version change`,
+                    value: `${alert.previousVersion ?? "unknown"} -> ${
+                      alert.currentVersion ?? "unknown"
+                    }`,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} published at`,
+                    value: alert.publishedAt,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} effective from`,
+                    value: alert.effectiveFrom,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} affected references`,
+                    value:
+                      alert.affectedRequirementRefs.length > 0
+                        ? alert.affectedRequirementRefs.join(", ")
+                        : "None recorded",
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} change impact`,
+                    value: alert.changeImpact,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} review action`,
+                    value: alert.reviewAction,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} triggered at`,
+                    value: alert.triggeredAt,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} acknowledged at`,
+                    value: alert.acknowledgedAt,
+                  },
+                  {
+                    label: `Regulatory amendment alert ${index + 1} resolved at`,
+                    value: alert.resolvedAt,
+                  },
+                ],
+              )
+            : [
+                {
+                  label: "Regulatory amendment alerts",
+                  value: "No regulatory amendment alerts recorded",
                 },
               ],
       },

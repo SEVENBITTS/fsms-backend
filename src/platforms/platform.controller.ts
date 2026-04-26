@@ -21,6 +21,32 @@ export class PlatformController {
     }
   };
 
+  createAircraftTypeSpec = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const spec = await this.platformService.createAircraftTypeSpec(req.body);
+      res.status(201).json({ spec });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listAircraftTypeSpecs = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const specs = await this.platformService.listAircraftTypeSpecs();
+      res.status(200).json({ specs });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getPlatform = async (
     req: Request<PlatformIdParams>,
     res: Response,

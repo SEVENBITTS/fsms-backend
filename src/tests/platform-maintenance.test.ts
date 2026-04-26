@@ -7,6 +7,7 @@ const clearPlatformTables = async () => {
   await pool.query("delete from maintenance_records");
   await pool.query("delete from maintenance_schedules");
   await pool.query("delete from platforms");
+  await pool.query("delete from aircraft_type_specs");
 };
 
 describe("platform maintenance integration", () => {
@@ -20,6 +21,128 @@ describe("platform maintenance integration", () => {
 
   afterAll(async () => {
     await pool.end();
+  });
+
+  it("creates and lists curated aircraft capability specifications", async () => {
+    const createResponse = await request(app)
+      .post("/platforms/aircraft-type-specs")
+      .send({
+        displayName: "DJI M30T curated operating profile",
+        manufacturer: "DJI",
+        model: "Matrice 30T",
+        aircraftType: "multi-rotor",
+        mtomKg: 3.998,
+        maxPayloadKg: 0,
+        maxWindMps: 12,
+        maxGustMps: 15,
+        minOperatingTempC: -20,
+        maxOperatingTempC: 50,
+        maxFlightTimeMin: 41,
+        maxRangeM: 15000,
+        ipRating: "IP55",
+        gnssCapability: "GPS, Galileo, BeiDou, GLONASS",
+        rtkCapable: true,
+        manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+        manufacturerMaintenanceScheduleVersion: "v4.2",
+        manufacturerMaintenanceScheduleUrl:
+          "https://example.com/dji-m30t-maintenance",
+        manufacturerMaintenanceAdvice:
+          "Inspect propellers, arms, batteries, and gimbal before every flight.",
+        recommendedInspectionIntervalDays: 30,
+        recommendedInspectionIntervalFlightHours: 25,
+        sourceType: "manufacturer",
+        sourceReference: "Manufacturer datasheet reviewed by ops",
+        sourceVersion: "2026-04-curated",
+        sourceUrl: "https://example.com/dji-m30t-spec",
+        notes: "Curated manually; do not treat as live manufacturer sync.",
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.spec).toMatchObject({
+      displayName: "DJI M30T curated operating profile",
+      manufacturer: "DJI",
+      model: "Matrice 30T",
+      aircraftType: "multi-rotor",
+      mtomKg: 3.998,
+      maxPayloadKg: 0,
+      maxWindMps: 12,
+      maxGustMps: 15,
+      minOperatingTempC: -20,
+      maxOperatingTempC: 50,
+      maxFlightTimeMin: 41,
+      maxRangeM: 15000,
+      ipRating: "IP55",
+      gnssCapability: "GPS, Galileo, BeiDou, GLONASS",
+      rtkCapable: true,
+      manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+      manufacturerMaintenanceScheduleVersion: "v4.2",
+      manufacturerMaintenanceScheduleUrl:
+        "https://example.com/dji-m30t-maintenance",
+      manufacturerMaintenanceAdvice:
+        "Inspect propellers, arms, batteries, and gimbal before every flight.",
+      recommendedInspectionIntervalDays: 30,
+      recommendedInspectionIntervalFlightHours: 25,
+      sourceType: "manufacturer",
+      sourceReference: "Manufacturer datasheet reviewed by ops",
+      sourceVersion: "2026-04-curated",
+      sourceUrl: "https://example.com/dji-m30t-spec",
+      notes: "Curated manually; do not treat as live manufacturer sync.",
+    });
+
+    const listResponse = await request(app).get("/platforms/aircraft-type-specs");
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.specs).toHaveLength(1);
+    expect(listResponse.body.specs[0]).toMatchObject({
+      id: createResponse.body.spec.id,
+      displayName: "DJI M30T curated operating profile",
+      manufacturer: "DJI",
+      model: "Matrice 30T",
+      manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+    });
+  });
+
+  it("rejects aircraft specs with invalid maintenance guidance intervals", async () => {
+    const response = await request(app)
+      .post("/platforms/aircraft-type-specs")
+      .send({
+        displayName: "Invalid maintenance spec",
+        manufacturer: "Example",
+        model: "Bad Interval",
+        sourceReference: "Manual test source",
+        recommendedInspectionIntervalDays: 0,
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "platform_validation_error",
+        message:
+          "recommendedInspectionIntervalDays must be a positive integer",
+      },
+    });
+  });
+
+  it("rejects aircraft specs with invalid operating temperature ranges", async () => {
+    const response = await request(app)
+      .post("/platforms/aircraft-type-specs")
+      .send({
+        displayName: "Invalid spec",
+        manufacturer: "Example",
+        model: "Bad Temp",
+        minOperatingTempC: 45,
+        maxOperatingTempC: -10,
+        sourceReference: "Manual test source",
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "platform_validation_error",
+        message:
+          "minOperatingTempC must be less than or equal to maxOperatingTempC",
+      },
+    });
   });
 
   it("creates and reads a UAV platform with operational status", async () => {
@@ -59,6 +182,100 @@ describe("platform maintenance integration", () => {
       id: platformId,
       name: "UAV Alpha",
       status: "active",
+    });
+  });
+
+  it("links UAV platforms to curated aircraft capability specifications", async () => {
+    const specResponse = await request(app)
+      .post("/platforms/aircraft-type-specs")
+      .send({
+        displayName: "DJI M30T curated operating profile",
+        manufacturer: "DJI",
+        model: "Matrice 30T",
+        aircraftType: "multi-rotor",
+        maxWindMps: 12,
+        manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+        manufacturerMaintenanceAdvice:
+          "Follow manufacturer post-flight inspection after heavy rain.",
+        recommendedInspectionIntervalFlightHours: 25,
+        sourceType: "manufacturer",
+        sourceReference: "Manufacturer datasheet reviewed by ops",
+      });
+
+    expect(specResponse.status).toBe(201);
+
+    const specId = specResponse.body.spec.id;
+    const platformResponse = await request(app)
+      .post("/platforms")
+      .send({
+        name: "UAV Echo",
+        aircraftTypeSpecId: specId,
+        status: "active",
+      });
+
+    expect(platformResponse.status).toBe(201);
+    expect(platformResponse.body.platform).toMatchObject({
+      name: "UAV Echo",
+      aircraftTypeSpecId: specId,
+      aircraftTypeSpec: {
+        id: specId,
+        displayName: "DJI M30T curated operating profile",
+        manufacturer: "DJI",
+        model: "Matrice 30T",
+        maxWindMps: 12,
+        manufacturerMaintenanceScheduleRef: "DJI M30 Series Maintenance Manual",
+        manufacturerMaintenanceAdvice:
+          "Follow manufacturer post-flight inspection after heavy rain.",
+        recommendedInspectionIntervalFlightHours: 25,
+        sourceReference: "Manufacturer datasheet reviewed by ops",
+      },
+    });
+
+    const readResponse = await request(app).get(
+      `/platforms/${platformResponse.body.platform.id}`,
+    );
+
+    expect(readResponse.status).toBe(200);
+    expect(readResponse.body.platform).toMatchObject({
+      id: platformResponse.body.platform.id,
+      aircraftTypeSpecId: specId,
+      aircraftTypeSpec: {
+        id: specId,
+        displayName: "DJI M30T curated operating profile",
+      },
+    });
+  });
+
+  it("keeps platform creation compatible when no aircraft capability spec is linked", async () => {
+    const response = await request(app)
+      .post("/platforms")
+      .send({
+        name: "UAV Foxtrot",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.platform).toMatchObject({
+      name: "UAV Foxtrot",
+      aircraftTypeSpecId: null,
+      aircraftTypeSpec: null,
+    });
+  });
+
+  it("rejects UAV platforms linked to unknown aircraft capability specifications", async () => {
+    const response = await request(app)
+      .post("/platforms")
+      .send({
+        name: "UAV Ghost",
+        aircraftTypeSpecId: "4e8454e3-0cf6-4881-8b12-b6fbdfe3a1ab",
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "platform_validation_error",
+        message:
+          "aircraftTypeSpecId does not reference a known aircraft capability specification",
+      },
     });
   });
 

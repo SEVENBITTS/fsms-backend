@@ -5,11 +5,9 @@ import app, { pool } from "../app";
 import { runMigrations } from "../migrations/runMigrations";
 
 const clearTables = async () => {
-  await pool.query("delete from user_sessions");
-  await pool.query("delete from organisation_memberships");
-  await pool.query("delete from users");
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
+  await pool.query("delete from conflict_guidance_acknowledgements");
   await pool.query("delete from mission_external_overlays");
   await pool.query("delete from audit_evidence_snapshots");
   await pool.query("delete from airspace_compliance_inputs");
@@ -21,45 +19,31 @@ const clearTables = async () => {
   await pool.query("delete from maintenance_records");
   await pool.query("delete from maintenance_schedules");
   await pool.query("delete from platforms");
+  await pool.query("delete from aircraft_type_specs");
 };
 
-const createUserAndSession = async (email: string) => {
-  const createUserResponse = await request(app).post("/users").send({
-    email,
-    displayName: "Planning Test User",
-    password: "Password123!",
-  });
-
-  expect(createUserResponse.status).toBe(201);
-
-  const loginResponse = await request(app).post("/auth/login").send({
-    email,
-    password: "Password123!",
-  });
-
-  expect(loginResponse.status).toBe(200);
-
-  return {
-    user: createUserResponse.body.user as { id: string },
-    sessionToken: loginResponse.body.sessionToken as string,
-  };
-};
-
-const createMembership = async (organisationId: string, userId: string, role: string) => {
+const createAircraftTypeSpec = async () => {
   const response = await request(app)
-    .post(`/organisations/${organisationId}/memberships`)
+    .post("/platforms/aircraft-type-specs")
     .send({
-      userId,
-      role,
+      displayName: "Planning UAV capability profile",
+      manufacturer: "VerityAir Test",
+      model: "Atlas Scout",
+      aircraftType: "multi-rotor",
+      maxWindMps: 11,
+      sourceType: "operator",
+      sourceReference: "Operator-maintained planning spec",
     });
 
   expect(response.status).toBe(201);
+  return response.body.spec as { id: string };
 };
 
-const createPlatform = async () => {
+const createPlatform = async (aircraftTypeSpecId?: string) => {
   const response = await request(app).post("/platforms").send({
     name: "Planning UAV",
     status: "active",
+    aircraftTypeSpecId,
   });
 
   expect(response.status).toBe(201);
@@ -89,13 +73,9 @@ const createPilotReadinessEvidence = async (pilotId: string) => {
   return response.body.evidence as { id: string };
 };
 
-const createDispatchEvidenceLink = async (
-  missionId: string,
-  sessionToken?: string,
-) => {
+const createDispatchEvidenceLink = async (missionId: string) => {
   const snapshotResponse = await request(app)
     .post(`/missions/${missionId}/readiness/audit-snapshots`)
-    .set("X-Session-Token", sessionToken ?? "")
     .send({
       createdBy: "dispatcher-1",
     });
@@ -104,7 +84,6 @@ const createDispatchEvidenceLink = async (
 
   const linkResponse = await request(app)
     .post(`/missions/${missionId}/decision-evidence-links`)
-    .set("X-Session-Token", sessionToken ?? "")
     .send({
       snapshotId: snapshotResponse.body.snapshot.id,
       decisionType: "dispatch",
@@ -115,10 +94,9 @@ const createDispatchEvidenceLink = async (
   return linkResponse.body.link as { id: string };
 };
 
-const recordTelemetry = async (missionId: string, sessionToken?: string) => {
+const recordTelemetry = async (missionId: string) => {
   const response = await request(app)
     .post(`/missions/${missionId}/telemetry`)
-    .set("X-Session-Token", sessionToken ?? "")
     .send({
       records: [
         {
@@ -147,13 +125,9 @@ const recordTelemetry = async (missionId: string, sessionToken?: string) => {
   expect(response.status).toBe(202);
 };
 
-const createPostOperationEvidenceSnapshot = async (
-  missionId: string,
-  sessionToken?: string,
-) => {
+const createPostOperationEvidenceSnapshot = async (missionId: string) => {
   const response = await request(app)
     .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
-    .set("X-Session-Token", sessionToken ?? "")
     .send({
       createdBy: "ops-reviewer-1",
     });
@@ -1108,7 +1082,8 @@ describe("mission planning drafts", () => {
   });
 
   it("returns a populated planning workspace with readiness and evidence status", async () => {
-    const platform = await createPlatform();
+    const aircraftSpec = await createAircraftTypeSpec();
+    const platform = await createPlatform(aircraftSpec.id);
     const pilot = await createPilot();
     await createPilotReadinessEvidence(pilot.id);
 
@@ -1155,6 +1130,13 @@ describe("mission planning drafts", () => {
           id: platform.id,
           name: "Planning UAV",
           status: "active",
+          aircraftTypeSpecId: aircraftSpec.id,
+          aircraftTypeSpec: expect.objectContaining({
+            id: aircraftSpec.id,
+            displayName: "Planning UAV capability profile",
+            maxWindMps: 11,
+            sourceReference: "Operator-maintained planning spec",
+          }),
         }),
       },
       pilot: {
@@ -1446,15 +1428,11 @@ describe("mission planning drafts", () => {
   });
 
   it("returns a dispatch workspace for approved missions with dispatch evidence", async () => {
-    const organisationId = randomUUID();
-    const auth = await createUserAndSession("planning-dispatch-ready@example.com");
-    await createMembership(organisationId, auth.user.id, "admin");
     const platform = await createPlatform();
     const pilot = await createPilot();
     await createPilotReadinessEvidence(pilot.id);
 
     const createResponse = await request(app).post("/mission-plans/drafts").send({
-      organisationId,
       missionPlanId: "plan-dispatch-ready",
       platformId: platform.id,
       pilotId: pilot.id,
@@ -1489,10 +1467,7 @@ describe("mission planning drafts", () => {
       ).status,
     ).toBe(204);
 
-    const dispatchLink = await createDispatchEvidenceLink(
-      missionId,
-      auth.sessionToken,
-    );
+    const dispatchLink = await createDispatchEvidenceLink(missionId);
 
     const workspaceResponse = await request(app).get(
       `/missions/${missionId}/dispatch-workspace`,
@@ -1531,15 +1506,11 @@ describe("mission planning drafts", () => {
   });
 
   it("keeps dispatch workspace evidence isolated by mission", async () => {
-    const organisationId = randomUUID();
-    const auth = await createUserAndSession("planning-dispatch-isolated@example.com");
-    await createMembership(organisationId, auth.user.id, "admin");
     const platform = await createPlatform();
     const pilot = await createPilot();
     await createPilotReadinessEvidence(pilot.id);
 
     const firstMissionResponse = await request(app).post("/mission-plans/drafts").send({
-      organisationId,
       missionPlanId: "dispatch-isolated-1",
       platformId: platform.id,
       pilotId: pilot.id,
@@ -1547,7 +1518,6 @@ describe("mission planning drafts", () => {
       airspaceInput: clearAirspaceInput,
     });
     const secondMissionResponse = await request(app).post("/mission-plans/drafts").send({
-      organisationId,
       missionPlanId: "dispatch-isolated-2",
       platformId: platform.id,
       pilotId: pilot.id,
@@ -1582,7 +1552,7 @@ describe("mission planning drafts", () => {
         })
       ).status,
     ).toBe(204);
-    await createDispatchEvidenceLink(secondMissionId, auth.sessionToken);
+    await createDispatchEvidenceLink(secondMissionId);
 
     const firstWorkspaceResponse = await request(app).get(
       `/missions/${firstMissionResponse.body.draft.missionId}/dispatch-workspace`,
@@ -1653,15 +1623,11 @@ describe("mission planning drafts", () => {
   });
 
   it("returns a populated operations timeline across planning, approval, dispatch, flight, and post-operation", async () => {
-    const organisationId = randomUUID();
-    const auth = await createUserAndSession("planning-ops-timeline@example.com");
-    await createMembership(organisationId, auth.user.id, "admin");
     const platform = await createPlatform();
     const pilot = await createPilot();
     await createPilotReadinessEvidence(pilot.id);
 
     const createResponse = await request(app).post("/mission-plans/drafts").send({
-      organisationId,
       missionPlanId: "plan-ops-timeline",
       platformId: platform.id,
       pilotId: pilot.id,
@@ -1696,10 +1662,7 @@ describe("mission planning drafts", () => {
       ).status,
     ).toBe(204);
 
-    const dispatchLink = await createDispatchEvidenceLink(
-      missionId,
-      auth.sessionToken,
-    );
+    const dispatchLink = await createDispatchEvidenceLink(missionId);
 
     expect(
       (
@@ -1713,7 +1676,7 @@ describe("mission planning drafts", () => {
       ).status,
     ).toBe(204);
 
-    await recordTelemetry(missionId, auth.sessionToken);
+    await recordTelemetry(missionId);
 
     expect(
       (
@@ -1725,7 +1688,6 @@ describe("mission planning drafts", () => {
 
     const postOperationSnapshot = await createPostOperationEvidenceSnapshot(
       missionId,
-      auth.sessionToken,
     );
     const before = await countOperationsTimelineRows(missionId);
 
@@ -1980,9 +1942,6 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Mission Lifecycle Actions");
     expect(response.text).toContain("Mission Search and Selection");
     expect(response.text).toContain("Evidence Helpers");
-    expect(response.text).toContain("Risk Heat Surface");
-    expect(response.text).toContain("risk-map-panel");
-    expect(response.text).toContain("stage-tile[data-stage-target]");
     expect(response.text).toContain("mission-search-input");
     expect(response.text).toContain("mission-browser-list");
     expect(response.text).toContain("evidence-panel");
@@ -2038,22 +1997,32 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain('fetchJson(`/missions?${params.toString()}`)');
     expect(response.text).toContain('data-open-mission');
     expect(response.text).toContain('getElementById("evidence-panel")');
-    expect(response.text).toContain('getElementById("risk-map-panel")');
     expect(response.text).toContain("/readiness/audit-snapshots");
-    expect(response.text).toContain("/risk-map");
-    expect(response.text).toContain("renderRiskMap");
-    expect(response.text).toContain("stage-map-grid");
-    expect(response.text).toContain("data-stage-target");
-    expect(response.text).toContain("scrollToWorkspaceSection");
-    expect(response.text).toContain("#evidence-current-state");
-    expect(response.text).toContain("#evidence-safeguards");
-    expect(response.text).toContain("#planning-blockers");
-    expect(response.text).toContain("#dispatch-blockers");
-    expect(response.text).toContain("OA Personnel Status");
-    expect(response.text).toContain("OA Personnel Status Before Dispatch");
-    expect(response.text).toContain("OA Personnel Advisories");
     expect(response.text).toContain("/approval-handoff");
+    expect(response.text).toContain("/post-operation/evidence-snapshots/${encodeURIComponent(");
+    expect(response.text).toContain("/readiness");
+    expect(response.text).toContain("Pre-sign-off Evidence Summary");
+    expect(response.text).toContain("Rendered Report Readiness Summary");
+    expect(response.text).toContain("renderReportReadinessSummary");
+    expect(response.text).toContain("Evidence readiness summary");
+    expect(response.text).toContain("Rendered report readiness summary is not loaded yet.");
+    expect(response.text).toContain("Rendered report readiness counts are review prompts only.");
+    expect(response.text).toContain("They remain separate from accountable-manager sign-off and are not compliance certification.");
+    expect(response.text).toContain("Map view-state evidence");
+    expect(response.text).toContain("live_ops_map_view_state_snapshots");
+    expect(response.text).toContain("These counts are informational prompts for review before sign-off");
+    expect(response.text).toContain("Empty categories do not automatically reject the mission or certify compliance");
+    expect(response.text).toContain("metadata-only evidence and not pilot command guidance");
+    expect(response.text).toContain("liveOpsMapEvidenceUrl");
+    expect(response.text).toContain("/operator/missions/${encodeURIComponent(uiState.missionId)}/live-operations");
+    expect(response.text).toContain("Capture metadata in live ops, then review it in this post-operation evidence pack.");
+    expect(response.text).toContain("Open live-ops map evidence capture");
+    expect(response.text).toContain("metadata-only evidence capture");
     expect(response.text).toContain('payload.decisionType = "dispatch"');
+    expect(response.text).toContain("Aircraft Capability and Maintenance");
+    expect(response.text).toContain("manufacturerMaintenanceScheduleRef");
+    expect(response.text).toContain("manufacturerMaintenanceAdvice");
+    expect(response.text).toContain("Informational only");
   });
 
   it("serves the operator live operations javascript bundle", async () => {
@@ -2068,11 +2037,12 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/telemetry/latest");
     expect(response.text).toContain("/alerts");
     expect(response.text).toContain("/external-overlays");
+    expect(response.text).toContain("/external-overlays/refresh-runs?chronology=true");
     expect(response.text).toContain("/conflict-assessment");
     expect(response.text).toContain("/planning-workspace");
     expect(response.text).toContain("/dispatch-workspace");
     expect(response.text).toContain("/operations-timeline");
-    expect(response.text).toContain("/operator/missions/${encodeURIComponent(missionId)}");
+    expect(response.text).toContain("/operator/missions/${encodeURIComponent(normalizedMissionId)}");
     expect(response.text).toContain("buildOverlayCards");
     expect(response.text).toContain("normalizeMissionId");
     expect(response.text).toContain("isPlaceholderMissionId");
@@ -2169,6 +2139,94 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("carried forward after partial refresh");
     expect(response.text).toContain("carried forward after failed refresh");
     expect(response.text).toContain("areaOverlaySourceRefreshCardContext");
+    expect(response.text).toContain("areaOverlayRefreshProvenanceDetail");
+    expect(response.text).toContain("areaSourceProvenanceRows");
+    expect(response.text).toContain("areaOverlayFreshnessTone");
+    expect(response.text).toContain("areaOverlayFreshnessLabel");
+    expect(response.text).toContain("areaOverlayFreshnessStroke");
+    expect(response.text).toContain("areaOverlayCoordinatePoints");
+    expect(response.text).toContain("areaOverlayIsDegraded");
+    expect(response.text).toContain("filteredAreaFreshnessOverlays");
+    expect(response.text).toContain("areaFreshnessFilterLabel");
+    expect(response.text).toContain("areaFreshnessFilterOptions");
+    expect(response.text).toContain("normalizeAreaFreshnessFilter");
+    expect(response.text).toContain("areaFreshnessFilterSummary");
+    expect(response.text).toContain("getAreaFreshnessFilterFromLocation");
+    expect(response.text).toContain("areaFreshnessFilter");
+    expect(response.text).toContain('next.searchParams.delete("areaFreshnessFilter")');
+    expect(response.text).toContain('next.searchParams.set("areaFreshnessFilter"');
+    expect(response.text).toContain("mapViewStateMetadata");
+    expect(response.text).toContain("Map View-State Metadata");
+    expect(response.text).toContain("Replay cursor");
+    expect(response.text).toContain("Area freshness filter");
+    expect(response.text).toContain("Visible area overlays");
+    expect(response.text).toContain("Area refresh runs");
+    expect(response.text).toContain("View-state metadata only; no evidence export has been generated.");
+    expect(response.text).toContain("mapViewStateEvidencePayload");
+    expect(response.text).toContain("loadMapViewStateEvidenceSnapshots");
+    expect(response.text).toContain("recordMapViewStateEvidenceSnapshot");
+    expect(response.text).toContain("renderMapViewStateEvidenceHistory");
+    expect(response.text).toContain("renderMapViewStatePostOperationReadiness");
+    expect(response.text).toContain("missionWorkspaceUrl");
+    expect(response.text).toContain("Post-operation readiness context");
+    expect(response.text).toContain("Present for post-operation review");
+    expect(response.text).toContain("Missing review prompt");
+    expect(response.text).toContain("map view-state metadata snapshot");
+    expect(response.text).toContain("Return to mission workspace evidence summary");
+    expect(response.text).toContain("data-record-map-view-state-evidence");
+    expect(response.text).toContain("Record map view-state evidence");
+    expect(response.text).toContain("/live-operations/map-view-state/audit-snapshots");
+    expect(response.text).toContain("visibleAreaOverlayCount");
+    expect(response.text).toContain("degradedAreaOverlayCount");
+    expect(response.text).toContain("openAlertCount");
+    expect(response.text).toContain("activeConflictCount");
+    expect(response.text).toContain("areaRefreshRunCount");
+    expect(response.text).toContain("Metadata-only map view-state evidence snapshot recorded.");
+    expect(response.text).toContain("Recent Map View-State Evidence");
+    expect(response.text).toContain("No backend-recorded map view-state evidence snapshots yet.");
+    expect(response.text).toContain("Latest metadata snapshot");
+    expect(response.text).toContain("Older metadata snapshot");
+    expect(response.text).toContain("History status");
+    expect(response.text).toContain("Capture scope");
+    expect(response.text).toContain("Pilot instruction status");
+    expect(response.text).toContain("metadata_only");
+    expect(response.text).toContain("not_a_pilot_command");
+    expect(response.text).toContain("Review cue: latest/older status supports post-operation review only");
+    expect(response.text).toContain("Snapshot history is backend audit metadata only.");
+    expect(response.text).toContain("not screenshot evidence, not an exported file, and not pilot command guidance");
+    expect(response.text).toContain("does not create screenshots, create local files, or transmit pilot instructions");
+    expect(response.text).toContain("areaFreshnessOverlays");
+    expect(response.text).toContain("area-freshness-overlay");
+    expect(response.text).toContain("data-area-freshness-filter");
+    expect(response.text).toContain("Read-only area freshness filter");
+    expect(response.text).toContain("All area freshness");
+    expect(response.text).toContain("Degraded only");
+    expect(response.text).toContain("Hide freshness");
+    expect(response.text).toContain("Area freshness degraded-only");
+    expect(response.text).toContain("Area freshness hidden");
+    expect(response.text).toContain("Area map filter");
+    expect(response.text).toContain("Filtered area overlays");
+    expect(response.text).toContain("visible of");
+    expect(response.text).toContain("degraded or carried-forward");
+    expect(response.text).toContain("Map filter:");
+    expect(response.text).toContain("Area freshness: green fresh, amber partial, red failed");
+    expect(response.text).toContain("failed carry-forward");
+    expect(response.text).toContain("partial carry-forward");
+    expect(response.text).toContain("areaRefreshChronology");
+    expect(response.text).toContain("areaRefreshRunRows");
+    expect(response.text).toContain("areaRefreshTransitionRows");
+    expect(response.text).toContain("renderAreaRefreshChronologyReview");
+    expect(response.text).toContain("areaRefreshTransitionUrl");
+    expect(response.text).toContain("Area Source Provenance");
+    expect(response.text).toContain("Area Refresh Chronology");
+    expect(response.text).toContain("Open refresh run JSON");
+    expect(response.text).toContain("Open transition artifact JSON");
+    expect(response.text).toContain("Read-only audit review");
+    expect(response.text).toContain("does not trigger pilot instructions");
+    expect(response.text).toContain("Area provenance boundary");
+    expect(response.text).toContain("Synthetic/local demo provenance only");
+    expect(response.text).toContain("not live CAA or NOTAM connectivity");
+    expect(response.text).toContain("Review against authoritative CAA, NOTAM, and airspace feeds");
     expect(response.text).toContain("Area source failed");
     expect(response.text).toContain("Area source partial");
     expect(response.text).toContain("Area source stale");

@@ -5,6 +5,7 @@ import type {
   SmsElement,
   SmsFrameworkSource,
   SmsPillar,
+  RegulatoryRequirementMapping,
 } from "./sms-framework.types";
 
 interface SmsFrameworkSourceRow extends QueryResultRow {
@@ -51,6 +52,24 @@ interface SmsControlMappedElementRow extends QueryResultRow {
   element_display_order: number;
   rationale: string;
   mapping_display_order: number;
+}
+
+interface RegulatoryRequirementMappingRow extends QueryResultRow {
+  requirement_code: string;
+  source_code: string;
+  source_title: string;
+  source_version_label: string | null;
+  requirement_ref: string;
+  requirement_summary: string;
+  compliance_intent: string;
+  control_code: string;
+  control_title: string;
+  control_area: string;
+  evidence_type: string;
+  assurance_owner: string;
+  review_status: string;
+  notes: string | null;
+  display_order: number;
 }
 
 const toSource = (row: SmsFrameworkSourceRow): SmsFrameworkSource => ({
@@ -102,6 +121,26 @@ const toControlMapping = (
   description: row.description,
   displayOrder: row.display_order,
   elements,
+});
+
+const toRegulatoryRequirementMapping = (
+  row: RegulatoryRequirementMappingRow,
+): RegulatoryRequirementMapping => ({
+  requirementCode: row.requirement_code,
+  sourceCode: row.source_code,
+  sourceTitle: row.source_title,
+  sourceVersionLabel: row.source_version_label,
+  requirementRef: row.requirement_ref,
+  requirementSummary: row.requirement_summary,
+  complianceIntent: row.compliance_intent,
+  controlCode: row.control_code,
+  controlTitle: row.control_title,
+  controlArea: row.control_area,
+  evidenceType: row.evidence_type,
+  assuranceOwner: row.assurance_owner,
+  reviewStatus: row.review_status,
+  notes: row.notes,
+  displayOrder: row.display_order,
 });
 
 export class SmsFrameworkRepository {
@@ -184,5 +223,38 @@ export class SmsFrameworkRepository {
           .map(toMappedElement),
       ),
     );
+  }
+
+  async listRegulatoryRequirementMappings(
+    tx: PoolClient,
+  ): Promise<RegulatoryRequirementMapping[]> {
+    const result = await tx.query<RegulatoryRequirementMappingRow>(
+      `
+      select
+        requirements.requirement_code,
+        requirements.source_code,
+        sources.title as source_title,
+        sources.version_label as source_version_label,
+        requirements.requirement_ref,
+        requirements.requirement_summary,
+        requirements.compliance_intent,
+        requirements.control_code,
+        controls.title as control_title,
+        controls.control_area,
+        requirements.evidence_type,
+        requirements.assurance_owner,
+        requirements.review_status,
+        requirements.notes,
+        requirements.display_order
+      from regulatory_requirement_mappings requirements
+      inner join sms_framework_sources sources
+        on sources.code = requirements.source_code
+      inner join sms_controls controls
+        on controls.code = requirements.control_code
+      order by requirements.display_order asc
+      `,
+    );
+
+    return result.rows.map(toRegulatoryRequirementMapping);
   }
 }

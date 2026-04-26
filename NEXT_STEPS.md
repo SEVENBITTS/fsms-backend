@@ -1,35 +1,32 @@
 # NEXT STEP
 
 ## Goal
-Validate the recovered migration chain against a clean Postgres test database.
+Add post-operation evidence readiness drill-down links in the mission workspace.
 
 ---
 
 ## Build
 
-### 1. Migration validation
-- Run the full migration chain from an empty test database.
-- Confirm recovered migrations `007` through `047` apply in order.
-- Confirm seed/reference data is present after migration.
+### 1. Operator visibility
+- add quick links from readiness categories to the relevant evidence areas
+- link map view-state readiness to live ops map evidence capture/history
+- link report readiness context to the rendered audit report/PDF
 
-### 2. Guardrails
-- Capture any ordering assumptions between mission, governance, OA, insurance, stored-file, auth, and membership tables.
-- Add or update a lightweight validation script/test if a gap is found.
+### 2. Product boundary
+- continue to label demo airspace data as synthetic/local
+- do not imply live CAA, NOTAM, or manufacturer feed connectivity
+- keep links framed as audit review support, not compliance certification
 
 ### 3. Tests
-- Keep `npm test` green.
-- Keep `npm run build` green.
-
----
-
-## Do NOT do
-- No feature expansion.
-- No schema redesign unless validation exposes a real defect.
-- No production data migration.
+- add focused mission workspace UI tests for readiness drill-down links
+- run mission-planning UI tests
+- run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- A clean database migration run is verified.
-- Any migration assumptions are documented.
-- Build and full test suite remain green.
+- Mission workspace provides clear drill-down actions for readiness categories
+- Links target the current mission and existing evidence views
+- Copy remains explicit that links support audit review, not compliance certification
+- Degraded or carried-forward overlays remain visually distinguishable
+- The demo remains clearly synthetic and safe for local presentation

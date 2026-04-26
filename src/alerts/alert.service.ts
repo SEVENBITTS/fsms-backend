@@ -1,6 +1,22 @@
 import type { Pool, PoolClient } from "pg";
 import { AlertRepository } from "./alert.repository";
-import type { Alert, AlertType, CreateAlertInput } from "./alert.types";
+import type {
+  Alert,
+  AlertType,
+  AcknowledgeAlertInput,
+  CreateAlertInput,
+  RegulatoryAmendmentAlertInput,
+  RegulatoryAmendmentAlertResult,
+  RegulatoryReviewImpactSummary,
+  ResolveAlertInput,
+} from "./alert.types";
+import {
+  AlertMissionMismatchError,
+  AlertMissionNotFoundError,
+  AlertNotFoundError,
+} from "./alert.errors";
+import { SmsFrameworkRepository } from "../sms-framework/sms-framework.repository";
+import type { RegulatoryRequirementMapping } from "../sms-framework/sms-framework.types";
 
 export interface AlertThresholdConfig {
   altitudeHighM: number;
@@ -33,6 +49,7 @@ export class AlertService {
     private readonly pool: Pool,
     private readonly alertRepository: AlertRepository,
     private readonly thresholds: AlertThresholdConfig = DEFAULT_THRESHOLDS,
+    private readonly smsFrameworkRepository?: SmsFrameworkRepository,
   ) {}
 
   async listAlertsForMission(missionId: string): Promise<Alert[]> {
@@ -132,6 +149,174 @@ export class AlertService {
     };
   }
 
+  async recordRegulatoryAmendmentImpact(
+    missionId: string,
+    input: RegulatoryAmendmentAlertInput,
+  ): Promise<RegulatoryAmendmentAlertResult> {
+    const amendment = this.normalizeRegulatoryAmendment(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+
+      const exists = await this.alertRepository.missionExists(client, missionId);
+      if (!exists) {
+        throw new AlertMissionNotFoundError(missionId);
+      }
+
+      const existingOpen = await this.alertRepository.listOpenByMissionAndType(
+        client,
+        missionId,
+        "REGULATORY_AMENDMENT",
+      );
+      const duplicate = existingOpen.some(
+        (alert) =>
+          alert.metadata.sourceDocument === amendment.sourceDocument &&
+          alert.metadata.currentVersion === amendment.currentVersion,
+      );
+
+      if (duplicate) {
+        await client.query("commit");
+        return { created: [], duplicate: true };
+      }
+
+      const alert = await this.alertRepository.insert(client, {
+        missionId,
+        alertType: "REGULATORY_AMENDMENT",
+        severity: "warning",
+        message: `Regulatory amendment detected: ${amendment.sourceDocument} ${amendment.previousVersion} -> ${amendment.currentVersion}`,
+        triggeredAt: amendment.publishedAt,
+        metadata: { ...amendment },
+        source: "regulatory",
+      });
+
+      await client.query("commit");
+      return { created: [alert], duplicate: false };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getRegulatoryReviewImpact(
+    missionId: string,
+  ): Promise<RegulatoryReviewImpactSummary> {
+    const client = await this.pool.connect();
+
+    try {
+      const exists = await this.alertRepository.missionExists(client, missionId);
+      if (!exists) {
+        throw new AlertMissionNotFoundError(missionId);
+      }
+
+      const amendmentAlerts = await this.alertRepository.list(client, {
+        missionId,
+        alertType: "REGULATORY_AMENDMENT",
+        status: "open",
+        limit: 100,
+      });
+      const mappings = this.smsFrameworkRepository
+        ? await this.smsFrameworkRepository.listRegulatoryRequirementMappings(
+            client,
+          )
+        : [];
+      const impactedMappings = mappings
+        .map((mapping) => {
+          const matchingAlerts = amendmentAlerts.filter((alert) =>
+            this.amendmentAffectsMapping(alert.metadata, mapping),
+          );
+
+          return {
+            mapping,
+            alertIds: matchingAlerts.map((alert) => alert.id),
+            reviewReason:
+              matchingAlerts.length > 0
+                ? "Open regulatory amendment matches this source mapping or affected reference context."
+                : "",
+          };
+        })
+        .filter((item) => item.alertIds.length > 0);
+
+      return {
+        missionId,
+        openAmendmentAlertCount: amendmentAlerts.length,
+        impactedMappingCount: impactedMappings.length,
+        needsClauseReviewCount: impactedMappings.filter((item) =>
+          item.mapping.reviewStatus.includes("needs"),
+        ).length,
+        impactedMappings,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async acknowledgeAlertForMission(
+    missionId: string,
+    alertId: string,
+    input: AcknowledgeAlertInput = {},
+  ): Promise<Alert> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+      await this.assertAlertBelongsToMission(client, missionId, alertId);
+
+      const acknowledged = await this.alertRepository.acknowledge(
+        client,
+        alertId,
+        input.acknowledgedAt,
+      );
+      const alert = acknowledged ?? await this.alertRepository.getById(client, alertId);
+
+      if (!alert) {
+        throw new AlertNotFoundError(alertId);
+      }
+
+      await client.query("commit");
+      return alert;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async resolveAlertForMission(
+    missionId: string,
+    alertId: string,
+    input: ResolveAlertInput = {},
+  ): Promise<Alert> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+      await this.assertAlertBelongsToMission(client, missionId, alertId);
+
+      const resolved = await this.alertRepository.resolve(
+        client,
+        alertId,
+        input.resolvedAt,
+      );
+      const alert = resolved ?? await this.alertRepository.getById(client, alertId);
+
+      if (!alert) {
+        throw new AlertNotFoundError(alertId);
+      }
+
+      await client.query("commit");
+      return alert;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private async syncThresholdAlert(
     client: PoolClient,
     missionId: string,
@@ -178,5 +363,112 @@ export class AlertService {
     );
 
     return { created: [], resolvedCount };
+  }
+
+  private async assertAlertBelongsToMission(
+    client: PoolClient,
+    missionId: string,
+    alertId: string,
+  ): Promise<Alert> {
+    const exists = await this.alertRepository.missionExists(client, missionId);
+    if (!exists) {
+      throw new AlertMissionNotFoundError(missionId);
+    }
+
+    const alert = await this.alertRepository.getById(client, alertId);
+    if (!alert) {
+      throw new AlertNotFoundError(alertId);
+    }
+
+    if (alert.missionId !== missionId) {
+      throw new AlertMissionMismatchError(alertId, missionId);
+    }
+
+    return alert;
+  }
+
+  private normalizeRegulatoryAmendment(
+    input: RegulatoryAmendmentAlertInput,
+  ): RegulatoryAmendmentAlertInput {
+    const sourceDocument = input.sourceDocument.trim();
+    const previousVersion = input.previousVersion.trim();
+    const currentVersion = input.currentVersion.trim();
+    const amendmentSummary = input.amendmentSummary.trim();
+    const changeImpact = input.changeImpact.trim();
+    const reviewAction = input.reviewAction.trim();
+
+    if (
+      !sourceDocument ||
+      !previousVersion ||
+      !currentVersion ||
+      !input.publishedAt ||
+      !amendmentSummary ||
+      !changeImpact ||
+      !reviewAction
+    ) {
+      throw new Error("Regulatory amendment alerts require source, version, change, and review details");
+    }
+
+    return {
+      sourceDocument,
+      previousVersion,
+      currentVersion,
+      publishedAt: input.publishedAt,
+      effectiveFrom: input.effectiveFrom ?? null,
+      amendmentSummary,
+      changeImpact,
+      affectedRequirementRefs: input.affectedRequirementRefs ?? [],
+      reviewAction,
+    };
+  }
+
+  private amendmentAffectsMapping(
+    metadata: Record<string, unknown>,
+    mapping: RegulatoryRequirementMapping,
+  ): boolean {
+    const sourceText = [
+      metadata.sourceDocument,
+      metadata.previousVersion,
+      metadata.currentVersion,
+      metadata.amendmentSummary,
+      metadata.changeImpact,
+      ...(Array.isArray(metadata.affectedRequirementRefs)
+        ? metadata.affectedRequirementRefs
+        : []),
+    ]
+      .filter(Boolean)
+      .map((value) => String(value))
+      .join(" ");
+    const normalizedSourceText = this.normalizeRegulatoryText(sourceText);
+    const mappingTokens = this.regulatoryMappingTokens(mapping);
+
+    return mappingTokens.some((token) => normalizedSourceText.includes(token));
+  }
+
+  private regulatoryMappingTokens(mapping: RegulatoryRequirementMapping): string[] {
+    const sourceSpecific =
+      mapping.sourceCode === "CAA_CAP_722_2024"
+        ? ["cap722", "caa cap722"]
+        : mapping.sourceCode === "CAA_CAP_722A_2022"
+          ? ["cap722a", "caa cap722a"]
+          : mapping.sourceCode === "UK_UAS_REGULATIONS"
+            ? ["ukuas", "2019947", "2019945", "amc", "gm", "cs"]
+            : [];
+
+    return [
+      mapping.sourceCode,
+      mapping.sourceTitle,
+      mapping.requirementRef,
+      mapping.requirementCode,
+      ...sourceSpecific,
+    ]
+      .map((value) => this.normalizeRegulatoryText(value))
+      .filter(Boolean);
+  }
+
+  private normalizeRegulatoryText(value: unknown): string {
+    return String(value ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
   }
 }

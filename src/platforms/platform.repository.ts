@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type {
+  AircraftTypeSpec,
   MaintenanceRecord,
   MaintenanceSchedule,
   Platform,
@@ -9,6 +10,8 @@ import type {
 interface PlatformRow extends QueryResultRow {
   id: string;
   name: string;
+  aircraft_type_spec_id: string | null;
+  aircraft_type_spec: AircraftTypeSpecRow | null;
   registration: string | null;
   platform_type: string | null;
   manufacturer: string | null;
@@ -50,7 +53,42 @@ interface MaintenanceRecordRow extends QueryResultRow {
   created_at: Date;
 }
 
-type CreatePlatformRow = Omit<Platform, "id" | "createdAt" | "updatedAt">;
+interface AircraftTypeSpecRow extends QueryResultRow {
+  id: string;
+  display_name: string;
+  manufacturer: string;
+  model: string;
+  aircraft_type: string | null;
+  mtom_kg: string | number | null;
+  max_payload_kg: string | number | null;
+  max_wind_mps: string | number | null;
+  max_gust_mps: string | number | null;
+  min_operating_temp_c: string | number | null;
+  max_operating_temp_c: string | number | null;
+  max_flight_time_min: number | null;
+  max_range_m: number | null;
+  ip_rating: string | null;
+  gnss_capability: string | null;
+  rtk_capable: boolean;
+  manufacturer_maintenance_schedule_ref: string | null;
+  manufacturer_maintenance_schedule_version: string | null;
+  manufacturer_maintenance_schedule_url: string | null;
+  manufacturer_maintenance_advice: string | null;
+  recommended_inspection_interval_days: number | null;
+  recommended_inspection_interval_flight_hours: string | number | null;
+  source_type: AircraftTypeSpec["sourceType"];
+  source_reference: string;
+  source_version: string | null;
+  source_url: string | null;
+  notes: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+type CreatePlatformRow = Omit<
+  Platform,
+  "id" | "createdAt" | "updatedAt" | "aircraftTypeSpec"
+>;
 
 type CreateScheduleRow = {
   platformId: string;
@@ -74,12 +112,24 @@ type CreateRecordRow = {
   evidenceRef: string | null;
 };
 
+type CreateAircraftTypeSpecRow = Omit<
+  AircraftTypeSpec,
+  "id" | "createdAt" | "updatedAt"
+>;
+
 const numberOrNull = (value: string | number | null): number | null =>
   value === null ? null : Number(value);
+
+const toIsoString = (value: Date | string): string =>
+  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
 const toPlatform = (row: PlatformRow): Platform => ({
   id: row.id,
   name: row.name,
+  aircraftTypeSpecId: row.aircraft_type_spec_id,
+  aircraftTypeSpec: row.aircraft_type_spec
+    ? toAircraftTypeSpec(row.aircraft_type_spec)
+    : null,
   registration: row.registration,
   platformType: row.platform_type,
   manufacturer: row.manufacturer,
@@ -121,13 +171,152 @@ const toRecord = (row: MaintenanceRecordRow): MaintenanceRecord => ({
   createdAt: row.created_at.toISOString(),
 });
 
+const toAircraftTypeSpec = (row: AircraftTypeSpecRow): AircraftTypeSpec => ({
+  id: row.id,
+  displayName: row.display_name,
+  manufacturer: row.manufacturer,
+  model: row.model,
+  aircraftType: row.aircraft_type,
+  mtomKg: numberOrNull(row.mtom_kg),
+  maxPayloadKg: numberOrNull(row.max_payload_kg),
+  maxWindMps: numberOrNull(row.max_wind_mps),
+  maxGustMps: numberOrNull(row.max_gust_mps),
+  minOperatingTempC: numberOrNull(row.min_operating_temp_c),
+  maxOperatingTempC: numberOrNull(row.max_operating_temp_c),
+  maxFlightTimeMin: row.max_flight_time_min,
+  maxRangeM: row.max_range_m,
+  ipRating: row.ip_rating,
+  gnssCapability: row.gnss_capability,
+  rtkCapable: row.rtk_capable,
+  manufacturerMaintenanceScheduleRef:
+    row.manufacturer_maintenance_schedule_ref,
+  manufacturerMaintenanceScheduleVersion:
+    row.manufacturer_maintenance_schedule_version,
+  manufacturerMaintenanceScheduleUrl:
+    row.manufacturer_maintenance_schedule_url,
+  manufacturerMaintenanceAdvice: row.manufacturer_maintenance_advice,
+  recommendedInspectionIntervalDays:
+    row.recommended_inspection_interval_days,
+  recommendedInspectionIntervalFlightHours: numberOrNull(
+    row.recommended_inspection_interval_flight_hours,
+  ),
+  sourceType: row.source_type,
+  sourceReference: row.source_reference,
+  sourceVersion: row.source_version,
+  sourceUrl: row.source_url,
+  notes: row.notes,
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
+});
+
 export class PlatformRepository {
+  async insertAircraftTypeSpec(
+    tx: PoolClient,
+    input: CreateAircraftTypeSpecRow,
+  ): Promise<AircraftTypeSpec> {
+    const result = await tx.query<AircraftTypeSpecRow>(
+      `
+      insert into aircraft_type_specs (
+        id,
+        display_name,
+        manufacturer,
+        model,
+        aircraft_type,
+        mtom_kg,
+        max_payload_kg,
+        max_wind_mps,
+        max_gust_mps,
+        min_operating_temp_c,
+        max_operating_temp_c,
+        max_flight_time_min,
+        max_range_m,
+        ip_rating,
+        gnss_capability,
+        rtk_capable,
+        manufacturer_maintenance_schedule_ref,
+        manufacturer_maintenance_schedule_version,
+        manufacturer_maintenance_schedule_url,
+        manufacturer_maintenance_advice,
+        recommended_inspection_interval_days,
+        recommended_inspection_interval_flight_hours,
+        source_type,
+        source_reference,
+        source_version,
+        source_url,
+        notes
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.displayName,
+        input.manufacturer,
+        input.model,
+        input.aircraftType,
+        input.mtomKg,
+        input.maxPayloadKg,
+        input.maxWindMps,
+        input.maxGustMps,
+        input.minOperatingTempC,
+        input.maxOperatingTempC,
+        input.maxFlightTimeMin,
+        input.maxRangeM,
+        input.ipRating,
+        input.gnssCapability,
+        input.rtkCapable,
+        input.manufacturerMaintenanceScheduleRef,
+        input.manufacturerMaintenanceScheduleVersion,
+        input.manufacturerMaintenanceScheduleUrl,
+        input.manufacturerMaintenanceAdvice,
+        input.recommendedInspectionIntervalDays,
+        input.recommendedInspectionIntervalFlightHours,
+        input.sourceType,
+        input.sourceReference,
+        input.sourceVersion,
+        input.sourceUrl,
+        input.notes,
+      ],
+    );
+
+    return toAircraftTypeSpec(result.rows[0]);
+  }
+
+  async listAircraftTypeSpecs(tx: PoolClient): Promise<AircraftTypeSpec[]> {
+    const result = await tx.query<AircraftTypeSpecRow>(
+      `
+      select *
+      from aircraft_type_specs
+      order by manufacturer asc, model asc, display_name asc, id asc
+      `,
+    );
+
+    return result.rows.map(toAircraftTypeSpec);
+  }
+
+  async getAircraftTypeSpecById(
+    tx: PoolClient,
+    specId: string,
+  ): Promise<AircraftTypeSpec | null> {
+    const result = await tx.query<AircraftTypeSpecRow>(
+      `
+      select *
+      from aircraft_type_specs
+      where id = $1
+      `,
+      [specId],
+    );
+
+    return result.rows[0] ? toAircraftTypeSpec(result.rows[0]) : null;
+  }
+
   async insertPlatform(tx: PoolClient, input: CreatePlatformRow): Promise<Platform> {
     const result = await tx.query<PlatformRow>(
       `
       insert into platforms (
         id,
         name,
+        aircraft_type_spec_id,
         registration,
         platform_type,
         manufacturer,
@@ -137,12 +326,13 @@ export class PlatformRepository {
         total_flight_hours,
         notes
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       returning *
       `,
       [
         randomUUID(),
         input.name,
+        input.aircraftTypeSpecId,
         input.registration,
         input.platformType,
         input.manufacturer,
@@ -154,7 +344,8 @@ export class PlatformRepository {
       ],
     );
 
-    return toPlatform(result.rows[0]);
+    const platform = await this.getPlatformById(tx, result.rows[0].id);
+    return platform ?? toPlatform({ ...result.rows[0], aircraft_type_spec: null });
   }
 
   async getPlatformById(
@@ -163,9 +354,46 @@ export class PlatformRepository {
   ): Promise<Platform | null> {
     const result = await tx.query<PlatformRow>(
       `
-      select *
+      select
+        platforms.*,
+        case
+          when aircraft_type_specs.id is null then null
+          else jsonb_build_object(
+            'id', aircraft_type_specs.id,
+            'display_name', aircraft_type_specs.display_name,
+            'manufacturer', aircraft_type_specs.manufacturer,
+            'model', aircraft_type_specs.model,
+            'aircraft_type', aircraft_type_specs.aircraft_type,
+            'mtom_kg', aircraft_type_specs.mtom_kg,
+            'max_payload_kg', aircraft_type_specs.max_payload_kg,
+            'max_wind_mps', aircraft_type_specs.max_wind_mps,
+            'max_gust_mps', aircraft_type_specs.max_gust_mps,
+            'min_operating_temp_c', aircraft_type_specs.min_operating_temp_c,
+            'max_operating_temp_c', aircraft_type_specs.max_operating_temp_c,
+            'max_flight_time_min', aircraft_type_specs.max_flight_time_min,
+            'max_range_m', aircraft_type_specs.max_range_m,
+            'ip_rating', aircraft_type_specs.ip_rating,
+            'gnss_capability', aircraft_type_specs.gnss_capability,
+            'rtk_capable', aircraft_type_specs.rtk_capable,
+            'manufacturer_maintenance_schedule_ref', aircraft_type_specs.manufacturer_maintenance_schedule_ref,
+            'manufacturer_maintenance_schedule_version', aircraft_type_specs.manufacturer_maintenance_schedule_version,
+            'manufacturer_maintenance_schedule_url', aircraft_type_specs.manufacturer_maintenance_schedule_url,
+            'manufacturer_maintenance_advice', aircraft_type_specs.manufacturer_maintenance_advice,
+            'recommended_inspection_interval_days', aircraft_type_specs.recommended_inspection_interval_days,
+            'recommended_inspection_interval_flight_hours', aircraft_type_specs.recommended_inspection_interval_flight_hours,
+            'source_type', aircraft_type_specs.source_type,
+            'source_reference', aircraft_type_specs.source_reference,
+            'source_version', aircraft_type_specs.source_version,
+            'source_url', aircraft_type_specs.source_url,
+            'notes', aircraft_type_specs.notes,
+            'created_at', aircraft_type_specs.created_at,
+            'updated_at', aircraft_type_specs.updated_at
+          )
+        end as aircraft_type_spec
       from platforms
-      where id = $1
+      left join aircraft_type_specs
+        on aircraft_type_specs.id = platforms.aircraft_type_spec_id
+      where platforms.id = $1
       `,
       [platformId],
     );

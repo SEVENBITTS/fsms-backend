@@ -88,7 +88,6 @@ export class MissionPlanningRepository {
   async insertDraftMission(
     tx: PoolClient,
     input: {
-      organisationId: string | null;
       missionPlanId: string | null;
       platformId: string | null;
       pilotId: string | null;
@@ -98,23 +97,16 @@ export class MissionPlanningRepository {
       `
       insert into missions (
         id,
-        organisation_id,
         status,
         mission_plan_id,
         platform_id,
         pilot_id,
         last_event_sequence_no
       )
-      values ($1, $2, 'draft', $3, $4, $5, 0)
+      values ($1, 'draft', $2, $3, $4, 0)
       returning id
       `,
-      [
-        randomUUID(),
-        input.organisationId,
-        input.missionPlanId,
-        input.platformId,
-        input.pilotId,
-      ],
+      [randomUUID(), input.missionPlanId, input.platformId, input.pilotId],
     );
 
     return result.rows[0].id;
@@ -124,7 +116,6 @@ export class MissionPlanningRepository {
     tx: PoolClient,
     missionId: string,
     input: {
-      organisationId?: string | null;
       missionPlanId?: string | null;
       platformId?: string | null;
       pilotId?: string | null;
@@ -132,11 +123,6 @@ export class MissionPlanningRepository {
   ): Promise<boolean> {
     const setClauses: string[] = [];
     const values: Array<string | null> = [missionId];
-
-    if (Object.prototype.hasOwnProperty.call(input, "organisationId")) {
-      values.push(input.organisationId ?? null);
-      setClauses.push(`organisation_id = $${values.length}`);
-    }
 
     if (Object.prototype.hasOwnProperty.call(input, "missionPlanId")) {
       values.push(input.missionPlanId ?? null);

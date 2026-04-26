@@ -8,19 +8,6 @@ type PilotIdParams = {
 export class PilotController {
   constructor(private readonly pilotService: PilotService) {}
 
-  listPilots = async (
-    _req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
-    try {
-      const pilots = await this.pilotService.listPilots();
-      res.status(200).json({ pilots });
-    } catch (error) {
-      next(error);
-    }
-  };
-
   createPilot = async (
     req: Request,
     res: Response,

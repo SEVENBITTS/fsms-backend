@@ -1,8 +1,8 @@
-# FSMS Backend
+﻿# VerityAtlas Backend
 
-Flight Safety Monitoring System (FSMS) backend for replaying flight telemetry, detecting airspace violations, and predicting potential breaches.
+VerityAtlas, formerly FSMS, is the backend for replaying flight telemetry, detecting airspace violations, and supporting operator-facing mission review workflows.
 
-The system evaluates drone flight paths against airspace restrictions using PostGIS spatial queries and provides a mission-control style replay interface.
+The platform evaluates drone flight paths against airspace restrictions, provides mission replay and live-operations surfaces, and is evolving toward a sharper evidence-driven aviation operations platform: an audit-ready operational assurance and BVLOS-readiness system for serious UAV operators, not a generic all-in-one drone business tool.
 
 ---
 
@@ -15,19 +15,22 @@ Replay recorded flights with timeline controls and map visualization.
 Load nearby airspace zones intersecting the flight path.
 
 ### Compliance Evaluation
-Determine if aircraft altitude violates airspace limits.
+Determine whether aircraft altitude violates airspace limits.
 
 ### Predictive Breach Alerts
-Predict time-to-breach using vertical speed.
+Predict time-to-breach using flight dynamics and conflict context.
 
-### Track Smoothing
-Apply Kalman-like smoothing to reduce GPS jitter.
+### Operator Mission Workspace
+Review planning state, readiness, blockers, lifecycle actions, and mission evidence.
+
+### Operator Live Operations View
+Monitor mission status, alerts, overlays, conflict context, and replay surfaces.
 
 ### Modular Backend Architecture
-Clean separation between routes, services, models, and database access.
+Clean separation between routes, services, repositories, and domain modules.
 
 ### Automated Tests
-Unit tests verify core safety logic.
+Unit and integration tests cover replay, mission workflow, overlays, and related safety logic.
 
 ---
 
@@ -35,70 +38,52 @@ Unit tests verify core safety logic.
 
 Backend
 
+- TypeScript
+- Node.js
+- Express
+- PostgreSQL
+- `pg`
+- Zod / AJV
+
+Legacy prototype components still present in the repo:
+
 - Python
 - Flask
-- PostgreSQL
-- PostGIS
-- psycopg2
+- PostGIS-oriented replay prototype code
 
 Frontend
 
-- MapLibre GL
-- JavaScript HUD interface
+- HTML
+- JavaScript
+- Operator-focused static UI surfaces
 
 Testing
 
-- pytest
+- Vitest
+- Supertest
 
 ---
 
 # Project Structure
 
-
+```text
 fsms-backend/
-│
-├── routes/ # Flask API endpoints
-│ health.py
-│ replay.py
-│ airspace.py
-│ compliance.py
-│
-├── services/ # Business logic
-│ db.py
-│ replay_service.py
-│ airspace_service.py
-│ compliance.py
-│ compliance_airspace.py
-│ prediction_service.py
-│ smoothing.py
-│ terrain.py
-│
-├── models/ # Data structures
-│ flight.py
-│ airspace.py
-│ compliance.py
-│
-├── tests/ # Unit tests
-│ test_health.py
-│ test_compliance.py
-│ test_prediction.py
-│ test_smoothing.py
-│
-├── docs/ # System documentation
-│ architecture.md
-│ api.md
-│ roadmap.md
-│ system_diagram.md
-│
-├── static/ # Frontend UI
-│ replay.html
-│
-└── server.py # Flask application entry point
+|-- src/                TypeScript backend and domain modules
+|-- static/             Operator UI pages and replay surfaces
+|-- docs/               Product and architecture documentation
+|-- scripts/            Dev, migration, validation, and seed helpers
+|-- sql/                SQL helpers and historical database assets
+|-- routes/             Legacy Python/Flask routes
+|-- services/           Legacy Python services
+|-- models/             Legacy Python models
+|-- server.py           Legacy Flask entry point
+```
 
+The repo name remains `fsms-backend` for compatibility. This is intentional during the safe rename phase.
 
 ---
 
-# Running the Backend
+# Running The Backend
 
 ## Current TypeScript dev startup
 
@@ -108,11 +93,11 @@ For the current Express/TypeScript operator UI work, use:
 npm run dev
 ```
 
-This dev entrypoint now:
+This dev entrypoint:
 
 - compiles runtime server output into `dist/`
 - starts the server with plain `node`
-- skips startup migrations in local dev by default so static operator routes can still be rendered when local PostgreSQL credentials are not configured
+- skips startup migrations in local dev by default so static operator routes can still render when local PostgreSQL credentials are not configured
 
 This is intended for UI rendering and route verification. API-backed mission data still requires a working local database setup.
 
@@ -127,7 +112,7 @@ npm run seed:liveops-demo
 The script:
 
 - runs migrations
-- creates a mission with planning/approval/dispatch state
+- creates a mission with planning, approval, and dispatch state
 - launches the mission
 - records replay telemetry
 - creates weather, crewed traffic, and drone traffic overlays
@@ -144,99 +129,67 @@ Then open the seeded mission in:
 - `/operator/missions/<mission-id>/live-operations`
 - `/operator/missions/<mission-id>`
 
+## Legacy Python prototype
+
+The older Python replay prototype is still present for reference.
+
 Activate the virtual environment:
 
-
+```powershell
 venv\Scripts\activate
-
+```
 
 Start the server:
 
-
+```powershell
 python server.py
-
+```
 
 Server runs on:
 
-
+```text
 http://127.0.0.1:5000
-
+```
 
 ---
 
 # Running Tests
 
-Run the full test suite:
+TypeScript test suite:
 
+```powershell
+npm test
+```
 
+On this machine, `vitest` has also been successfully run with:
+
+```powershell
+npx vitest run --pool=threads
+```
+
+Legacy Python test suite:
+
+```powershell
 python -m pytest
-
-
-Example output:
-
-
-collected 19 items
-19 passed
-
+```
 
 ---
 
-# API Endpoints
+# API Notes
 
-### Health
+Health endpoint:
 
-
+```text
 GET /health
+```
 
+Legacy replay route documentation still references:
 
-Returns backend and database health.
-
----
-
-### Flight Replay
-
-
+```text
 GET /api/fsms/replay/<flight_id>
+```
 
-
-Returns telemetry replay data.
-
----
-
-### Airspace Query
-
-
-GET /api/airspace/by-flight/<flight_id>?buffer_m=5000
-
-
-Returns GeoJSON airspace intersecting a flight.
-
----
-
-### Compliance Evaluation (single point)
-
-
-GET /api/compliance/airspace/eval-point
-
-
-Parameters:
-
-
-lat
-lon
-alt_amsl_m
-buffer_m (optional)
-
-
----
-
-### Compliance Evaluation (entire flight)
-
-
-GET /api/compliance/airspace/by-flight/<flight_id>
-
-
-Returns compliance evaluation for each flight point.
+The `/api/fsms/*` naming is intentionally unchanged during the safe branding pass to avoid compatibility risk.
 
 ---
 
@@ -254,8 +207,11 @@ Prediction and smoothing services.
 ### Phase 4
 Testing and documentation.
 
-### Phase 5 (future)
-Terrain integration and performance optimization.
+### Phase 5
+Operator workspace and live-operations surfaces.
+
+### Phase 6
+Broader mission-assurance, evidence, and overlay workflows.
 
 ---
 
@@ -263,23 +219,27 @@ Terrain integration and performance optimization.
 
 Planned improvements include:
 
-- real terrain elevation integration
+- deeper terrain integration
 - faster batch compliance evaluation
-- live telemetry monitoring
-- collision prediction
+- broader live telemetry monitoring
+- richer conflict prediction
 - multi-flight monitoring
-- production deployment
+- production deployment hardening
 
 ---
 
 # Product Direction
 
-The current FSMS product direction and prototype boundaries are documented in:
+The current VerityAtlas product direction and prototype boundaries are documented in:
 
 - `docs/FSMS_DIRECTION.md`
+
+That document also captures the company ethos for VerityAir Systems Ltd: build around operational assurance, regulatory clarity, auditable evidence, and BVLOS readiness before secondary business-administration features.
+
+The filename remains unchanged for now to avoid unnecessary churn during the safe rename phase.
 
 ---
 
 # License
 
-Internal project – FSMS prototype.
+Internal project for VerityAtlas, the aviation operations platform being developed under VerityAir Systems Ltd.

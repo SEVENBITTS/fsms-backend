@@ -4,12 +4,15 @@ import type {
   AuditEvidenceSnapshot,
   AuditEvidenceReadinessSnapshot,
   AuditReportSmsControlMapping,
+  ConflictGuidanceAcknowledgement,
+  LiveOpsMapViewStateSnapshot,
   MissionDecisionEvidenceLink,
   MissionLifecycleEvidenceEvent,
   PlanningApprovalHandoffEvidence,
   PostOperationAuditSignoff,
   PostOperationCompletionSnapshot,
   PostOperationEvidenceSnapshot,
+  RegulatoryAmendmentAlertAuditRecord,
   SafetyActionClosureDecisionExportContext,
   SafetyActionClosureEvidenceExportContext,
 } from "./audit-evidence.types";
@@ -48,6 +51,70 @@ interface CreateMissionDecisionEvidenceLinkRow {
   snapshotId: string;
   decisionType: MissionDecisionEvidenceLink["decisionType"];
   createdBy: string | null;
+}
+
+interface LiveOpsMapViewStateSnapshotRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  evidence_type: LiveOpsMapViewStateSnapshot["evidenceType"];
+  replay_cursor: string;
+  replay_timestamp: Date | null;
+  area_freshness_filter: LiveOpsMapViewStateSnapshot["areaFreshnessFilter"];
+  visible_area_overlay_count: number;
+  total_area_overlay_count: number;
+  degraded_area_overlay_count: number;
+  open_alert_count: number;
+  active_conflict_count: number;
+  area_refresh_run_count: number;
+  view_state_url: string | null;
+  snapshot_metadata: Record<string, unknown>;
+  capture_scope: LiveOpsMapViewStateSnapshot["captureScope"];
+  pilot_instruction_status: LiveOpsMapViewStateSnapshot["pilotInstructionStatus"];
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface CreateLiveOpsMapViewStateSnapshotRow {
+  missionId: string;
+  replayCursor: string;
+  replayTimestamp: string | null;
+  areaFreshnessFilter: LiveOpsMapViewStateSnapshot["areaFreshnessFilter"];
+  visibleAreaOverlayCount: number;
+  totalAreaOverlayCount: number;
+  degradedAreaOverlayCount: number;
+  openAlertCount: number;
+  activeConflictCount: number;
+  areaRefreshRunCount: number;
+  viewStateUrl: string | null;
+  snapshotMetadata: Record<string, unknown>;
+  createdBy: string | null;
+}
+
+interface ConflictGuidanceAcknowledgementRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  conflict_id: string;
+  overlay_id: string;
+  guidance_action_code: ConflictGuidanceAcknowledgement["guidanceActionCode"];
+  evidence_action: ConflictGuidanceAcknowledgement["evidenceAction"];
+  acknowledgement_role: ConflictGuidanceAcknowledgement["acknowledgementRole"];
+  acknowledged_by: string;
+  acknowledgement_note: string | null;
+  guidance_summary: string;
+  pilot_instruction_status: ConflictGuidanceAcknowledgement["pilotInstructionStatus"];
+  created_at: Date;
+}
+
+interface CreateConflictGuidanceAcknowledgementRow {
+  missionId: string;
+  conflictId: string;
+  overlayId: string;
+  guidanceActionCode: ConflictGuidanceAcknowledgement["guidanceActionCode"];
+  evidenceAction: ConflictGuidanceAcknowledgement["evidenceAction"];
+  acknowledgementRole: ConflictGuidanceAcknowledgement["acknowledgementRole"];
+  acknowledgedBy: string;
+  acknowledgementNote: string | null;
+  guidanceSummary: string;
 }
 
 interface MissionAuditStateRow extends QueryResultRow {
@@ -158,6 +225,31 @@ interface SafetyActionClosureEvidenceExportRow extends QueryResultRow {
   evidence_created_at: Date;
 }
 
+interface RegulatoryAmendmentAlertAuditRow extends QueryResultRow {
+  id: string;
+  status: RegulatoryAmendmentAlertAuditRecord["status"];
+  severity: RegulatoryAmendmentAlertAuditRecord["severity"];
+  message: string;
+  metadata: Record<string, unknown>;
+  triggered_at: Date;
+  created_at: Date;
+  acknowledged_at: Date | null;
+  resolved_at: Date | null;
+}
+
+const toNullableString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value : null;
+
+const toStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+        .filter(
+          (entry): entry is string =>
+            typeof entry === "string" && entry.trim().length > 0,
+        )
+        .map((entry) => entry.trim())
+    : [];
+
 const toAuditEvidenceSnapshot = (
   row: AuditEvidenceSnapshotRow,
 ): AuditEvidenceSnapshot => ({
@@ -182,6 +274,46 @@ const toMissionDecisionEvidenceLink = (
   auditEvidenceSnapshotId: row.audit_evidence_snapshot_id,
   decisionType: row.decision_type,
   createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
+const toLiveOpsMapViewStateSnapshot = (
+  row: LiveOpsMapViewStateSnapshotRow,
+): LiveOpsMapViewStateSnapshot => ({
+  id: row.id,
+  missionId: row.mission_id,
+  evidenceType: row.evidence_type,
+  replayCursor: row.replay_cursor,
+  replayTimestamp: row.replay_timestamp?.toISOString() ?? null,
+  areaFreshnessFilter: row.area_freshness_filter,
+  visibleAreaOverlayCount: row.visible_area_overlay_count,
+  totalAreaOverlayCount: row.total_area_overlay_count,
+  degradedAreaOverlayCount: row.degraded_area_overlay_count,
+  openAlertCount: row.open_alert_count,
+  activeConflictCount: row.active_conflict_count,
+  areaRefreshRunCount: row.area_refresh_run_count,
+  viewStateUrl: row.view_state_url,
+  snapshotMetadata: row.snapshot_metadata,
+  captureScope: row.capture_scope,
+  pilotInstructionStatus: row.pilot_instruction_status,
+  createdBy: row.created_by,
+  createdAt: row.created_at.toISOString(),
+});
+
+const toConflictGuidanceAcknowledgement = (
+  row: ConflictGuidanceAcknowledgementRow,
+): ConflictGuidanceAcknowledgement => ({
+  id: row.id,
+  missionId: row.mission_id,
+  conflictId: row.conflict_id,
+  overlayId: row.overlay_id,
+  guidanceActionCode: row.guidance_action_code,
+  evidenceAction: row.evidence_action,
+  acknowledgementRole: row.acknowledgement_role,
+  acknowledgedBy: row.acknowledged_by,
+  acknowledgementNote: row.acknowledgement_note,
+  guidanceSummary: row.guidance_summary,
+  pilotInstructionStatus: row.pilot_instruction_status,
   createdAt: row.created_at.toISOString(),
 });
 
@@ -279,6 +411,28 @@ const toSafetyActionClosureEvidenceExportContext = (
   reviewedBy: row.reviewed_by,
   reviewNotes: row.review_notes,
   evidenceCreatedAt: row.evidence_created_at.toISOString(),
+});
+
+const toRegulatoryAmendmentAlertAuditRecord = (
+  row: RegulatoryAmendmentAlertAuditRow,
+): RegulatoryAmendmentAlertAuditRecord => ({
+  id: row.id,
+  status: row.status,
+  severity: row.severity,
+  message: row.message,
+  sourceDocument: toNullableString(row.metadata.sourceDocument),
+  previousVersion: toNullableString(row.metadata.previousVersion),
+  currentVersion: toNullableString(row.metadata.currentVersion),
+  publishedAt: toNullableString(row.metadata.publishedAt),
+  effectiveFrom: toNullableString(row.metadata.effectiveFrom),
+  amendmentSummary: toNullableString(row.metadata.amendmentSummary),
+  changeImpact: toNullableString(row.metadata.changeImpact),
+  affectedRequirementRefs: toStringArray(row.metadata.affectedRequirementRefs),
+  reviewAction: toNullableString(row.metadata.reviewAction),
+  triggeredAt: row.triggered_at.toISOString(),
+  acknowledgedAt: row.acknowledged_at?.toISOString() ?? null,
+  resolvedAt: row.resolved_at?.toISOString() ?? null,
+  createdAt: row.created_at.toISOString(),
 });
 
 export class AuditEvidenceRepository {
@@ -430,6 +584,91 @@ export class AuditEvidenceRepository {
     return result.rows.map(toMissionDecisionEvidenceLink);
   }
 
+  async insertLiveOpsMapViewStateSnapshot(
+    tx: PoolClient,
+    input: CreateLiveOpsMapViewStateSnapshotRow,
+  ): Promise<LiveOpsMapViewStateSnapshot> {
+    const result = await tx.query<LiveOpsMapViewStateSnapshotRow>(
+      `
+      insert into live_ops_map_view_state_snapshots (
+        id,
+        mission_id,
+        evidence_type,
+        replay_cursor,
+        replay_timestamp,
+        area_freshness_filter,
+        visible_area_overlay_count,
+        total_area_overlay_count,
+        degraded_area_overlay_count,
+        open_alert_count,
+        active_conflict_count,
+        area_refresh_run_count,
+        view_state_url,
+        snapshot_metadata,
+        capture_scope,
+        pilot_instruction_status,
+        created_by
+      )
+      values (
+        $1,
+        $2,
+        'live_ops_map_view_state',
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13::jsonb,
+        'metadata_only',
+        'not_a_pilot_command',
+        $14
+      )
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        input.replayCursor,
+        input.replayTimestamp,
+        input.areaFreshnessFilter,
+        input.visibleAreaOverlayCount,
+        input.totalAreaOverlayCount,
+        input.degradedAreaOverlayCount,
+        input.openAlertCount,
+        input.activeConflictCount,
+        input.areaRefreshRunCount,
+        input.viewStateUrl,
+        JSON.stringify(input.snapshotMetadata),
+        input.createdBy,
+      ],
+    );
+
+    return toLiveOpsMapViewStateSnapshot(result.rows[0]);
+  }
+
+  async listLiveOpsMapViewStateSnapshots(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<LiveOpsMapViewStateSnapshot[]> {
+    const result = await tx.query<LiveOpsMapViewStateSnapshotRow>(
+      `
+      select *
+      from live_ops_map_view_state_snapshots
+      where mission_id = $1
+        and evidence_type = 'live_ops_map_view_state'
+      order by created_at desc, id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toLiveOpsMapViewStateSnapshot);
+  }
+
   async getDecisionEvidenceLinkForMission(
     tx: PoolClient,
     missionId: string,
@@ -459,6 +698,80 @@ export class AuditEvidenceRepository {
     }
 
     return this.getDecisionEvidenceLinkForMission(tx, missionId, linkId);
+  }
+
+  async overlayExistsForMission(
+    tx: PoolClient,
+    missionId: string,
+    overlayId: string,
+  ): Promise<boolean> {
+    const result = await tx.query(
+      `
+      select 1
+      from mission_external_overlays
+      where mission_id = $1
+        and id = $2
+      `,
+      [missionId, overlayId],
+    );
+
+    return result.rowCount === 1;
+  }
+
+  async insertConflictGuidanceAcknowledgement(
+    tx: PoolClient,
+    input: CreateConflictGuidanceAcknowledgementRow,
+  ): Promise<ConflictGuidanceAcknowledgement> {
+    const result = await tx.query<ConflictGuidanceAcknowledgementRow>(
+      `
+      insert into conflict_guidance_acknowledgements (
+        id,
+        mission_id,
+        conflict_id,
+        overlay_id,
+        guidance_action_code,
+        evidence_action,
+        acknowledgement_role,
+        acknowledged_by,
+        acknowledgement_note,
+        guidance_summary,
+        pilot_instruction_status
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'not_a_pilot_command')
+      returning *
+      `,
+      [
+        randomUUID(),
+        input.missionId,
+        input.conflictId,
+        input.overlayId,
+        input.guidanceActionCode,
+        input.evidenceAction,
+        input.acknowledgementRole,
+        input.acknowledgedBy,
+        input.acknowledgementNote,
+        input.guidanceSummary,
+      ],
+    );
+
+    return toConflictGuidanceAcknowledgement(result.rows[0]);
+  }
+
+  async listConflictGuidanceAcknowledgements(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<ConflictGuidanceAcknowledgement[]> {
+    const result = await tx.query<ConflictGuidanceAcknowledgementRow>(
+      `
+      select *
+      from conflict_guidance_acknowledgements
+      where mission_id = $1
+      order by created_at desc, id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toConflictGuidanceAcknowledgement);
   }
 
   async getLifecycleEvidenceEvents(
@@ -771,6 +1084,33 @@ export class AuditEvidenceRepository {
     );
 
     return result.rows.map(toSafetyActionClosureEvidenceExportContext);
+  }
+
+  async listRegulatoryAmendmentAlertsForMissionExport(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<RegulatoryAmendmentAlertAuditRecord[]> {
+    const result = await tx.query<RegulatoryAmendmentAlertAuditRow>(
+      `
+      select
+        id,
+        status,
+        severity,
+        message,
+        metadata,
+        triggered_at,
+        created_at,
+        acknowledged_at,
+        resolved_at
+      from alerts
+      where mission_id = $1
+        and alert_type = 'REGULATORY_AMENDMENT'
+      order by triggered_at asc, created_at asc, id asc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map(toRegulatoryAmendmentAlertAuditRecord);
   }
 
   async decisionEvidenceLinkReferencesReadinessSnapshot(

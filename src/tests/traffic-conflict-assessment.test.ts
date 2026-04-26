@@ -182,6 +182,17 @@ describe("traffic conflict assessment integration", () => {
             rangeMeters: expect.any(Number),
             bearingDegrees: expect.any(Number),
           }),
+          resolutionGuidance: expect.objectContaining({
+            mode: "decision_support",
+            actionCode: expect.any(String),
+            recommendedAction: expect.any(String),
+            prohibitedActions: expect.arrayContaining([
+              "Do not treat this guidance as an aircraft command",
+            ]),
+            acknowledgementRequired: expect.any(Boolean),
+            evidenceAction: expect.any(String),
+            pilotInstructionStatus: "not_a_pilot_command",
+          }),
         }),
         expect.objectContaining({
           missionId,
@@ -196,6 +207,17 @@ describe("traffic conflict assessment integration", () => {
           metrics: expect.objectContaining({
             rangeMeters: expect.any(Number),
             bearingDegrees: expect.any(Number),
+          }),
+          resolutionGuidance: expect.objectContaining({
+            mode: "decision_support",
+            actionCode: expect.any(String),
+            recommendedAction: expect.any(String),
+            prohibitedActions: expect.arrayContaining([
+              "Do not treat this guidance as an aircraft command",
+            ]),
+            acknowledgementRequired: expect.any(Boolean),
+            evidenceAction: expect.any(String),
+            pilotInstructionStatus: "not_a_pilot_command",
           }),
         }),
       ]),
@@ -307,6 +329,18 @@ describe("traffic conflict assessment integration", () => {
             rangeMeters: expect.any(Number),
             bearingDegrees: expect.any(Number),
             insideArea: expect.any(Boolean),
+          }),
+          resolutionGuidance: expect.objectContaining({
+            mode: "decision_support",
+            urgency: "immediate_review",
+            actionCode: "hold_or_suspend",
+            authorityRequired: "supervisor",
+            prohibitedActions: expect.arrayContaining([
+              "Do not transmit avoidance instructions from this advisory alone",
+            ]),
+            acknowledgementRequired: true,
+            evidenceAction: "record_supervisor_review",
+            pilotInstructionStatus: "not_a_pilot_command",
           }),
         }),
         expect.objectContaining({

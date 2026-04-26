@@ -4,7 +4,6 @@ import { PilotController } from "./pilot.controller";
 export function createPilotRouter(controller: PilotController): Router {
   const router = Router();
 
-  router.get("/", controller.listPilots);
   router.post("/", controller.createPilot);
   router.get("/:id", controller.getPilot);
   router.post("/:id/readiness-evidence", controller.createReadinessEvidence);

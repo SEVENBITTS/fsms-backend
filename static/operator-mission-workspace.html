@@ -3,8 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FSMS Operator Mission Workspace</title>
+  <title>VerityAtlas Operator Mission Workspace</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <script src="/static/branding.js"></script>
+  <script>
+    document.title = window.VERITY_BRANDING?.missionWorkspaceTitle ?? document.title;
+  </script>
   <style>
     :root {
       color-scheme: dark;
@@ -336,6 +340,7 @@
     }
 
     .action-field input,
+    .action-field select,
     .action-field textarea {
       width: 100%;
       min-height: 42px;
@@ -361,6 +366,9 @@
     }
 
     .action-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       min-height: 42px;
       padding: 0 14px;
       border: 1px solid var(--border);
@@ -370,6 +378,7 @@
       font: inherit;
       font-weight: 700;
       cursor: pointer;
+      text-decoration: none;
     }
 
     .action-button[disabled] {
@@ -432,126 +441,6 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-    }
-
-    .risk-surface-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-      gap: 16px;
-    }
-
-    .stage-map-grid,
-    .risk-category-grid {
-      display: grid;
-      gap: 12px;
-    }
-
-    .stage-map-grid {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-    }
-
-    .risk-category-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      margin-top: 14px;
-    }
-
-    .stage-tile,
-    .risk-card {
-      padding: 14px;
-      border: 1px solid var(--border);
-      background: var(--bg-soft);
-    }
-
-    .stage-tile[data-stage-target] {
-      cursor: pointer;
-      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
-    }
-
-    .stage-tile[data-stage-target]:hover,
-    .stage-tile[data-stage-target]:focus-visible {
-      transform: translateY(-2px);
-      outline: none;
-      border-color: rgba(56, 189, 248, 0.45);
-      background: rgba(255, 255, 255, 0.055);
-    }
-
-    .stage-tile h4,
-    .risk-card h4 {
-      margin: 0 0 8px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-    }
-
-    .stage-tile .stage-value,
-    .risk-card .risk-headline {
-      font-size: 14px;
-      font-weight: 800;
-      line-height: 1.4;
-    }
-
-    .risk-card .risk-headline {
-      margin-bottom: 10px;
-    }
-
-    .stage-chip-row,
-    .risk-chip-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .stage-chip {
-      display: inline-flex;
-      align-items: center;
-      min-height: 28px;
-      padding: 0 10px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .heat-pass {
-      color: var(--ok);
-      background: rgba(34, 197, 94, 0.08);
-    }
-
-    .heat-warning {
-      color: var(--warn);
-      background: rgba(245, 158, 11, 0.08);
-    }
-
-    .heat-fail {
-      color: var(--bad);
-      background: rgba(239, 68, 68, 0.08);
-    }
-
-    .heat-stable {
-      border-color: rgba(34, 197, 94, 0.35);
-      box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.08);
-    }
-
-    .heat-emerging {
-      border-color: rgba(245, 158, 11, 0.35);
-      box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.08);
-    }
-
-    .heat-immediate {
-      border-color: rgba(239, 68, 68, 0.35);
-      box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.08);
-    }
-
-    .risk-list {
-      margin: 10px 0 0;
-      padding-left: 18px;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.55;
     }
 
     .mission-browser-toolbar {
@@ -663,15 +552,9 @@
       .controls-grid,
       .metric-grid,
       .workspace-grid,
-      .risk-surface-grid,
-      .risk-category-grid,
       .summary-grid,
       .timeline-item {
         grid-template-columns: 1fr;
-      }
-
-      .stage-map-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .kv {
@@ -766,18 +649,6 @@
       <div class="band-inner">
         <div class="panel">
           <div class="panel-header">
-            <h3>Risk Heat Surface</h3>
-            <p>Early-warning view across OA, insurance, competency, maintenance, and override pressure, using the joined mission governance and readiness signals directly.</p>
-          </div>
-          <div id="risk-map-panel" class="panel-body"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="band">
-      <div class="band-inner">
-        <div class="panel">
-          <div class="panel-header">
             <h3>Mission Lifecycle Actions</h3>
             <p>Execute mission transitions from the operator workspace using backend transition checks and evidence-aware safeguards.</p>
           </div>
@@ -794,6 +665,20 @@
             <p>Create readiness snapshots, approval handoff evidence, and dispatch evidence links from the operator workspace using the existing backend evidence flows.</p>
           </div>
           <div id="evidence-panel" class="panel-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="band-inner">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Regulatory Requirement Matrix</h3>
+            <p>Read-only CAA/CAP source mappings to platform controls, evidence types, assurance owners, and review status.</p>
+          </div>
+          <div id="regulatory-matrix-panel" class="panel-body">
+            <div class="empty-state">Loading regulatory requirement matrix...</div>
+          </div>
         </div>
       </div>
     </section>

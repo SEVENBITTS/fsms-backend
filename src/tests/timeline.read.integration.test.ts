@@ -2,6 +2,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import app from "../app";
+import { BRANDING } from "../config/branding";
 import { runMigrations } from "../migrations/runMigrations";
 
 const pool = new Pool({
@@ -48,7 +49,7 @@ describe("timeline endpoint (read)", () => {
     const response = await request(app).get("/");
 
     expect(response.status).toBe(200);
-    expect(response.text).toBe("FSMS backend is running");
+    expect(response.text).toBe(BRANDING.backendStatusText);
   });
 
   it("GET /timeline returns all items in ascending sequence order", async () => {

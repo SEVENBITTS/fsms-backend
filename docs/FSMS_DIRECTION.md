@@ -1,8 +1,10 @@
-# FSMS Product Direction
+# VerityAtlas Product Direction
 
 ## Purpose
 
-The end product is a UAV Flight Safety Management System that supports safety assurance from planning through live operations and post-operation review.
+The end product is VerityAtlas, a UAV operations platform that supports safety assurance from planning through live operations and post-operation review.
+
+VerityAtlas should be sharper and more specialised than a generic all-in-one drone business tool. The company ethos is to build an audit-ready operational assurance and BVLOS-readiness platform for serious UAV operators.
 
 The system should help answer:
 
@@ -14,9 +16,32 @@ The system should help answer:
 
 Future work should stay focused on safety, compliance, operational assurance, and audit evidence.
 
+## Company Ethos
+
+VerityAir Systems Ltd should be positioned around operational assurance rather than broad drone administration.
+
+VerityAtlas should therefore prioritise:
+
+- evidence-led operational planning
+- risk, compliance, and assurance traceability
+- CAA-first regulatory clarity, including CAP 722 alignment where applicable
+- auditable records that show what changed, who reviewed it, and why
+- live-operations awareness that supports safe operator decisions without pretending to replace pilot accountability
+- BVLOS-readiness foundations that can be proven incrementally before higher-risk operating models are added
+
+VerityAtlas should avoid becoming:
+
+- a generic CRM, invoicing, or job-booking product
+- a loose document store without assurance logic
+- a consumer-style flight app
+- an automated legal sign-off engine
+- a system that gives definite pilot commands without approved authority, integration, and safety case coverage
+
+The practical product test is: if a feature does not improve operational planning, safety assurance, compliance evidence, live operational awareness, or auditability, it should be treated as secondary until the core assurance platform is stronger.
+
 ## Active Product Core
 
-The TypeScript backend is the active FSMS product core.
+The TypeScript backend is the active VerityAtlas product core.
 
 It owns the long-term direction for:
 
@@ -74,7 +99,7 @@ Regulatory logic should be structured as profiles or rule packs rather than scat
 
 ## Audit Principle
 
-The FSMS should be built as an evidence machine.
+VerityAtlas should be built as an evidence machine.
 
 Important safety and compliance decisions should produce auditable records, including:
 

@@ -23,6 +23,22 @@ export function createAuditEvidenceRouter(
     controller.listMissionDecisionEvidenceLinks,
   );
   router.post(
+    "/:missionId/live-operations/map-view-state/audit-snapshots",
+    controller.createLiveOpsMapViewStateSnapshot,
+  );
+  router.get(
+    "/:missionId/live-operations/map-view-state/audit-snapshots",
+    controller.listLiveOpsMapViewStateSnapshots,
+  );
+  router.post(
+    "/:missionId/conflict-guidance-acknowledgements",
+    controller.createConflictGuidanceAcknowledgement,
+  );
+  router.get(
+    "/:missionId/conflict-guidance-acknowledgements",
+    controller.listConflictGuidanceAcknowledgements,
+  );
+  router.post(
     "/:missionId/post-operation/evidence-snapshots",
     controller.createPostOperationEvidenceSnapshot,
   );
@@ -37,6 +53,10 @@ export function createAuditEvidenceRouter(
   router.get(
     "/:missionId/post-operation/evidence-snapshots/:snapshotId/export/render",
     controller.renderPostOperationEvidenceSnapshot,
+  );
+  router.get(
+    "/:missionId/post-operation/evidence-snapshots/:snapshotId/readiness",
+    controller.getPostOperationEvidenceReadiness,
   );
   router.get(
     "/:missionId/post-operation/evidence-snapshots/:snapshotId/export/render/pdf",

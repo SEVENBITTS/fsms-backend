@@ -8,6 +8,10 @@ export function createSmsFrameworkRouter(
 
   router.get("/framework", controller.getFramework);
   router.get("/control-mappings", controller.listControlMappings);
+  router.get(
+    "/regulatory-requirement-mappings",
+    controller.listRegulatoryRequirementMappings,
+  );
 
   return router;
 }

@@ -47,7 +47,6 @@ export function validateCreateMissionPlanningDraftInput(
 ) {
   if (input === undefined || input === null) {
     return {
-      organisationId: null,
       missionPlanId: null,
       platformId: null,
       pilotId: null,
@@ -61,7 +60,6 @@ export function validateCreateMissionPlanningDraftInput(
   }
 
   return {
-    organisationId: optionalTrimmed(input.organisationId, "organisationId"),
     missionPlanId: optionalTrimmed(input.missionPlanId, "missionPlanId"),
     platformId: optionalTrimmed(input.platformId, "platformId"),
     pilotId: optionalTrimmed(input.pilotId, "pilotId"),
@@ -82,10 +80,6 @@ export function validateUpdateMissionPlanningDraftInput(
   }
 
   return {
-    organisationId: {
-      provided: Object.prototype.hasOwnProperty.call(input, "organisationId"),
-      value: optionalTrimmed(input.organisationId, "organisationId"),
-    },
     missionPlanId: {
       provided: Object.prototype.hasOwnProperty.call(input, "missionPlanId"),
       value: optionalTrimmed(input.missionPlanId, "missionPlanId"),

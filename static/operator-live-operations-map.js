@@ -27,6 +27,13 @@ const missionBrowserList = document.getElementById("live-ops-mission-browser-lis
 const missionBrowserDetail = document.getElementById("live-ops-mission-browser-detail");
 const missionRoutePattern = /^\/operator\/missions\/([^/]+)\/live-operations$/;
 
+const missionWorkspaceUrl = (missionId = uiState.missionId) => {
+  const normalizedMissionId = normalizeMissionId(missionId);
+  return hasSelectedMissionId(normalizedMissionId)
+    ? `/operator/missions/${encodeURIComponent(normalizedMissionId)}`
+    : "/operator/mission-workspace";
+};
+
 const uiState = {
   missionId: "",
   planningWorkspace: null,
@@ -36,7 +43,10 @@ const uiState = {
   latestTelemetry: null,
   alerts: [],
   externalOverlays: [],
+  areaRefreshChronology: null,
   conflictAssessment: null,
+  conflictGuidanceAcknowledgements: [],
+  mapViewStateEvidenceSnapshots: [],
   missionList: [],
   missionQuery: "",
   replayPlayback: {
@@ -44,6 +54,13 @@ const uiState = {
     playing: false,
     timerId: null,
     speed: 1,
+  },
+  areaFreshnessFilter: "all",
+  mapViewStateEvidenceCapture: {
+    status: "idle",
+    message: "No map view-state evidence snapshot has been recorded in this browser session.",
+    snapshotId: null,
+    createdAt: null,
   },
 };
 
@@ -101,6 +118,42 @@ const renderBadge = (value) =>
 const missionDisplayName = (mission) =>
   mission?.missionPlanId || mission?.id || "Unknown mission";
 
+const alertDisplayLabel = (alert) =>
+  String(alert?.alertType ?? "Alert").replaceAll("_", " ");
+
+const regulatoryAmendmentAlerts = () =>
+  (uiState.alerts ?? []).filter(
+    (alert) =>
+      alert.alertType === "REGULATORY_AMENDMENT" &&
+      alert.status !== "resolved",
+  );
+
+const formatRegulatoryAmendmentDetail = (alert) => {
+  const metadata = alert?.metadata ?? {};
+  const affectedRefs = Array.isArray(metadata.affectedRequirementRefs)
+    ? metadata.affectedRequirementRefs.join(", ")
+    : null;
+
+  return [
+    metadata.sourceDocument,
+    metadata.previousVersion && metadata.currentVersion
+      ? `${metadata.previousVersion} -> ${metadata.currentVersion}`
+      : null,
+    metadata.amendmentSummary,
+    metadata.changeImpact ? `Impact: ${metadata.changeImpact}` : null,
+    affectedRefs ? `Affected refs: ${affectedRefs}` : null,
+    metadata.reviewAction ? `Review: ${metadata.reviewAction}` : null,
+    metadata.effectiveFrom ? `Effective: ${formatDateTime(metadata.effectiveFrom)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+};
+
+const alertDisplayDetail = (alert) =>
+  alert?.alertType === "REGULATORY_AMENDMENT"
+    ? formatRegulatoryAmendmentDetail(alert) || alert.message
+    : alert?.message;
+
 const weatherOverlays = () =>
   (uiState.externalOverlays ?? []).filter((overlay) => overlay.kind === "weather");
 
@@ -124,6 +177,9 @@ const areaOverlaySourceRefreshState = (overlay) =>
 
 const areaOverlayNotamGeometryContext = (overlay) =>
   overlay?.metadata?.notamGeometryContext ?? null;
+
+const areaOverlayQLineIndexSummary = (overlay) =>
+  overlay?.metadata?.qLineIndexSummary ?? null;
 
 const formatCoordinate = (value) =>
   value == null || Number.isNaN(value) ? "Not recorded" : Number(value).toFixed(5);
@@ -166,10 +222,20 @@ const areaOverlayNotamGeometrySummaryContext = (overlay) => {
 };
 
 const areaOverlayQLineIndexReviewContext = (overlay) => {
+  const summary = areaOverlayQLineIndexSummary(overlay);
+  if (summary?.available) {
+    return [
+      "Q-line index metadata",
+      `center ${summary.centerLabel ?? "Not recorded"}`,
+      `radius ${summary.radiusLabel ?? "Not recorded"}`,
+      summary.operatorNote,
+    ].join(" | ");
+  }
+
   const geometryContext = areaOverlayNotamGeometryContext(overlay);
   const qLineIndex = geometryContext?.qLineIndex;
   if (!qLineIndex) {
-    return null;
+    return summary?.operatorNote ?? null;
   }
 
   return [
@@ -251,6 +317,306 @@ const areaOverlaySourceRefreshCardContext = (overlay) => {
   const notamGeometryContext = areaOverlayNotamGeometrySummaryContext(overlay);
   const qLineIndexContext = areaOverlayQLineIndexReviewContext(overlay);
   return [label, notamGeometryContext, qLineIndexContext].filter(Boolean).join(" | ");
+};
+
+const areaOverlayRefreshProvenanceDetail = (overlay) => {
+  const metadata = overlay?.metadata ?? {};
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  const provenance = metadata.refreshProvenance ?? {};
+  const sourceLabel = [
+    overlay?.source?.provider,
+    overlay?.source?.sourceType,
+    overlay?.source?.sourceRecordId,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  const carryForwardState =
+    refreshState?.carriedForwardFromFailedRefresh === true
+      ? "carried forward after failed refresh"
+      : refreshState?.carriedForwardFromPartialRefresh === true
+        ? "carried forward after partial refresh"
+        : "not carried forward";
+
+  return [
+    sourceLabel || "source not recorded",
+    refreshState?.status ? `status ${refreshState.status}` : "refresh status missing",
+    carryForwardState,
+    provenance.createdByRunId ? `created run ${provenance.createdByRunId}` : null,
+    provenance.lastUpdatedByRunId ? `updated run ${provenance.lastUpdatedByRunId}` : null,
+    metadata.sourceReference ? `reference ${metadata.sourceReference}` : null,
+    areaOverlayNotamGeometrySummaryContext(overlay),
+  ]
+    .filter(Boolean)
+    .join(" | ");
+};
+
+const areaSourceProvenanceRows = () =>
+  areaConflictOverlays()
+    .map((overlay) => {
+      const metadata = overlay?.metadata ?? {};
+      const refreshState = areaOverlaySourceRefreshState(overlay);
+      const status = refreshState?.status ?? "missing";
+      const carriedForward =
+        refreshState?.carriedForwardFromFailedRefresh === true ||
+        refreshState?.carriedForwardFromPartialRefresh === true;
+
+      return {
+        label: `${metadata.label ?? metadata.areaId ?? "Area overlay"} | ${status}`,
+        tone: carriedForward ? "warning" : status,
+        value: areaOverlayRefreshProvenanceDetail(overlay),
+      };
+    })
+    .sort((left, right) => severityRank(right.tone) - severityRank(left.tone));
+
+const areaOverlayFreshnessTone = (overlay) => {
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  if (
+    refreshState?.carriedForwardFromFailedRefresh === true ||
+    refreshState?.status === "failed"
+  ) {
+    return "failed";
+  }
+
+  if (
+    refreshState?.carriedForwardFromPartialRefresh === true ||
+    refreshState?.status === "partial"
+  ) {
+    return "partial";
+  }
+
+  return refreshState?.status ?? "missing";
+};
+
+const areaOverlayFreshnessLabel = (overlay) => {
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  const metadata = overlay?.metadata ?? {};
+  const baseLabel = metadata.label ?? metadata.areaId ?? "Area overlay";
+  const status = refreshState?.status ?? "missing";
+
+  if (refreshState?.carriedForwardFromFailedRefresh === true) {
+    return `${baseLabel} | failed carry-forward`;
+  }
+
+  if (refreshState?.carriedForwardFromPartialRefresh === true) {
+    return `${baseLabel} | partial carry-forward`;
+  }
+
+  return `${baseLabel} | ${status}`;
+};
+
+const areaOverlayFreshnessStroke = (overlay) => {
+  const tone = areaOverlayFreshnessTone(overlay);
+
+  if (tone === "failed") {
+    return "#ef4444";
+  }
+
+  if (tone === "partial" || tone === "stale") {
+    return "#f59e0b";
+  }
+
+  if (tone === "fresh") {
+    return "#22c55e";
+  }
+
+  return "#94a3b8";
+};
+
+const areaOverlayCoordinatePoints = (overlay) => {
+  const geometry = overlay?.geometry ?? {};
+
+  if (geometry.type === "polygon" && Array.isArray(geometry.points)) {
+    return geometry.points
+      .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
+      .map((point) => ({ lat: Number(point.lat), lng: Number(point.lng) }));
+  }
+
+  if (
+    geometry.type === "circle" &&
+    Number.isFinite(geometry.centerLat) &&
+    Number.isFinite(geometry.centerLng)
+  ) {
+    return [{ lat: Number(geometry.centerLat), lng: Number(geometry.centerLng) }];
+  }
+
+  return [];
+};
+
+const areaOverlayIsDegraded = (overlay) => {
+  const tone = areaOverlayFreshnessTone(overlay);
+  return tone !== "fresh";
+};
+
+const filteredAreaFreshnessOverlays = () => {
+  if (uiState.areaFreshnessFilter === "hidden") {
+    return [];
+  }
+
+  const overlays = areaConflictOverlays();
+  if (uiState.areaFreshnessFilter === "degraded") {
+    return overlays.filter(areaOverlayIsDegraded);
+  }
+
+  return overlays;
+};
+
+const areaFreshnessFilterLabel = () =>
+  uiState.areaFreshnessFilter === "hidden"
+    ? "Area freshness hidden"
+    : uiState.areaFreshnessFilter === "degraded"
+      ? "Area freshness degraded-only"
+      : "Area freshness all";
+
+const areaFreshnessFilterOptions = [
+  { value: "all", label: "All area freshness" },
+  { value: "degraded", label: "Degraded only" },
+  { value: "hidden", label: "Hide freshness" },
+];
+
+const normalizeAreaFreshnessFilter = (value) =>
+  ["all", "degraded", "hidden"].includes(value) ? value : "all";
+
+const areaFreshnessFilterSummary = () => {
+  const visibleCount = filteredAreaFreshnessOverlays().length;
+  const totalCount = areaConflictOverlays().length;
+  const degradedCount = areaConflictOverlays().filter(areaOverlayIsDegraded).length;
+
+  return {
+    label: areaFreshnessFilterLabel(),
+    detail: `${visibleCount} visible of ${totalCount} area overlay${totalCount === 1 ? "" : "s"} | ${degradedCount} degraded or carried-forward`,
+    visibleCount,
+    totalCount,
+    degradedCount,
+  };
+};
+
+const areaRefreshChronology = () =>
+  uiState.areaRefreshChronology?.chronology ?? null;
+
+const areaRefreshRunRows = () =>
+  (areaRefreshChronology()?.refreshRuns ?? []).map((refreshRun, index) => {
+    const createdCount = refreshRun.created?.length ?? 0;
+    const updatedCount = refreshRun.updated?.length ?? 0;
+    const partialCount = refreshRun.partial?.length ?? 0;
+    const failedCount = refreshRun.failed?.length ?? 0;
+    const activeCount = refreshRun.active?.length ?? 0;
+    const retiredCount = refreshRun.retired?.length ?? 0;
+    const tone =
+      failedCount > 0
+        ? "failed"
+        : partialCount > 0
+          ? "partial"
+          : createdCount + updatedCount + activeCount > 0
+            ? "fresh"
+            : "info";
+
+    return {
+      index,
+      refreshRunId: refreshRun.refreshRunId,
+      label: `Run ${index + 1} | ${tone}`,
+      tone,
+      detail: [
+        `${createdCount} created`,
+        `${updatedCount} updated`,
+        `${partialCount} partial`,
+        `${failedCount} failed`,
+        `${activeCount} active`,
+        retiredCount > 0 ? `${retiredCount} retired` : null,
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    };
+  });
+
+const areaRefreshTransitionRows = () =>
+  (areaRefreshChronology()?.transitions ?? []).map((transition, index) => {
+    const addedCount = transition.added?.length ?? 0;
+    const removedCount = transition.removed?.length ?? 0;
+    const persistedCount = transition.persisted?.length ?? 0;
+    const updatedCount = transition.changed?.updated?.length ?? 0;
+    const supersededCount = transition.changed?.superseded?.length ?? 0;
+    const retiredCount = transition.changed?.retired?.length ?? 0;
+    const tone = removedCount + retiredCount > 0 ? "warning" : "info";
+
+    return {
+      index,
+      fromRefreshRunId: transition.fromRefreshRunId,
+      toRefreshRunId: transition.toRefreshRunId,
+      label: `Transition ${index + 1}`,
+      tone,
+      detail: [
+        `${addedCount} added`,
+        `${updatedCount} updated`,
+        `${persistedCount} persisted`,
+        removedCount > 0 ? `${removedCount} removed` : null,
+        supersededCount > 0 ? `${supersededCount} superseded` : null,
+        retiredCount > 0 ? `${retiredCount} retired` : null,
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    };
+  });
+
+const areaRefreshRunUrl = (refreshRunId) =>
+  `/missions/${encodeURIComponent(uiState.missionId)}/external-overlays/refresh-runs?refreshRunId=${encodeURIComponent(refreshRunId)}`;
+
+const areaRefreshTransitionUrl = (transition) =>
+  `/missions/${encodeURIComponent(uiState.missionId)}/external-overlays/refresh-runs?transitionArtifact=true&transitionFromRefreshRunId=${encodeURIComponent(transition.fromRefreshRunId)}&transitionToRefreshRunId=${encodeURIComponent(transition.toRefreshRunId)}`;
+
+const renderAreaRefreshChronologyReview = () => {
+  const runs = areaRefreshRunRows();
+  const transitions = areaRefreshTransitionRows();
+
+  if (runs.length === 0) {
+    return '<div class="empty-state">No area refresh chronology is available for this mission.</div>';
+  }
+
+  return `
+    <div class="stack">
+      <div class="kv">
+        <div class="k">Refresh runs</div>
+        <div>${escapeHtml(String(runs.length))}</div>
+        <div class="k">Transitions</div>
+        <div>${escapeHtml(String(transitions.length))}</div>
+        <div class="k">Review mode</div>
+        <div>${escapeHtml("Read-only audit review; no pilot command or feed action is available here.")}</div>
+      </div>
+      <ul class="list">
+        ${runs
+          .map(
+            (run) => `
+              <li class="list-item">
+                <strong>${escapeHtml(run.label)}</strong>
+                <div>${renderBadge(run.tone)}</div>
+                <div>${escapeHtml(run.detail)}</div>
+                <a href="${escapeHtml(areaRefreshRunUrl(run.refreshRunId))}" target="_blank" rel="noopener">Open refresh run JSON</a>
+              </li>
+            `,
+          )
+          .join("")}
+      </ul>
+      ${
+        transitions.length === 0
+          ? '<div class="empty-state">No refresh transitions are available yet.</div>'
+          : `
+            <ul class="list">
+              ${transitions
+                .map(
+                  (transition) => `
+                    <li class="list-item">
+                      <strong>${escapeHtml(transition.label)}</strong>
+                      <div>${renderBadge(transition.tone)}</div>
+                      <div>${escapeHtml(transition.detail)}</div>
+                      <a href="${escapeHtml(areaRefreshTransitionUrl(transition))}" target="_blank" rel="noopener">Open transition artifact JSON</a>
+                    </li>
+                  `,
+                )
+                .join("")}
+            </ul>
+          `
+      }
+    </div>
+  `;
 };
 
 const areaSourceRefreshSummary = () => {
@@ -463,7 +829,12 @@ const fetchJson = async (url, options = {}) => {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(payload?.error?.message || `Request failed with ${response.status}`);
+    const error = new Error(
+      payload?.error?.message || `Request failed with ${response.status}`,
+    );
+    error.type = payload?.error?.type;
+    error.status = response.status;
+    throw error;
   }
 
   return payload;
@@ -502,8 +873,17 @@ const resetLiveOperationsState = () => {
   uiState.latestTelemetry = null;
   uiState.alerts = [];
   uiState.externalOverlays = [];
+  uiState.areaRefreshChronology = null;
   uiState.conflictAssessment = null;
+  uiState.conflictGuidanceAcknowledgements = [];
+  uiState.mapViewStateEvidenceSnapshots = [];
   uiState.replayPlayback.index = 0;
+  uiState.mapViewStateEvidenceCapture = {
+    status: "idle",
+    message: "No map view-state evidence snapshot has been recorded in this browser session.",
+    snapshotId: null,
+    createdAt: null,
+  };
 };
 
 const renderMissionBrowser = () => {
@@ -936,17 +1316,57 @@ const primaryConflictAssessmentItem = () => activeConflictAssessmentItems()[0] ?
 const secondaryConflictAssessmentItems = () =>
   activeConflictAssessmentItems().slice(1, 4);
 
+const fallbackResolutionGuidance = (conflict) => ({
+  mode: "decision_support",
+  urgency:
+    conflict?.severity === "critical"
+      ? "immediate_review"
+      : conflict?.severity === "caution"
+        ? "review"
+        : "monitor",
+  recommendedAction:
+    conflict?.severity === "critical"
+      ? "Review immediately"
+      : conflict?.severity === "caution"
+        ? "Review conflict context"
+        : "Monitor conflict context",
+  actionCode:
+    conflict?.severity === "critical"
+      ? "prepare_deconfliction"
+      : conflict?.severity === "caution"
+        ? "review_separation"
+        : "monitor_context",
+  prohibitedActions: ["Do not treat this guidance as an aircraft command"],
+  authorityRequired: conflict?.severity === "critical" ? "supervisor" : "operator",
+  acknowledgementRequired: conflict?.severity === "critical" || conflict?.severity === "caution",
+  evidenceAction:
+    conflict?.severity === "critical"
+      ? "record_supervisor_review"
+      : conflict?.severity === "caution"
+        ? "record_operator_review"
+        : "none",
+  pilotInstructionStatus: "not_a_pilot_command",
+  rationale: conflict?.explanation ?? "No conflict rationale is currently available.",
+});
+
+const matchingConflictGuidanceAcknowledgement = (advisory) =>
+  (uiState.conflictGuidanceAcknowledgements ?? []).find(
+    (acknowledgement) =>
+      acknowledgement.overlayId === advisory.overlayId &&
+      acknowledgement.guidanceActionCode === advisory.actionCode &&
+      acknowledgement.evidenceAction === advisory.evidenceAction,
+  ) ?? null;
+
 const deriveConflictAdvisories = () =>
   activeConflictAssessmentItems().slice(0, 5).map((conflict) => {
+    const guidance =
+      conflict.resolutionGuidance ?? fallbackResolutionGuidance(conflict);
     let headline = "Monitor traffic proximity";
-    let recommendation = "Monitor";
 
-    if (conflict.severity === "critical") {
+    if (guidance.urgency === "immediate_review") {
       headline = "Immediate deconfliction review";
-      recommendation = "Review immediately";
-    } else if (conflict.severity === "caution") {
+    } else if (guidance.urgency === "review") {
       headline = "Deconfliction review recommended";
-      recommendation = "Deconflict";
     }
 
     const replayRelevance = conflict.replayRelevant
@@ -959,9 +1379,17 @@ const deriveConflictAdvisories = () =>
 
     return {
       id: conflict.id,
+      overlayId: conflict.overlayId,
       tone: conflict.severity,
       headline,
-      recommendation,
+      actionCode: guidance.actionCode,
+      recommendation: guidance.recommendedAction,
+      prohibitedActions: guidance.prohibitedActions ?? [],
+      authorityRequired: guidance.authorityRequired,
+      acknowledgementRequired: Boolean(guidance.acknowledgementRequired),
+      evidenceAction: guidance.evidenceAction ?? "none",
+      pilotInstructionStatus: guidance.pilotInstructionStatus,
+      guidanceRationale: guidance.rationale,
       relatedObject: conflict.overlayLabel,
       relatedSource: `${conflict.relatedSource.provider} / ${conflict.relatedSource.sourceType}`,
       reasoning: conflict.explanation,
@@ -976,6 +1404,18 @@ const deriveConflictAdvisories = () =>
       ]
         .filter(Boolean)
         .join(" | "),
+    };
+  }).map((advisory) => {
+    const acknowledgement = matchingConflictGuidanceAcknowledgement(advisory);
+
+    return {
+      ...advisory,
+      acknowledgement,
+      acknowledgementStatus: acknowledgement
+        ? `Recorded by ${acknowledgement.acknowledgedBy} (${acknowledgement.acknowledgementRole}) at ${formatDateTime(acknowledgement.createdAt)}`
+        : advisory.acknowledgementRequired
+          ? "Required"
+          : "Not required",
     };
   });
 
@@ -993,7 +1433,7 @@ const conflictAdvisorySummary = () => {
   return {
     label: `${advisories.length} advisory item${advisories.length === 1 ? "" : "s"}`,
     tone: primary.tone,
-    detail: `${primary.recommendation} | ${primary.relatedObject} | ${primary.summary}`,
+    detail: `${primary.recommendation} | ${primary.acknowledgementStatus} | ${primary.relatedObject} | ${primary.summary}`,
   };
 };
 
@@ -1339,6 +1779,13 @@ const updateUrl = (missionId) => {
   } else {
     next.searchParams.delete("missionId");
   }
+
+  if (uiState.areaFreshnessFilter === "all") {
+    next.searchParams.delete("areaFreshnessFilter");
+  } else {
+    next.searchParams.set("areaFreshnessFilter", uiState.areaFreshnessFilter);
+  }
+
   window.history.replaceState({}, "", next);
 };
 
@@ -1350,6 +1797,211 @@ const getMissionIdFromLocation = () => {
 
   const queryMissionId = new URL(window.location.href).searchParams.get("missionId");
   return queryMissionId?.trim() || "";
+};
+
+const getAreaFreshnessFilterFromLocation = () =>
+  normalizeAreaFreshnessFilter(
+    new URL(window.location.href).searchParams.get("areaFreshnessFilter")?.trim(),
+  );
+
+const mapViewStateMetadata = () => {
+  const replayPoints = replayTrack();
+  const activePoint = activeReplayPoint();
+  const areaFilter = areaFreshnessFilterSummary();
+  const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
+  const conflicts = activeConflictAssessmentItems();
+  const refreshRuns = areaRefreshChronology()?.refreshRuns ?? [];
+
+  return {
+    missionId: uiState.missionId || "Not selected",
+    replayCursor:
+      replayPoints.length === 0
+        ? "0 / 0"
+        : `${uiState.replayPlayback.index + 1} / ${replayPoints.length}`,
+    replayTimestamp: formatDateTime(activePoint?.timestamp),
+    areaFreshnessFilter: areaFilter.label,
+    visibleAreaOverlays: areaFilter.visibleCount,
+    totalAreaOverlays: areaFilter.totalCount,
+    degradedAreaOverlays: areaFilter.degradedCount,
+    openAlertCount: openAlerts.length,
+    activeConflictCount: conflicts.length,
+    areaRefreshRunCount: refreshRuns.length,
+    exportStatus: "View-state metadata only; no evidence export has been generated.",
+  };
+};
+
+const mapViewStateEvidencePayload = () => {
+  const replayPoints = replayTrack();
+  const activePoint = activeReplayPoint();
+  const areaFilter = areaFreshnessFilterSummary();
+  const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
+  const conflicts = activeConflictAssessmentItems();
+  const refreshRuns = areaRefreshChronology()?.refreshRuns ?? [];
+
+  return {
+    replayCursor:
+      replayPoints.length === 0
+        ? "0 / 0"
+        : `${uiState.replayPlayback.index + 1} / ${replayPoints.length}`,
+    replayTimestamp: activePoint?.timestamp ?? null,
+    areaFreshnessFilter: uiState.areaFreshnessFilter,
+    visibleAreaOverlayCount: areaFilter.visibleCount,
+    totalAreaOverlayCount: areaFilter.totalCount,
+    degradedAreaOverlayCount: areaFilter.degradedCount,
+    openAlertCount: openAlerts.length,
+    activeConflictCount: conflicts.length,
+    areaRefreshRunCount: refreshRuns.length,
+    viewStateUrl: `${window.location.pathname}${window.location.search}`,
+    createdBy: "live-ops-ui",
+  };
+};
+
+const loadMapViewStateEvidenceSnapshots = async (missionId) => {
+  const response = await fetchJson(
+    `/missions/${encodeURIComponent(missionId)}/live-operations/map-view-state/audit-snapshots`,
+  );
+  uiState.mapViewStateEvidenceSnapshots = response.snapshots ?? [];
+  return uiState.mapViewStateEvidenceSnapshots;
+};
+
+const recordMapViewStateEvidenceSnapshot = async () => {
+  const missionId = normalizeMissionId(uiState.missionId);
+  if (!hasSelectedMissionId(missionId)) {
+    uiState.mapViewStateEvidenceCapture = {
+      status: "failed",
+      message: "Load a valid mission before recording map view-state evidence.",
+      snapshotId: null,
+      createdAt: null,
+    };
+    renderStatus();
+    return;
+  }
+
+  uiState.mapViewStateEvidenceCapture = {
+    status: "pending",
+    message: "Recording metadata-only map view-state evidence...",
+    snapshotId: null,
+    createdAt: null,
+  };
+  renderStatus();
+
+  try {
+    const response = await fetchJson(
+      `/missions/${encodeURIComponent(missionId)}/live-operations/map-view-state/audit-snapshots`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mapViewStateEvidencePayload()),
+      },
+    );
+
+    uiState.mapViewStateEvidenceCapture = {
+      status: "recorded",
+      message: "Metadata-only map view-state evidence snapshot recorded.",
+      snapshotId: response.snapshot?.id ?? null,
+      createdAt: response.snapshot?.createdAt ?? null,
+    };
+    if (response.snapshot) {
+      uiState.mapViewStateEvidenceSnapshots = [
+        response.snapshot,
+        ...(uiState.mapViewStateEvidenceSnapshots ?? []).filter(
+          (snapshot) => snapshot.id !== response.snapshot.id,
+        ),
+      ];
+    }
+    try {
+      await loadMapViewStateEvidenceSnapshots(missionId);
+    } catch {
+      uiState.mapViewStateEvidenceCapture.message =
+        "Metadata-only map view-state evidence snapshot recorded. Recent history refresh failed.";
+    }
+  } catch (error) {
+    uiState.mapViewStateEvidenceCapture = {
+      status: "failed",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to record map view-state evidence snapshot.",
+      snapshotId: null,
+      createdAt: null,
+    };
+  }
+
+  renderStatus();
+};
+
+const renderMapViewStateEvidenceHistory = () => {
+  const snapshots = (uiState.mapViewStateEvidenceSnapshots ?? []).slice(0, 3);
+
+  if (snapshots.length === 0) {
+    return `
+      <div class="empty-state">
+        No backend-recorded map view-state evidence snapshots yet.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="list compact-list">
+      ${snapshots
+        .map(
+          (snapshot, index) => `
+            <article class="list-card">
+              <div class="list-card-title">
+                Snapshot ${escapeHtml(snapshot.id ?? "unknown")}
+                ${index === 0 ? renderBadge("Latest metadata snapshot") : renderBadge("Older metadata snapshot")}
+              </div>
+              <div class="kv">
+                <div class="k">Captured</div>
+                <div>${escapeHtml(formatDateTime(snapshot.createdAt))}</div>
+                <div class="k">History status</div>
+                <div>${renderBadge(index === 0 ? "Latest" : "Older")}</div>
+                <div class="k">Replay cursor</div>
+                <div>${escapeHtml(snapshot.replayCursor ?? "Not recorded")}</div>
+                <div class="k">Area freshness filter</div>
+                <div>${renderBadge(snapshot.areaFreshnessFilter ?? "Not recorded")}</div>
+                <div class="k">Area overlays</div>
+                <div>${escapeHtml(`${snapshot.visibleAreaOverlayCount ?? 0} / ${snapshot.totalAreaOverlayCount ?? 0} visible, ${snapshot.degradedAreaOverlayCount ?? 0} degraded`)}</div>
+                <div class="k">Alerts / conflicts</div>
+                <div>${escapeHtml(`${snapshot.openAlertCount ?? 0} open alerts, ${snapshot.activeConflictCount ?? 0} active conflicts`)}</div>
+                <div class="k">Capture scope</div>
+                <div>${renderBadge(snapshot.captureScope ?? "metadata_only")}</div>
+                <div class="k">Pilot instruction status</div>
+                <div>${renderBadge(snapshot.pilotInstructionStatus ?? "not_a_pilot_command")}</div>
+              </div>
+              <div class="alert-window-meta">
+                Review cue: latest/older status supports post-operation review only; this remains metadata-only evidence, not screenshot evidence, and not pilot command guidance.
+              </div>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+};
+
+const renderMapViewStatePostOperationReadiness = () => {
+  const snapshots = uiState.mapViewStateEvidenceSnapshots ?? [];
+  const latestSnapshot = snapshots[0] ?? null;
+  const readinessLabel =
+    snapshots.length > 0 ? "Present for post-operation review" : "Missing review prompt";
+
+  return `
+    <div class="alert-window-meta">
+      Post-operation readiness context: ${renderBadge(readinessLabel)}
+      ${escapeHtml(`${snapshots.length} map view-state metadata snapshot${snapshots.length === 1 ? "" : "s"} recorded`)}.
+      ${
+        latestSnapshot?.id
+          ? ` Latest snapshot ${escapeHtml(latestSnapshot.id)} captured at ${escapeHtml(formatDateTime(latestSnapshot.createdAt))}.`
+          : " Capture a metadata snapshot here before accountable-manager review if map evidence is needed."
+      }
+    </div>
+    <div class="actions-row">
+      <a class="secondary-button" href="${escapeHtml(missionWorkspaceUrl())}">
+        Return to mission workspace evidence summary
+      </a>
+    </div>
+  `;
 };
 
 const renderList = (items, title) => {
@@ -1464,9 +2116,9 @@ const summarizeTelemetryAlerts = (alerts) => {
   const openAlerts = (alerts ?? []).filter((alert) => alert.status !== "resolved");
   if (openAlerts.length === 0) {
     return {
-      label: "Telemetry alerts clear",
+      label: "Mission alerts clear",
       tone: "pass",
-      detail: "No open telemetry alerts are currently reported.",
+      detail: "No open mission alerts are currently reported.",
     };
   }
 
@@ -1478,7 +2130,29 @@ const summarizeTelemetryAlerts = (alerts) => {
   return {
     label: `${openAlerts.length} active alert${openAlerts.length === 1 ? "" : "s"}`,
     tone: highest?.severity ?? "warning",
-    detail: highest?.message ?? "Telemetry alerts are present.",
+    detail: alertDisplayDetail(highest) ?? "Mission alerts are present.",
+  };
+};
+
+const summarizeRegulatoryAmendments = () => {
+  const amendments = regulatoryAmendmentAlerts();
+  if (amendments.length === 0) {
+    return {
+      label: "Regulatory amendments clear",
+      tone: "pass",
+      detail: "No open regulatory amendment review alerts are recorded.",
+    };
+  }
+
+  const latest = [...amendments].sort(
+    (left, right) =>
+      Date.parse(right.triggeredAt ?? "") - Date.parse(left.triggeredAt ?? ""),
+  )[0];
+
+  return {
+    label: `${amendments.length} regulatory review alert${amendments.length === 1 ? "" : "s"}`,
+    tone: latest?.severity ?? "warning",
+    detail: alertDisplayDetail(latest),
   };
 };
 
@@ -1535,6 +2209,7 @@ const buildOverlayCards = () => {
     crewedTrafficSummary(),
     droneTrafficSummary(),
     summarizeTelemetryAlerts(uiState.alerts),
+    summarizeRegulatoryAmendments(),
     primaryConflict
       ? {
           label: "Primary conflict",
@@ -1783,6 +2458,7 @@ const buildMapMarkup = () => {
       Number.isFinite(latestTelemetry.lng)
       ? [latestTelemetry]
       : [],
+    ...filteredAreaFreshnessOverlays().flatMap(areaOverlayCoordinatePoints),
   );
 
   if (points.length === 0) {
@@ -1854,6 +2530,7 @@ const buildMapMarkup = () => {
     weatherOverlays().length > 0 ? `Weather overlays ${weatherOverlays().length}` : "Weather overlays 0",
     crewedTrafficOverlays().length > 0 ? `Crewed traffic ${crewedTrafficOverlays().length}` : "Crewed traffic 0",
     droneTrafficOverlays().length > 0 ? `Drone traffic ${droneTrafficOverlays().length}` : "Drone traffic 0",
+    `${areaFreshnessFilterLabel()} (${filteredAreaFreshnessOverlays().length}/${areaConflictOverlays().length})`,
   ];
 
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
@@ -1862,6 +2539,7 @@ const buildMapMarkup = () => {
     "Red marker latest telemetry",
     `Open alerts ${openAlerts.length}`,
     `Conflict windows ${activeConflictAssessmentItems().length}`,
+    "Area freshness: green fresh, amber partial, red failed",
   ];
 
   const highestAlertSeverity = openAlerts.reduce((highest, alert) => {
@@ -2032,6 +2710,85 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
+  const areaFreshnessOverlays = filteredAreaFreshnessOverlays()
+    .map((overlay) => {
+      const geometry = overlay?.geometry ?? {};
+      const stroke = areaOverlayFreshnessStroke(overlay);
+      const tone = areaOverlayFreshnessTone(overlay);
+      const label = areaOverlayFreshnessLabel(overlay);
+      const points = areaOverlayCoordinatePoints(overlay);
+
+      if (geometry.type === "polygon" && points.length >= 3) {
+        const projectedPoints = points.map((point) => toPoint(point.lat, point.lng));
+        const centroid = projectedPoints.reduce(
+          (accumulator, point) => ({
+            x: accumulator.x + point.x / projectedPoints.length,
+            y: accumulator.y + point.y / projectedPoints.length,
+          }),
+          { x: 0, y: 0 },
+        );
+
+        return `
+          <g class="area-freshness-overlay area-freshness-overlay-${escapeHtml(tone)}">
+            <polygon
+              points="${projectedPoints.map((point) => `${point.x},${point.y}`).join(" ")}"
+              fill="${stroke}"
+              fill-opacity="${tone === "fresh" ? "0.06" : "0.12"}"
+              stroke="${stroke}"
+              stroke-width="${tone === "fresh" ? "2" : "3"}"
+              stroke-dasharray="${tone === "fresh" ? "10 8" : "4 6"}"
+              opacity="0.86"
+            />
+            <text x="${centroid.x}" y="${centroid.y}" fill="${stroke}" text-anchor="middle" font-size="12" font-weight="800">${escapeHtml(label)}</text>
+          </g>
+        `;
+      }
+
+      if (geometry.type === "circle" && points.length === 1) {
+        const center = toPoint(points[0].lat, points[0].lng);
+        const pixelRadius = Math.max(
+          18,
+          Math.min(
+            120,
+            ((Number(geometry.radiusMeters) || 450) / 111320) *
+              ((height - padding * 2) / latSpan),
+          ),
+        );
+
+        return `
+          <g class="area-freshness-overlay area-freshness-overlay-${escapeHtml(tone)}">
+            <circle
+              cx="${center.x}"
+              cy="${center.y}"
+              r="${pixelRadius}"
+              fill="${stroke}"
+              fill-opacity="${tone === "fresh" ? "0.05" : "0.1"}"
+              stroke="${stroke}"
+              stroke-width="${tone === "fresh" ? "2" : "3"}"
+              stroke-dasharray="${tone === "fresh" ? "10 8" : "4 6"}"
+              opacity="0.86"
+            />
+            <text x="${center.x}" y="${center.y - pixelRadius - 8}" fill="${stroke}" text-anchor="middle" font-size="12" font-weight="800">${escapeHtml(label)}</text>
+          </g>
+        `;
+      }
+
+      return "";
+    })
+    .join("");
+  const areaFreshnessFilterControls = areaFreshnessFilterOptions
+    .map(
+      (option) => `
+        <button
+          type="button"
+          class="control-button ${uiState.areaFreshnessFilter === option.value ? "tone-ok" : "tone-muted"}"
+          data-area-freshness-filter="${escapeHtml(option.value)}"
+        >
+          ${escapeHtml(option.label)}
+        </button>
+      `,
+    )
+    .join("");
   const conflictSeverityBands = conflictEnvelopeTargets
     .map((target) =>
       target.radii
@@ -2102,6 +2859,7 @@ const buildMapMarkup = () => {
     </div>
     <svg class="map-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Mission live operations map">
       ${airspaceRegion}
+      ${areaFreshnessOverlays}
       ${riskCorridor}
       ${replayPath ? `<polyline points="${replayPath}" fill="none" stroke="#224665" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.72" />` : ""}
       ${completedReplayPath ? `<polyline points="${completedReplayPath}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />` : ""}
@@ -2137,6 +2895,10 @@ const buildMapMarkup = () => {
     <div class="map-overlay">
       ${overlays.map((item) => `<div class="overlay-pill">${escapeHtml(item)}</div>`).join("")}
     </div>
+    <div class="map-overlay map-area-freshness-controls">
+      <div class="overlay-pill">Read-only area freshness filter</div>
+      ${areaFreshnessFilterControls}
+    </div>
     <div class="map-compass">N</div>
   `;
 };
@@ -2163,7 +2925,13 @@ const renderStatus = () => {
   const conflictState = conflictAssessmentSummary();
   const advisoryState = conflictAdvisorySummary();
   const replayConflictRelation = currentConflictReplayRelation();
+  const areaProvenanceRows = areaSourceProvenanceRows();
+  const areaFilterSummary = areaFreshnessFilterSummary();
+  const viewStateMetadata = mapViewStateMetadata();
   const primaryConflict = primaryConflictAssessmentItem();
+  const primaryConflictOverlay = primaryConflict
+    ? conflictOverlayForItem(primaryConflict)
+    : null;
   const primaryAdvisory = primaryConflictAdvisory();
   const secondaryAdvisories = secondaryConflictAdvisories();
   const approvalPosture = isPostLaunchMission()
@@ -2182,8 +2950,8 @@ const renderStatus = () => {
       ? "Allowed"
       : "Blocked";
   const alertSignals = (uiState.alerts ?? []).map((alert) => ({
-    label: `${alert.alertType} - ${alert.severity}`,
-    value: `${alert.status}: ${alert.message}`,
+    label: `${alertDisplayLabel(alert)} - ${alert.severity}`,
+    value: `${alert.status}: ${alertDisplayDetail(alert)}`,
   }));
   const conflictSignals = primaryConflict
     ? [
@@ -2243,6 +3011,58 @@ const renderStatus = () => {
           )}</div>
           <div class="k">Latest live telemetry</div>
           <div>${escapeHtml(formatDateTime(latestTelemetry?.timestamp))}</div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Map View-State Metadata</h4>
+        <div class="kv">
+          <div class="k">Mission ID</div>
+          <div>${escapeHtml(viewStateMetadata.missionId)}</div>
+          <div class="k">Replay cursor</div>
+          <div>${escapeHtml(viewStateMetadata.replayCursor)}</div>
+          <div class="k">Replay timestamp</div>
+          <div>${escapeHtml(viewStateMetadata.replayTimestamp)}</div>
+          <div class="k">Area freshness filter</div>
+          <div>${renderBadge(viewStateMetadata.areaFreshnessFilter)}</div>
+          <div class="k">Visible area overlays</div>
+          <div>${escapeHtml(`${viewStateMetadata.visibleAreaOverlays} / ${viewStateMetadata.totalAreaOverlays}`)}</div>
+          <div class="k">Open alerts</div>
+          <div>${escapeHtml(String(viewStateMetadata.openAlertCount))}</div>
+          <div class="k">Active conflicts</div>
+          <div>${escapeHtml(String(viewStateMetadata.activeConflictCount))}</div>
+          <div class="k">Area refresh runs</div>
+          <div>${escapeHtml(String(viewStateMetadata.areaRefreshRunCount))}</div>
+          <div class="k">Export status</div>
+          <div>${escapeHtml(viewStateMetadata.exportStatus)}</div>
+        </div>
+        <div class="actions-row">
+          <button
+            type="button"
+            class="secondary-button"
+            data-record-map-view-state-evidence
+            ${uiState.mapViewStateEvidenceCapture.status === "pending" ? "disabled" : ""}
+          >
+            Record map view-state evidence
+          </button>
+        </div>
+        ${renderMapViewStatePostOperationReadiness()}
+        <div class="alert-window-meta">
+          Capture status: ${escapeHtml(uiState.mapViewStateEvidenceCapture.message)}
+          ${
+            uiState.mapViewStateEvidenceCapture.snapshotId
+              ? ` Snapshot ID ${escapeHtml(uiState.mapViewStateEvidenceCapture.snapshotId)} recorded at ${escapeHtml(formatDateTime(uiState.mapViewStateEvidenceCapture.createdAt))}.`
+              : ""
+          }
+        </div>
+        <div class="alert-window-meta">
+          This records structured metadata only. It does not create screenshots, create local files, or transmit pilot instructions.
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Recent Map View-State Evidence</h4>
+        ${renderMapViewStateEvidenceHistory()}
+        <div class="alert-window-meta">
+          Snapshot history is backend audit metadata only. It is not screenshot evidence, not an exported file, and not pilot command guidance.
         </div>
       </section>
       <section class="summary-block">
@@ -2340,10 +3160,20 @@ const renderStatus = () => {
           <div>${renderBadge(areaSourceState.label)}</div>
           <div class="k">Area refresh detail</div>
           <div>${escapeHtml(areaSourceState.detail)}</div>
+          <div class="k">Area map filter</div>
+          <div>${renderBadge(areaFilterSummary.label)}</div>
+          <div class="k">Filtered area overlays</div>
+          <div>${escapeHtml(areaFilterSummary.detail)}</div>
           <div class="k">NOTAM geometry</div>
           <div>${escapeHtml(
             primaryConflictOverlay ? areaOverlayNotamGeometryDetail(primaryConflictOverlay) ?? "Not recorded" : "Not recorded",
           )}</div>
+          <div class="k">Q-line index summary</div>
+          <div>${escapeHtml(
+            primaryConflictOverlay ? areaOverlayQLineIndexReviewContext(primaryConflictOverlay) ?? "Not recorded" : "Not recorded",
+          )}</div>
+          <div class="k">Area provenance boundary</div>
+          <div>${escapeHtml("Synthetic/local demo provenance only; this is not live CAA or NOTAM connectivity.")}</div>
           <div class="k">Conflict assessment</div>
           <div>${renderBadge(conflictState.label)}</div>
           <div class="k">Primary conflict</div>
@@ -2400,6 +3230,27 @@ const renderStatus = () => {
           )}</div>
         </div>
       </section>
+      <section class="summary-block">
+        <h4>Area Source Provenance</h4>
+        ${
+          areaProvenanceRows.length === 0
+            ? '<div class="empty-state">No normalized area-source provenance is available for this mission.</div>'
+            : renderList(areaProvenanceRows, "area source provenance")
+        }
+        <div class="alert-window-meta">
+          Map filter: ${escapeHtml(areaFilterSummary.label)} | ${escapeHtml(areaFilterSummary.detail)}
+        </div>
+        <div class="alert-window-meta">
+          Synthetic/local demo provenance only. Review against authoritative CAA, NOTAM, and airspace feeds before operational use.
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Area Refresh Chronology</h4>
+        ${renderAreaRefreshChronologyReview()}
+        <div class="alert-window-meta">
+          Chronology review is read-only and audit-facing. It does not trigger pilot instructions, update airspace feeds, or connect to live CAA/NOTAM services.
+        </div>
+      </section>
     </div>
     <div style="margin-top: 14px;">
       ${renderList(riskSignals, "live operation signals")}
@@ -2451,8 +3302,8 @@ const renderAlertCorrelation = () => {
     .map(
       (alert) => `
         <article class="alert-window ${toneClass(alert.severity)}">
-          <strong>${escapeHtml(alert.alertType.replaceAll("_", " "))} ${escapeHtml(alert.status)}</strong>
-          <div>${escapeHtml(alert.message)}</div>
+          <strong>${escapeHtml(alertDisplayLabel(alert))} ${escapeHtml(alert.status)}</strong>
+          <div>${escapeHtml(alertDisplayDetail(alert))}</div>
           <div class="alert-window-meta">
             Triggered: ${escapeHtml(formatDateTime(alert.triggeredAt))}<br />
             Resolved: ${escapeHtml(formatDateTime(alert.resolvedAt))}<br />
@@ -2477,7 +3328,7 @@ const renderAlertCorrelation = () => {
           <div class="k">Window state</div>
           <div>${escapeHtml(
             currentAlerts[0]
-              ? `${currentAlerts[0].alertType} ${currentAlerts[0].status}`
+              ? `${alertDisplayLabel(currentAlerts[0])} ${currentAlerts[0].status}`
               : "No alert window intersects the current replay point",
           )}</div>
         </div>
@@ -2560,6 +3411,8 @@ const renderConflictAssessment = () => {
                       ? `Area source refresh: ${escapeHtml(areaOverlaySourceRefreshDetail(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)))}
                   <br />
                   NOTAM geometry: ${escapeHtml(areaOverlayNotamGeometryDetail(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)) ?? "Not recorded")}
+                  <br />
+                  Q-line index summary: ${escapeHtml(areaOverlayQLineIndexReviewContext(areaConflictOverlays().find((overlay) => overlay.id === primaryConflict.overlayId)) ?? "Not recorded")}
                   <br />`
                       : ""
                   }
@@ -2590,6 +3443,40 @@ const renderConflictAssessment = () => {
     </div>
   `;
 };
+
+const formatSecondaryAdvisoryValue = (advisory) =>
+  [
+    advisory.recommendation,
+    `Authority: ${advisory.authorityRequired}`,
+    `Evidence: ${advisory.evidenceAction}`,
+    `Acknowledgement: ${advisory.acknowledgementStatus}`,
+    `Pilot instruction: ${advisory.pilotInstructionStatus}`,
+    `Related source: ${advisory.relatedSource}`,
+    `Relevance: ${advisory.relevance}`,
+    `Rationale: ${advisory.guidanceRationale}`,
+    `Do not: ${prohibitedActionText(advisory)}`,
+    advisory.acknowledgement
+      ? `Audit record: ${advisory.acknowledgement.id}`
+      : null,
+    advisory.acknowledgement
+      ? `Guidance summary: ${advisory.acknowledgement.guidanceSummary}`
+      : null,
+    advisory.summary,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+const prohibitedActionText = (advisory) =>
+  advisory.prohibitedActions.join(" | ") || "No additional constraints recorded";
+
+const auditGuidanceSummary = (advisory) =>
+  [
+    `Recommended attention: ${advisory.recommendation}`,
+    `Rationale: ${advisory.guidanceRationale}`,
+    `Do not: ${prohibitedActionText(advisory)}`,
+    `Pilot instruction status: ${advisory.pilotInstructionStatus}`,
+  ].join(" | ");
+
 const renderConflictAdvisory = () => {
   const advisories = deriveConflictAdvisories();
   const replayConflictRelation = currentConflictReplayRelation();
@@ -2623,11 +3510,55 @@ const renderConflictAdvisory = () => {
                 <div>${escapeHtml(primary.reasoning)}</div>
                 <div class="alert-window-meta">
                   Recommended attention: ${escapeHtml(primary.recommendation)}<br />
+                  Action code: ${escapeHtml(primary.actionCode)}<br />
+                  Authority required: ${escapeHtml(primary.authorityRequired)}<br />
+                  Acknowledgement required: ${escapeHtml(primary.acknowledgementRequired ? "yes" : "no")}<br />
+                  Acknowledgement status: ${escapeHtml(primary.acknowledgementStatus)}<br />
+                  Evidence action: ${escapeHtml(primary.evidenceAction)}<br />
+                  Pilot instruction status: ${escapeHtml(primary.pilotInstructionStatus)}<br />
                   Related object: ${escapeHtml(primary.relatedObject)}<br />
                   Related source: ${escapeHtml(primary.relatedSource)}<br />
                   Relevance: ${escapeHtml(primary.relevance)}<br />
                   Separation: ${escapeHtml(primary.summary)}
                 </div>
+                <div class="alert-window-meta">
+                  Guidance rationale: ${escapeHtml(primary.guidanceRationale)}
+                </div>
+                <div class="alert-window-meta">
+                  Do not: ${escapeHtml(prohibitedActionText(primary))}
+                </div>
+                ${
+                  primary.acknowledgement
+                    ? `
+                      <div class="alert-window-meta">
+                        Audit record: ${escapeHtml(primary.acknowledgement.id)}<br />
+                        Role: ${escapeHtml(primary.acknowledgement.acknowledgementRole)}<br />
+                        Recorded at: ${escapeHtml(formatDateTime(primary.acknowledgement.createdAt))}<br />
+                        Guidance summary: ${escapeHtml(primary.acknowledgement.guidanceSummary)}<br />
+                        Pilot instruction status: ${escapeHtml(primary.acknowledgement.pilotInstructionStatus)}<br />
+                        Note: ${escapeHtml(primary.acknowledgement.acknowledgementNote ?? "No note recorded")}
+                      </div>
+                    `
+                    : primary.acknowledgementRequired && primary.evidenceAction !== "none"
+                      ? `
+                        <button
+                          type="button"
+                          class="action-button"
+                          data-acknowledge-conflict="${escapeHtml(primary.id)}"
+                          data-overlay-id="${escapeHtml(primary.overlayId)}"
+                          data-action-code="${escapeHtml(primary.actionCode)}"
+                          data-evidence-action="${escapeHtml(primary.evidenceAction)}"
+                          data-acknowledgement-role="${escapeHtml(primary.authorityRequired)}"
+                          data-guidance-summary="${escapeHtml(auditGuidanceSummary(primary))}"
+                        >
+                          Record audit acknowledgement
+                        </button>
+                        <div class="alert-window-meta">
+                          This records operator/supervisor review evidence only. It does not transmit pilot instructions.
+                        </div>
+                      `
+                      : ""
+                }
               </article>
             `
             : '<div class="empty-state">No primary advisory is currently derived.</div>'
@@ -2640,8 +3571,8 @@ const renderConflictAdvisory = () => {
             ? '<div class="empty-state">No additional advisory items are currently derived.</div>'
             : renderList(
                 secondary.map((advisory) => ({
-                  label: `${advisory.recommendation} | ${advisory.relatedObject}`,
-                  value: advisory.summary,
+                  label: `${advisory.actionCode} | ${advisory.relatedObject}`,
+                  value: formatSecondaryAdvisoryValue(advisory),
                 })),
                 "additional advisories",
               )
@@ -2650,6 +3581,89 @@ const renderConflictAdvisory = () => {
     </div>
   `;
 };
+
+const loadConflictGuidanceAcknowledgements = async (missionId) => {
+  const response = await fetchJson(
+    `/missions/${missionId}/conflict-guidance-acknowledgements`,
+  );
+  uiState.conflictGuidanceAcknowledgements = response.acknowledgements ?? [];
+};
+
+const recordConflictGuidanceAcknowledgement = async (button) => {
+  const missionId = normalizeMissionId(uiState.missionId);
+  if (!hasSelectedMissionId(missionId)) {
+    setConnectionState("Load a mission before recording acknowledgement", "tone-warn");
+    return;
+  }
+
+  button.disabled = true;
+  const acknowledgementRole = button.dataset.acknowledgementRole ?? "operator";
+  const guidanceSummary = button.dataset.guidanceSummary?.trim() ?? "";
+  if (!guidanceSummary) {
+    button.disabled = false;
+    setConnectionState(
+      "Cannot record acknowledgement without guidance summary evidence",
+      "tone-bad",
+    );
+    return;
+  }
+
+  const acknowledgedBy =
+    window.prompt(
+      `Record ${acknowledgementRole} acknowledgement by`,
+      acknowledgementRole,
+    )?.trim() ?? "";
+
+  if (!acknowledgedBy) {
+    button.disabled = false;
+    setConnectionState("Acknowledgement cancelled", "tone-warn");
+    return;
+  }
+
+  const acknowledgementNote =
+    window.prompt(
+      "Optional audit note",
+      "Reviewed in live operations; decision-support advisory only.",
+    )?.trim() ?? "";
+
+  try {
+    await fetchJson(`/missions/${missionId}/conflict-guidance-acknowledgements`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        conflictId: button.dataset.acknowledgeConflict,
+        overlayId: button.dataset.overlayId,
+        guidanceActionCode: button.dataset.actionCode,
+        evidenceAction: button.dataset.evidenceAction,
+        acknowledgementRole,
+        acknowledgedBy,
+        acknowledgementNote,
+        guidanceSummary,
+      }),
+    });
+
+    await loadConflictGuidanceAcknowledgements(missionId);
+    renderLiveOperations();
+    setConnectionState("Conflict guidance acknowledgement recorded", "tone-ok");
+  } catch (error) {
+    button.disabled = false;
+    if (error?.type === "conflict_guidance_acknowledgement_already_exists") {
+      await loadConflictGuidanceAcknowledgements(missionId);
+      renderLiveOperations();
+    }
+
+    const message =
+      error?.type === "conflict_guidance_acknowledgement_already_exists"
+        ? "Conflict guidance acknowledgement already recorded for this advisory"
+        : error instanceof Error
+          ? error.message
+          : "Failed to record acknowledgement";
+    setConnectionState(message, "tone-bad");
+  }
+};
+
 const renderTimeline = () => {
   const relevant = correlatedConflictTimelineItems();
 
@@ -2794,7 +3808,10 @@ const loadLiveOperationsView = async (missionId) => {
       latestTelemetryResponse,
       alertsResponse,
       externalOverlayResponse,
+      areaRefreshChronologyResponse,
       conflictAssessmentResponse,
+      conflictGuidanceAcknowledgementsResponse,
+      mapViewStateEvidenceSnapshotsResponse,
     ] = await Promise.all([
       fetchJson(`/missions/${normalizedMissionId}/planning-workspace`),
       fetchJson(`/missions/${normalizedMissionId}/dispatch-workspace`),
@@ -2803,7 +3820,14 @@ const loadLiveOperationsView = async (missionId) => {
       fetchJson(`/missions/${normalizedMissionId}/telemetry/latest`),
       fetchJson(`/missions/${normalizedMissionId}/alerts`),
       fetchJson(`/missions/${normalizedMissionId}/external-overlays`),
+      fetchJson(
+        `/missions/${normalizedMissionId}/external-overlays/refresh-runs?chronology=true`,
+      ),
       fetchJson(`/missions/${normalizedMissionId}/conflict-assessment`),
+      fetchJson(`/missions/${normalizedMissionId}/conflict-guidance-acknowledgements`),
+      fetchJson(
+        `/missions/${normalizedMissionId}/live-operations/map-view-state/audit-snapshots`,
+      ),
     ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
@@ -2813,7 +3837,12 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.latestTelemetry = latestTelemetryResponse;
     uiState.alerts = alertsResponse.alerts ?? [];
     uiState.externalOverlays = externalOverlayResponse.overlays ?? [];
+    uiState.areaRefreshChronology = areaRefreshChronologyResponse;
     uiState.conflictAssessment = conflictAssessmentResponse;
+    uiState.conflictGuidanceAcknowledgements =
+      conflictGuidanceAcknowledgementsResponse.acknowledgements ?? [];
+    uiState.mapViewStateEvidenceSnapshots =
+      mapViewStateEvidenceSnapshotsResponse.snapshots ?? [];
     uiState.replayPlayback.index = 0;
     renderMissionBrowser();
     renderLiveOperations();
@@ -2828,7 +3857,10 @@ const loadLiveOperationsView = async (missionId) => {
     uiState.latestTelemetry = null;
     uiState.alerts = [];
     uiState.externalOverlays = [];
+    uiState.areaRefreshChronology = null;
     uiState.conflictAssessment = null;
+    uiState.conflictGuidanceAcknowledgements = [];
+    uiState.mapViewStateEvidenceSnapshots = [];
     uiState.replayPlayback.index = 0;
     renderMissionBrowser();
     clearPanels(message);
@@ -2916,12 +3948,59 @@ jumpControlsPanel.addEventListener("click", (event) => {
   renderLiveOperations();
 });
 
+statusPanel.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("[data-record-map-view-state-evidence]");
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  recordMapViewStateEvidenceSnapshot();
+});
+
+mapPanel.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("[data-area-freshness-filter]");
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+
+  const nextFilter = button.dataset.areaFreshnessFilter;
+  if (!["all", "degraded", "hidden"].includes(nextFilter)) {
+    return;
+  }
+
+  uiState.areaFreshnessFilter = nextFilter;
+  updateUrl(normalizeMissionId(uiState.missionId));
+  renderMap();
+  renderStatus();
+});
+
+conflictAdvisoryPanel.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("[data-acknowledge-conflict]");
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  recordConflictGuidanceAcknowledgement(button);
+});
+
 openWorkspaceButton.addEventListener("click", () => {
   const missionId = normalizeMissionId(missionIdInput.value);
-  const target = hasSelectedMissionId(missionId)
-    ? `/operator/missions/${encodeURIComponent(missionId)}`
-    : "/operator/mission-workspace";
-  window.location.assign(target);
+  window.location.assign(missionWorkspaceUrl(missionId));
 });
 
 openReplayApiButton.addEventListener("click", () => {
@@ -2939,6 +4018,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 const initialMissionId = normalizeMissionId(getMissionIdFromLocation());
+uiState.areaFreshnessFilter = getAreaFreshnessFilterFromLocation();
 if (initialMissionId) {
   missionIdInput.value = initialMissionId;
 }

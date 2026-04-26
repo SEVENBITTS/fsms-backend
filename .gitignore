@@ -3,6 +3,11 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .env
+.env.bak/
 node_modules/
 dist/
 data/uploads/
+~$*
+verityatlas-*.png
+validation_report_*.csv
+validation_report_*.json

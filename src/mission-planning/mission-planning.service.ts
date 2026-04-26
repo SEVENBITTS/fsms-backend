@@ -131,7 +131,6 @@ export class MissionPlanningService {
 
       const missionId =
         await this.missionPlanningRepository.insertDraftMission(client, {
-          organisationId: validated.organisationId,
           missionPlanId: validated.missionPlanId,
           platformId: validated.platformId,
           pilotId: validated.pilotId,
@@ -219,15 +218,10 @@ export class MissionPlanningService {
       }
 
       const placeholderUpdates: {
-        organisationId?: string | null;
         missionPlanId?: string | null;
         platformId?: string | null;
         pilotId?: string | null;
       } = {};
-
-      if (validated.organisationId.provided) {
-        placeholderUpdates.organisationId = validated.organisationId.value;
-      }
 
       if (validated.missionPlanId.provided) {
         placeholderUpdates.missionPlanId = validated.missionPlanId.value;

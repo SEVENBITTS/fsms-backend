@@ -12,10 +12,10 @@ const missionBrowserList = document.getElementById("mission-browser-list");
 const missionBrowserDetail = document.getElementById("mission-browser-detail");
 const actionsPanel = document.getElementById("actions-panel");
 const evidencePanel = document.getElementById("evidence-panel");
+const regulatoryMatrixPanel = document.getElementById("regulatory-matrix-panel");
 const planningPanel = document.getElementById("planning-panel");
 const dispatchPanel = document.getElementById("dispatch-panel");
 const timelinePanel = document.getElementById("timeline-panel");
-const riskMapPanel = document.getElementById("risk-map-panel");
 
 const ACTION_ORDER = ["submit", "approve", "launch", "complete", "abort"];
 const ACTION_DEFINITIONS = {
@@ -98,28 +98,58 @@ const EVIDENCE_HELPERS = {
       { key: "snapshotId", label: "Snapshot ID", type: "text", required: true },
     ],
   },
-};
-
-const STAGE_JUMP_TARGETS = {
-  governance: {
-    selector: "#planning-blockers",
-    label: "Planning blockers",
+  postOperationSnapshot: {
+    title: "Post-operation Snapshot",
+    description:
+      "Freeze the completed mission evidence pack for later audit review. This does not sign off, certify, or approve compliance.",
+    endpoint: (missionId) => `/missions/${missionId}/post-operation/evidence-snapshots`,
+    method: "POST",
+    requiresCompletedMission: true,
+    fields: [{ key: "createdBy", label: "Created by", type: "text", required: true }],
   },
-  insurance: {
-    selector: "#evidence-current-state",
-    label: "Current evidence state",
-  },
-  competency: {
-    selector: "#planning-mission-core",
-    label: "Planning mission core",
-  },
-  maintenance: {
-    selector: "#dispatch-blockers",
-    label: "Launch blockers",
-  },
-  override: {
-    selector: "#evidence-safeguards",
-    label: "Evidence safeguards",
+  postOperationSignoff: {
+    title: "Accountable-manager Sign-off",
+    description:
+      "Record internal accountable-manager review of the captured evidence pack. This is separate from legal compliance certification.",
+    endpoint: (missionId) =>
+      `/missions/${missionId}/post-operation/evidence-snapshots/${
+        latestPostOperationSnapshot()?.id ?? ""
+      }/signoffs`,
+    method: "POST",
+    requiresPostOperationSnapshot: true,
+    fields: [
+      {
+        key: "accountableManagerName",
+        label: "Accountable manager name",
+        type: "text",
+        required: true,
+      },
+      {
+        key: "accountableManagerRole",
+        label: "Accountable manager role",
+        type: "text",
+        required: true,
+      },
+      {
+        key: "reviewDecision",
+        label: "Review decision",
+        type: "select",
+        required: true,
+        options: [
+          { value: "approved", label: "Approved" },
+          { value: "requires_follow_up", label: "Requires follow-up" },
+          { value: "rejected", label: "Rejected" },
+        ],
+      },
+      { key: "signedAt", label: "Signed at", type: "datetime-local", required: true },
+      {
+        key: "signatureReference",
+        label: "Signature reference",
+        type: "text",
+        required: false,
+      },
+      { key: "createdBy", label: "Recorded by", type: "text", required: false },
+    ],
   },
 };
 
@@ -128,7 +158,12 @@ const uiState = {
   planningWorkspace: null,
   dispatchWorkspace: null,
   timeline: null,
-  riskMap: null,
+  regulatoryMatrix: [],
+  regulatoryReviewImpact: null,
+  postOperationSnapshots: [],
+  postOperationEvidenceReport: null,
+  postOperationEvidenceReadiness: null,
+  postOperationEvidenceReportError: "",
   missionList: [],
   missionQuery: "",
   transitionChecks: {},
@@ -136,6 +171,7 @@ const uiState = {
   busyAction: null,
   helperStatus: {},
   busyHelper: null,
+  busyAlertAction: null,
 };
 
 const toneClass = (value) => {
@@ -205,6 +241,93 @@ const formatDateTime = (value) => {
   });
 };
 
+const formatOptionalNumber = (value, suffix) =>
+  value == null || Number.isNaN(Number(value))
+    ? "Not recorded"
+    : `${Number(value).toLocaleString("en-GB")} ${suffix}`;
+
+const renderAircraftCapabilityContext = (platform) => {
+  const spec = platform?.summary?.aircraftTypeSpec ?? null;
+
+  if (!spec) {
+    return `
+      <section class="summary-block">
+        <h4>Aircraft Capability and Maintenance</h4>
+        <div class="empty-state">
+          No linked aircraft capability specification is recorded for this platform yet.
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="summary-block">
+      <h4>Aircraft Capability and Maintenance</h4>
+      <div class="kv">
+        <div class="k">Aircraft spec</div>
+        <div>${escapeHtml(spec.displayName ?? "Not recorded")}</div>
+        <div class="k">Manufacturer / model</div>
+        <div>${escapeHtml(
+          [spec.manufacturer, spec.model].filter(Boolean).join(" / ") ||
+            "Not recorded",
+        )}</div>
+        <div class="k">Wind limit</div>
+        <div>${escapeHtml(formatOptionalNumber(spec.maxWindMps, "m/s"))}</div>
+        <div class="k">Gust limit</div>
+        <div>${escapeHtml(formatOptionalNumber(spec.maxGustMps, "m/s"))}</div>
+        <div class="k">Temperature range</div>
+        <div>${escapeHtml(
+          spec.minOperatingTempC == null && spec.maxOperatingTempC == null
+            ? "Not recorded"
+            : `${spec.minOperatingTempC ?? "?"} C to ${
+                spec.maxOperatingTempC ?? "?"
+              } C`,
+        )}</div>
+        <div class="k">Capability source</div>
+        <div>${escapeHtml(
+          [
+            spec.sourceReference,
+            spec.sourceVersion ? `version ${spec.sourceVersion}` : null,
+            spec.sourceType ? `type ${spec.sourceType}` : null,
+          ]
+            .filter(Boolean)
+            .join(" | ") || "Not recorded",
+        )}</div>
+        <div class="k">Maintenance source</div>
+        <div>${escapeHtml(
+          [
+            spec.manufacturerMaintenanceScheduleRef,
+            spec.manufacturerMaintenanceScheduleVersion
+              ? `version ${spec.manufacturerMaintenanceScheduleVersion}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" | ") || "Not recorded",
+        )}</div>
+        <div class="k">Inspection interval</div>
+        <div>${escapeHtml(
+          [
+            spec.recommendedInspectionIntervalDays
+              ? `${spec.recommendedInspectionIntervalDays} days`
+              : null,
+            spec.recommendedInspectionIntervalFlightHours
+              ? `${spec.recommendedInspectionIntervalFlightHours} flight hours`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" / ") || "Not recorded",
+        )}</div>
+        <div class="k">Maintenance advice</div>
+        <div>${escapeHtml(spec.manufacturerMaintenanceAdvice ?? "Not recorded")}</div>
+      </div>
+      <div class="action-meta" style="margin-top: 12px;">
+        Informational only. This display does not automate weather suitability,
+        dispatch blocking, or manufacturer maintenance compliance decisions.
+      </div>
+    </section>
+  `;
+};
+
 const renderList = (items, title) => {
   if (!items || items.length === 0) {
     return `<div class="empty-state">No ${escapeHtml(title).toLowerCase()} recorded.</div>`;
@@ -229,78 +352,130 @@ const renderList = (items, title) => {
 const renderBadge = (value) =>
   `<span class="badge ${toneClass(value)}">${escapeHtml(value ?? "Unknown")}</span>`;
 
-const getOperationalAuthorityPilotReasons = () => {
-  const oaReasons =
-    uiState.riskMap?.governance?.operationalAuthority?.reasons ?? [];
+const missionDisplayName = (mission) =>
+  mission?.missionPlanId || mission?.id || "Unknown mission";
 
-  return oaReasons.filter((reason) =>
-    String(reason.code ?? "").startsWith("OA_PILOT_"),
+const formatMatrixSource = (mapping) =>
+  [
+    mapping.sourceCode,
+    mapping.sourceVersionLabel,
+    mapping.requirementRef,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+const regulatoryImpactByRequirement = () => {
+  const impacted = uiState.regulatoryReviewImpact?.impactedMappings ?? [];
+
+  return new Map(
+    impacted.map((item) => [item.mapping.requirementCode, item]),
   );
 };
 
-const renderOperationalAuthorityPilotSummary = (variant = "planning") => {
-  const operationalAuthority =
-    uiState.riskMap?.governance?.operationalAuthority ?? null;
-  const pilotAuthorisation = operationalAuthority?.pilotAuthorisation ?? null;
-  const pilotReasons = getOperationalAuthorityPilotReasons();
+const alertActionKey = (action, alertId) => `${action}:${alertId}`;
 
-  if (!uiState.planningWorkspace?.mission?.pilotId && !uiState.dispatchWorkspace?.mission?.pilotId) {
-    return "";
+const latestPostOperationSnapshot = () => uiState.postOperationSnapshots?.[0] ?? null;
+
+const reportSection = (heading) =>
+  uiState.postOperationEvidenceReport?.report?.sections?.find(
+    (section) => section.heading === heading,
+  ) ?? null;
+
+const reportFieldValue = (heading, label) =>
+  reportSection(heading)?.fields?.find((field) => field.label === label)?.value ??
+  null;
+
+const readinessCategory = (key) =>
+  uiState.postOperationEvidenceReadiness?.categories?.find(
+    (category) => category.key === key,
+  ) ?? null;
+
+const renderReportReadinessSummary = () => {
+  const section = reportSection("Evidence readiness summary");
+
+  if (!section) {
+    return `
+      <div class="empty-state">
+        Rendered report readiness summary is not loaded yet.
+      </div>
+    `;
   }
 
-  const heading =
-    variant === "dispatch"
-      ? "OA Personnel Status Before Dispatch"
-      : "OA Personnel Status";
-
-  const advisoryLine =
-    pilotReasons.length > 0
-      ? pilotReasons.map((reason) => reason.message).join("; ")
-      : "No pilot-specific OA advisory is currently recorded for this mission.";
-
   return `
-    <section class="summary-block">
-      <h4>${heading}</h4>
-      <div class="kv">
-        <div class="k">OA result</div>
-        <div>${renderBadge(operationalAuthority?.result ?? "Unknown")}</div>
-        <div class="k">Personnel state</div>
-        <div>${renderBadge(pilotAuthorisation?.authorisationState ?? "Not evidenced")}</div>
-        <div class="k">Pending amendment ref</div>
-        <div>${escapeHtml(pilotAuthorisation?.pendingAmendmentReference ?? "Not recorded")}</div>
-        <div class="k">Accountable review</div>
-        <div>${renderBadge(
-          pilotAuthorisation?.requiresAccountableReview
-            ? "Required"
-            : "Not required",
-        )}</div>
-        <div class="k">OA personnel advisory</div>
-        <div>${escapeHtml(advisoryLine)}</div>
-      </div>
-    </section>
+    <div class="kv">
+      ${section.fields
+        .map(
+          (field) => `
+            <div class="k">${escapeHtml(field.label)}</div>
+            <div>${renderBadge(field.value)}</div>
+          `,
+        )
+        .join("")}
+    </div>
+    <div class="action-meta" style="margin-top: 12px;">
+      Rendered report readiness counts are review prompts only. They remain separate from accountable-manager sign-off and are not compliance certification.
+    </div>
   `;
 };
 
-const heatResultClass = (value) => {
-  const text = String(value ?? "").toLowerCase();
-
-  if (text === "pass" || text === "stable") {
-    return text === "stable" ? "heat-stable" : "heat-pass";
+const postOperationExportLinks = (snapshotId) => {
+  if (!uiState.missionId || !snapshotId) {
+    return { renderUrl: "", pdfUrl: "" };
   }
 
-  if (text === "warning" || text === "emerging") {
-    return text === "emerging" ? "heat-emerging" : "heat-warning";
-  }
+  const base = `/missions/${encodeURIComponent(
+    uiState.missionId,
+  )}/post-operation/evidence-snapshots/${encodeURIComponent(snapshotId)}/export/render`;
 
-  if (text === "fail" || text === "immediate") {
-    return text === "immediate" ? "heat-immediate" : "heat-fail";
-  }
-
-  return "";
+  return {
+    renderUrl: base,
+    pdfUrl: `${base}/pdf`,
+  };
 };
 
-const missionDisplayName = (mission) =>
-  mission?.missionPlanId || mission?.id || "Unknown mission";
+const liveOpsMapEvidenceUrl = () =>
+  uiState.missionId
+    ? `/operator/missions/${encodeURIComponent(uiState.missionId)}/live-operations`
+    : "/operator/live-operations-map";
+
+const renderAlertActionButtons = (impact) => {
+  const alertIds = impact?.alertIds ?? [];
+  if (!uiState.missionId || alertIds.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="action-footer" style="justify-content: flex-start; margin-top: 10px;">
+      ${alertIds
+        .map((alertId) => {
+          const acknowledgeKey = alertActionKey("acknowledge", alertId);
+          const resolveKey = alertActionKey("resolve", alertId);
+
+          return `
+            <button
+              class="action-button"
+              type="button"
+              data-alert-action="acknowledge"
+              data-alert-id="${escapeHtml(alertId)}"
+              ${uiState.busyAlertAction === acknowledgeKey ? "disabled" : ""}
+            >
+              ${uiState.busyAlertAction === acknowledgeKey ? "Acknowledging..." : "Acknowledge alert"}
+            </button>
+            <button
+              class="action-button"
+              type="button"
+              data-alert-action="resolve"
+              data-alert-id="${escapeHtml(alertId)}"
+              ${uiState.busyAlertAction === resolveKey ? "disabled" : ""}
+            >
+              ${uiState.busyAlertAction === resolveKey ? "Resolving..." : "Resolve alert"}
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+};
 
 const setConnectionState = (message, tone = "tone-muted") => {
   connectionStatus.className = `status-pill ${tone}`;
@@ -439,6 +614,17 @@ const applyEvidenceHelperDefaults = () => {
       createdBy: "dispatcher-1",
       snapshotId: latestSnapshotId,
     },
+    postOperationSnapshot: {
+      createdBy: "post-ops-reviewer-1",
+    },
+    postOperationSignoff: {
+      accountableManagerName: "Accountable Manager",
+      accountableManagerRole: "Accountable Manager",
+      reviewDecision: "approved",
+      signedAt: new Date().toISOString().slice(0, 16),
+      signatureReference: "",
+      createdBy: "audit-admin-1",
+    },
   };
 
   for (const helper of Object.keys(EVIDENCE_HELPERS)) {
@@ -450,7 +636,7 @@ const applyEvidenceHelperDefaults = () => {
         continue;
       }
 
-      if (!input.value || key === "snapshotId") {
+      if (!input.value || key === "snapshotId" || key === "signedAt") {
         input.value = value;
       }
     }
@@ -479,6 +665,10 @@ const collectEvidenceHelperPayload = (helper) => {
 
   if (helper === "dispatchEvidence") {
     payload.decisionType = "dispatch";
+  }
+
+  if (helper === "postOperationSignoff" && payload.signedAt) {
+    payload.signedAt = new Date(payload.signedAt).toISOString();
   }
 
   return payload;
@@ -599,14 +789,45 @@ const renderEvidenceHelpers = () => {
   const dispatchWorkspace = uiState.dispatchWorkspace;
   const latestSnapshot = planningWorkspace.evidence.latestReadinessSnapshot;
   const latestApprovalLink = planningWorkspace.evidence.latestApprovalEvidenceLink;
-    const latestDispatchLink = dispatchWorkspace.dispatch.latestDispatchEvidenceLink;
-    const latestHandoff = planningWorkspace.approval.latestApprovalHandoff;
+  const latestDispatchLink = dispatchWorkspace.dispatch.latestDispatchEvidenceLink;
+  const latestHandoff = planningWorkspace.approval.latestApprovalHandoff;
+  const missionStatus = planningWorkspace.mission?.status ?? "Unknown";
+  const postOperationSnapshot = latestPostOperationSnapshot();
+  const signoffDecision = reportFieldValue(
+    "Accountable manager sign-off",
+    "Review decision/status",
+  );
+  const signoffRecordId = reportFieldValue(
+    "Accountable manager sign-off",
+    "Sign-off record ID",
+  );
+  const regulatoryAlertCount =
+    uiState.postOperationEvidenceReport?.sourceExport?.regulatoryAmendmentAlerts
+      ?.length ?? 0;
+  const readiness = uiState.postOperationEvidenceReadiness;
+  const mapViewStateReadiness = readinessCategory("live_ops_map_view_state_snapshots");
+  const conflictReadiness = readinessCategory("conflict_guidance_acknowledgements");
+  const safetyActionReadiness = readinessCategory("safety_action_closure_evidence");
+  const regulatoryReadiness = readinessCategory("regulatory_amendment_reviews");
+  const reportSectionCount =
+    uiState.postOperationEvidenceReport?.report?.sections?.length ?? 0;
+  const completionStatus = reportFieldValue(
+    "Mission completion",
+    "Completion status",
+  );
+  const exportLinks = postOperationExportLinks(postOperationSnapshot?.id);
+  const mapEvidenceUrl = liveOpsMapEvidenceUrl();
+  const signoffState =
+    signoffDecision && signoffDecision !== "Pending sign-off"
+      ? `Recorded: ${signoffDecision}`
+      : "Pending sign-off";
+  const postOperationReady = missionStatus === "completed";
 
-    evidencePanel.innerHTML = `
-      <div class="summary-grid" style="margin-bottom: 14px;">
-        <section id="evidence-current-state" class="summary-block">
-          <h4>Current Evidence State</h4>
-          <div class="kv">
+  evidencePanel.innerHTML = `
+    <div class="summary-grid" style="margin-bottom: 14px;">
+      <section class="summary-block">
+        <h4>Current Evidence State</h4>
+        <div class="kv">
           <div class="k">Readiness snapshots</div>
           <div>${escapeHtml(String(planningWorkspace.evidence.readinessSnapshotCount))}</div>
           <div class="k">Latest snapshot</div>
@@ -619,9 +840,9 @@ const renderEvidenceHelpers = () => {
           <div>${escapeHtml(latestDispatchLink?.id ?? "Missing")}</div>
         </div>
       </section>
-        <section id="evidence-safeguards" class="summary-block">
-          <h4>Safeguards</h4>
-          <div class="kv">
+      <section class="summary-block">
+        <h4>Safeguards</h4>
+        <div class="kv">
           <div class="k">Approval handoff state</div>
           <div>${renderBadge(planningWorkspace.approval.handoffCreated ? "Recorded" : "Missing")}</div>
           <div class="k">Approval blockers</div>
@@ -631,6 +852,94 @@ const renderEvidenceHelpers = () => {
           <div class="k">Dispatch missing requirements</div>
           <div>${escapeHtml(dispatchWorkspace.dispatch.missingRequirements.join("; ") || "None")}</div>
         </div>
+      </section>
+      <section class="summary-block">
+        <h4>Post-operation Evidence Pack</h4>
+        <div class="kv">
+          <div class="k">Mission state</div>
+          <div>${renderBadge(missionStatus)}</div>
+          <div class="k">Latest post-op snapshot</div>
+          <div>${escapeHtml(postOperationSnapshot?.id ?? "Not captured")}</div>
+          <div class="k">Captured at</div>
+          <div>${escapeHtml(formatDateTime(postOperationSnapshot?.createdAt))}</div>
+          <div class="k">Accountable-manager sign-off</div>
+          <div>${renderBadge(signoffState)}</div>
+          <div class="k">Sign-off record</div>
+          <div>${escapeHtml(signoffRecordId ?? "Not recorded")}</div>
+          <div class="k">Regulatory review records</div>
+          <div>${escapeHtml(String(regulatoryAlertCount))}</div>
+        </div>
+        <div class="action-meta" style="margin-top: 12px;">
+          Read-only evidence export for audit review. This is not a legal compliance certificate and does not approve dispatch or flight.
+          ${
+            postOperationReady
+              ? ""
+              : "Complete the mission before relying on a post-operation evidence pack."
+          }
+          ${
+            uiState.postOperationEvidenceReportError
+              ? `<br />Report status: ${escapeHtml(uiState.postOperationEvidenceReportError)}`
+              : ""
+          }
+        </div>
+        <div class="action-footer" style="justify-content: flex-start; margin-top: 12px;">
+          ${
+            postOperationSnapshot
+              ? `
+                <a class="action-button link-button" href="${escapeHtml(exportLinks.renderUrl)}" target="_blank" rel="noopener">
+                  Open audit report
+                </a>
+                <a class="action-button link-button" href="${escapeHtml(exportLinks.pdfUrl)}" target="_blank" rel="noopener">
+                  Download PDF evidence pack
+                </a>
+              `
+              : `<div class="action-status tone-warn">No post-operation snapshot is available yet.</div>`
+          }
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Pre-sign-off Evidence Summary</h4>
+        <div class="kv">
+          <div class="k">Report sections</div>
+          <div>${renderBadge(reportSectionCount > 0 ? `${reportSectionCount} loaded` : "Not loaded")}</div>
+          <div class="k">Completion status</div>
+          <div>${renderBadge(readiness?.completionStatus ?? completionStatus ?? "Not recorded")}</div>
+          <div class="k">Map view-state evidence</div>
+          <div>${renderBadge(mapViewStateReadiness ? `${mapViewStateReadiness.count} ${mapViewStateReadiness.status}` : "Not loaded")}</div>
+          <div class="k">Conflict acknowledgements</div>
+          <div>${renderBadge(conflictReadiness ? `${conflictReadiness.count} ${conflictReadiness.status}` : "Not loaded")}</div>
+          <div class="k">Safety action closures</div>
+          <div>${renderBadge(safetyActionReadiness ? `${safetyActionReadiness.count} ${safetyActionReadiness.status}` : "Not loaded")}</div>
+          <div class="k">Regulatory amendment reviews</div>
+          <div>${renderBadge(regulatoryReadiness ? `${regulatoryReadiness.count} ${regulatoryReadiness.status}` : "Not loaded")}</div>
+        </div>
+        <div class="action-meta" style="margin-top: 12px;">
+          ${escapeHtml(
+            readiness?.summary?.message ??
+              "These counts are informational prompts for review before sign-off. Empty categories do not automatically reject the mission or certify compliance.",
+          )}
+          <br />Map view-state readiness is metadata-only evidence and not pilot command guidance.
+          <br />Capture metadata in live ops, then review it in this post-operation evidence pack.
+          ${
+            readiness?.categories?.length
+              ? `<br />${readiness.categories
+                  .map((category) => escapeHtml(category.message))
+                  .join("<br />")}`
+              : ""
+          }
+        </div>
+        <div class="action-footer" style="justify-content: flex-start; margin-top: 12px;">
+          <a class="action-button link-button" href="${escapeHtml(mapEvidenceUrl)}">
+            Open live-ops map evidence capture
+          </a>
+          <div class="action-status tone-info">
+            Opens the current mission live-ops map history and metadata-only evidence capture.
+          </div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Rendered Report Readiness Summary</h4>
+        ${renderReportReadinessSummary()}
       </section>
     </div>
     <div class="action-grid">
@@ -644,180 +953,53 @@ const renderEvidenceHelpers = () => {
   bindEvidenceHelperForms();
 };
 
-const renderRiskMap = () => {
-  if (!riskMapPanel) {
-    return;
-  }
-
-  const riskMap = uiState.riskMap;
-
-  if (!uiState.missionId || !riskMap) {
-    riskMapPanel.innerHTML =
-      '<div class="empty-state">Load a mission before the risk heat surface can be evaluated.</div>';
-    return;
-  }
-
-  const stageMap = riskMap.stageMap ?? [];
-  const categories = riskMap.categories ?? [];
-
-  riskMapPanel.innerHTML = `
-    <div class="risk-surface-grid">
-      <section class="summary-block">
-        <h4>Overall Risk Posture</h4>
-        <div class="kv">
-          <div class="k">Overall result</div>
-          <div>${renderBadge(riskMap.overall?.result ?? "Unknown")}</div>
-          <div class="k">Threat level</div>
-          <div><span class="stage-chip ${heatResultClass(
-            riskMap.overall?.threatLevel,
-          )}">${escapeHtml(riskMap.overall?.threatLevel ?? "Unknown")}</span></div>
-          <div class="k">Risk score</div>
-          <div>${escapeHtml(String(riskMap.overall?.score ?? "0"))} / 100</div>
-          <div class="k">OA result</div>
-          <div>${renderBadge(riskMap.governance?.operationalAuthority?.result ?? "Unknown")}</div>
-          <div class="k">Insurance result</div>
-          <div>${renderBadge(riskMap.governance?.insurance?.result ?? "Unknown")}</div>
-          <div class="k">Override events</div>
-          <div>${escapeHtml(String(riskMap.overridePressure?.overrideEventCount ?? 0))}</div>
-        </div>
-      </section>
-      <section class="summary-block">
-        <h4>Early Warning Signals</h4>
-        <ul class="risk-list">
-          <li>Review-required snapshots: ${escapeHtml(
-            String(riskMap.overridePressure?.reviewRequiredSnapshotCount ?? 0),
-          )}</li>
-          <li>Latest override: ${escapeHtml(
-            formatDateTime(riskMap.overridePressure?.latestOverrideAt),
-          )}</li>
-          <li>Pilot competency: ${escapeHtml(
-            riskMap.pilotCompetency?.result ?? "Not evaluated",
-          )}</li>
-          <li>Platform maintenance: ${escapeHtml(
-            riskMap.platformMaintenance?.result ?? "Not evaluated",
-          )}</li>
-        </ul>
-      </section>
-    </div>
-      <div class="stage-map-grid" style="margin-top: 14px;">
-        ${stageMap
-          .map(
-            (stage) => `
-              <article
-                class="stage-tile ${heatResultClass(stage.threatLevel)}"
-                data-stage-target="${escapeHtml(stage.stage)}"
-                tabindex="0"
-                role="button"
-                aria-label="Open ${escapeHtml(
-                  STAGE_JUMP_TARGETS[stage.stage]?.label ?? stage.stage,
-                )}"
-              >
-                <h4>${escapeHtml(stage.stage.replaceAll("_", " "))}</h4>
-                <div class="stage-value ${toneClass(stage.result)}">${escapeHtml(stage.result)}</div>
-                <div class="stage-chip-row">
-                <span class="stage-chip ${heatResultClass(stage.result)}">${escapeHtml(
-                  stage.result,
-                )}</span>
-                <span class="stage-chip ${heatResultClass(stage.threatLevel)}">${escapeHtml(
-                  stage.threatLevel,
-                )}</span>
-              </div>
-            </article>
-          `,
-        )
-        .join("")}
-    </div>
-    <div class="risk-category-grid">
-      ${categories
-        .map(
-          (category) => `
-            <section class="risk-card ${heatResultClass(category.threatLevel)}">
-              <h4>${escapeHtml(category.label)}</h4>
-              <div class="risk-chip-row">
-                <span class="stage-chip ${heatResultClass(category.result)}">${escapeHtml(
-                  category.result,
-                )}</span>
-                <span class="stage-chip ${heatResultClass(category.threatLevel)}">${escapeHtml(
-                  category.threatLevel,
-                )}</span>
-              </div>
-              <div class="risk-headline ${toneClass(category.result)}">${escapeHtml(
-                category.headline,
-              )}</div>
-              <strong class="tone-muted" style="display:block; margin-top:10px; font-size:12px; text-transform:uppercase; letter-spacing:0.08em;">Signals</strong>
-              <ul class="risk-list">
-                ${(category.signals ?? [])
-                  .map((signal) => `<li>${escapeHtml(signal)}</li>`)
-                  .join("")}
-              </ul>
-              <strong class="tone-muted" style="display:block; margin-top:12px; font-size:12px; text-transform:uppercase; letter-spacing:0.08em;">Recommended Actions</strong>
-              <ul class="risk-list">
-                ${(category.recommendedActions ?? [])
-                  .map((action) => `<li>${escapeHtml(action)}</li>`)
-                  .join("")}
-              </ul>
-            </section>
-          `,
-        )
-        .join("")}
-      </div>
-    `;
-
-    bindRiskMapNavigation();
-  };
-
-const scrollToWorkspaceSection = (stage) => {
-  const target = STAGE_JUMP_TARGETS[stage];
-  if (!target) {
-    return;
-  }
-
-  const element = document.querySelector(target.selector);
-  if (!element) {
-    setConnectionState(`${target.label} is not available yet`, "tone-warn");
-    return;
-  }
-
-  element.scrollIntoView({ behavior: "smooth", block: "start" });
-  setConnectionState(`Jumped to ${target.label}`, "tone-info");
-};
-
-const bindRiskMapNavigation = () => {
-  if (!riskMapPanel) {
-    return;
-  }
-
-  riskMapPanel.querySelectorAll("[data-stage-target]").forEach((tile) => {
-    const handleJump = () => {
-      const stage = tile.getAttribute("data-stage-target");
-      if (!stage) {
-        return;
-      }
-
-      scrollToWorkspaceSection(stage);
-    };
-
-    tile.addEventListener("click", handleJump);
-    tile.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        handleJump();
-      }
-    });
-  });
-};
-
 const renderEvidenceHelperCard = (helper, definition) => {
   const helperBusy = uiState.busyHelper === helper;
   const helperStatus = uiState.helperStatus[helper];
+  const missionStatus = uiState.planningWorkspace?.mission?.status ?? "Unknown";
+  const postOperationSnapshot = latestPostOperationSnapshot();
+  const signoffRecordId = reportFieldValue(
+    "Accountable manager sign-off",
+    "Sign-off record ID",
+  );
+  const signoffRecorded =
+    Boolean(signoffRecordId) && signoffRecordId !== "Pending sign-off";
+  const helperBlocked =
+    (definition.requiresCompletedMission && missionStatus !== "completed") ||
+    (definition.requiresPostOperationSnapshot && !postOperationSnapshot) ||
+    (definition.requiresPostOperationSnapshot && signoffRecorded);
+  const helperMessage =
+    helperStatus?.message ??
+    (definition.requiresCompletedMission && missionStatus !== "completed"
+      ? "Available after mission completion"
+      : definition.requiresPostOperationSnapshot && !postOperationSnapshot
+        ? "Capture post-operation evidence first"
+        : definition.requiresPostOperationSnapshot && signoffRecorded
+          ? "Sign-off already recorded"
+          : "Ready");
 
   const fieldMarkup = definition.fields
     .map((field) => {
       const inputId = `helper-${helper}-${field.key}`;
+      const fieldInput =
+        field.type === "select"
+          ? `
+            <select id="${inputId}" ${field.required ? "required" : ""}>
+              ${(field.options ?? [])
+                .map(
+                  (option) => `
+                    <option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>
+                  `,
+                )
+                .join("")}
+            </select>
+          `
+          : `<input id="${inputId}" type="${field.type}" ${field.required ? "required" : ""} />`;
+
       return `
         <div class="action-field">
           <label for="${inputId}">${escapeHtml(field.label)}</label>
-          <input id="${inputId}" type="${field.type}" ${field.required ? "required" : ""} />
+          ${fieldInput}
         </div>
       `;
     })
@@ -832,16 +1014,142 @@ const renderEvidenceHelperCard = (helper, definition) => {
           ${fieldMarkup}
         </div>
         <div class="action-footer">
-          <button class="action-button" type="submit" ${helperBusy ? "disabled" : ""}>
+          <button class="action-button" type="submit" ${
+            helperBusy || helperBlocked ? "disabled" : ""
+          }>
             ${helperBusy ? "Running..." : `Create ${escapeHtml(definition.title)}`}
           </button>
-          <div class="action-status ${toneClass(helperStatus?.message ?? "info")}">${escapeHtml(
-            helperStatus?.message ?? "Ready",
-          )}</div>
+          <div class="action-status ${toneClass(helperMessage)}">${escapeHtml(helperMessage)}</div>
         </div>
       </form>
     </section>
   `;
+};
+
+const renderRegulatoryMatrix = () => {
+  if (!regulatoryMatrixPanel) {
+    return;
+  }
+
+  const mappings = uiState.regulatoryMatrix ?? [];
+  if (mappings.length === 0) {
+    regulatoryMatrixPanel.innerHTML =
+      '<div class="empty-state">Regulatory requirement matrix is not loaded.</div>';
+    return;
+  }
+
+  const sourceMapped = mappings.filter(
+    (mapping) => mapping.reviewStatus === "source_mapped",
+  ).length;
+  const needsReview = mappings.filter((mapping) =>
+    String(mapping.reviewStatus ?? "").includes("needs"),
+  ).length;
+  const reviewImpact = uiState.regulatoryReviewImpact;
+  const impactedByRequirement = regulatoryImpactByRequirement();
+  const displayedMappings = [...mappings].sort((left, right) => {
+    const leftImpacted = impactedByRequirement.has(left.requirementCode) ? 1 : 0;
+    const rightImpacted = impactedByRequirement.has(right.requirementCode) ? 1 : 0;
+
+    return (
+      rightImpacted - leftImpacted ||
+      (left.displayOrder ?? 0) - (right.displayOrder ?? 0)
+    );
+  });
+
+  regulatoryMatrixPanel.innerHTML = `
+    <div class="summary-grid" style="margin-bottom: 14px;">
+      <section class="summary-block">
+        <h4>Matrix Status</h4>
+        <div class="kv">
+          <div class="k">Mapped requirements</div>
+          <div>${escapeHtml(String(mappings.length))}</div>
+          <div class="k">Source mapped</div>
+          <div>${renderBadge(String(sourceMapped))}</div>
+          <div class="k">Needs review</div>
+          <div>${renderBadge(needsReview > 0 ? `${needsReview} needs review` : "Clear")}</div>
+          <div class="k">Mission amendment alerts</div>
+          <div>${renderBadge(
+            reviewImpact
+              ? `${reviewImpact.openAmendmentAlertCount} open`
+              : "Load mission",
+          )}</div>
+        </div>
+      </section>
+      <section class="summary-block">
+        <h4>Mission Review Impact</h4>
+        <div class="kv">
+          <div class="k">Impacted rows</div>
+          <div>${renderBadge(
+            reviewImpact
+              ? `${reviewImpact.impactedMappingCount} impacted`
+              : "Mission not loaded",
+          )}</div>
+          <div class="k">Clause review count</div>
+          <div>${renderBadge(
+            reviewImpact
+              ? `${reviewImpact.needsClauseReviewCount} needs review`
+              : "Mission not loaded",
+          )}</div>
+          <div class="k">Boundary</div>
+          <div>Read-only traceability matrix; not a legal compliance certification.</div>
+        </div>
+      </section>
+    </div>
+    <ul class="list">
+      ${displayedMappings
+        .map(
+          (mapping) => {
+            const impact = impactedByRequirement.get(mapping.requirementCode);
+
+            return `
+            <li class="list-item">
+              <strong>${escapeHtml(mapping.requirementCode)}</strong>
+              <div>
+                ${impact ? renderBadge("Impacted by amendment") : ""}
+                ${renderBadge(mapping.reviewStatus)}
+                ${renderBadge(mapping.assuranceOwner)}
+              </div>
+              <div style="margin-top: 8px;">
+                ${escapeHtml(mapping.requirementSummary)}
+              </div>
+              <div class="timeline-meta" style="margin-top: 8px;">
+                Source: ${escapeHtml(formatMatrixSource(mapping))}<br />
+                Control: ${escapeHtml(mapping.controlCode)} - ${escapeHtml(mapping.controlTitle)}<br />
+                Evidence: ${escapeHtml(mapping.evidenceType)}<br />
+                Intent: ${escapeHtml(mapping.complianceIntent)}
+                ${
+                  impact
+                    ? `<br />Review impact: ${escapeHtml(impact.reviewReason)}<br />Alert IDs: ${escapeHtml(impact.alertIds.join(", "))}`
+                    : ""
+                }
+              </div>
+              ${impact ? renderAlertActionButtons(impact) : ""}
+            </li>
+          `;
+          },
+        )
+        .join("")}
+    </ul>
+  `;
+
+  bindRegulatoryAlertActions();
+};
+
+const bindRegulatoryAlertActions = () => {
+  regulatoryMatrixPanel
+    ?.querySelectorAll("[data-alert-action][data-alert-id]")
+    .forEach((button) => {
+      button.addEventListener("click", async () => {
+        const action = button.getAttribute("data-alert-action");
+        const alertId = button.getAttribute("data-alert-id");
+
+        if (!action || !alertId) {
+          return;
+        }
+
+        await executeAlertLifecycleAction(action, alertId);
+      });
+    });
 };
 
 const bindEvidenceHelperForms = () => {
@@ -889,11 +1197,32 @@ const loadMissionList = async (query = "") => {
   }
 };
 
+const loadRegulatoryMatrix = async () => {
+  if (!regulatoryMatrixPanel) {
+    return;
+  }
+
+  regulatoryMatrixPanel.innerHTML =
+    '<div class="empty-state">Loading regulatory requirement matrix...</div>';
+
+  try {
+    const response = await fetchJson("/sms/regulatory-requirement-mappings");
+    uiState.regulatoryMatrix = response.mappings ?? [];
+    renderRegulatoryMatrix();
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to load regulatory requirement matrix";
+    uiState.regulatoryMatrix = [];
+    regulatoryMatrixPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+  }
+};
+
 const renderOverview = () => {
   const planningWorkspace = uiState.planningWorkspace;
   const dispatchWorkspace = uiState.dispatchWorkspace;
   const timeline = uiState.timeline;
-  const riskMap = uiState.riskMap;
   const mission = planningWorkspace?.mission ?? dispatchWorkspace?.mission;
   const readinessGate = planningWorkspace?.readiness?.gate;
   const dispatchReady = dispatchWorkspace?.dispatch?.ready ? "Ready" : "Blocked";
@@ -923,21 +1252,12 @@ const renderOverview = () => {
         planningWorkspace?.approval?.handoffCreated ? "Recorded" : "Missing",
       )}</div>
     </article>
-      <article class="metric">
-        <div class="label">Risk map</div>
-        <div class="value ${toneClass(riskMap?.overall?.result ?? "Unknown")}">${escapeHtml(
-          riskMap?.overall?.result ?? "Unknown",
-        )}</div>
-        <div class="meta">Threat: ${escapeHtml(
-          riskMap?.overall?.threatLevel ?? "Unknown",
-        )} | Score: ${escapeHtml(String(riskMap?.overall?.score ?? 0))}</div>
-      </article>
-      <article class="metric">
-        <div class="label">Timeline coverage</div>
-        <div class="value">${escapeHtml(String(timelineCount))}</div>
-        <div class="meta">Phases present: ${escapeHtml(
-          String((timeline?.phases ?? []).filter((phase) => phase.status === "present").length),
-        )} / ${escapeHtml(String((timeline?.phases ?? []).length ?? 0))}</div>
+    <article class="metric">
+      <div class="label">Timeline coverage</div>
+      <div class="value">${escapeHtml(String(timelineCount))}</div>
+      <div class="meta">Phases present: ${escapeHtml(
+        String((timeline?.phases ?? []).filter((phase) => phase.status === "present").length),
+      )} / ${escapeHtml(String((timeline?.phases ?? []).length ?? 0))}</div>
     </article>
   `;
 };
@@ -969,10 +1289,10 @@ const renderPlanning = () => {
       : action.error?.message ?? `Blocked from ${action.currentStatus}`,
   }));
 
-    planningPanel.innerHTML = `
-      <div class="summary-grid">
-        <section id="planning-mission-core" class="summary-block">
-          <h4>Mission Core</h4>
+  planningPanel.innerHTML = `
+    <div class="summary-grid">
+      <section class="summary-block">
+        <h4>Mission Core</h4>
         <div class="kv">
           <div class="k">Mission plan</div>
           <div>${escapeHtml(workspace.mission.missionPlanId ?? "Not assigned")}</div>
@@ -986,8 +1306,8 @@ const renderPlanning = () => {
           <div>${renderBadge(workspace.airspaceCompliance ? "Present" : "Missing")}</div>
         </div>
       </section>
-        <section class="summary-block">
-          <h4>Evidence Chain</h4>
+      <section class="summary-block">
+        <h4>Evidence Chain</h4>
         <div class="kv">
           <div class="k">Readiness snapshots</div>
           <div>${escapeHtml(String(workspace.evidence.readinessSnapshotCount))}</div>
@@ -1007,17 +1327,17 @@ const renderPlanning = () => {
         <h4>Checklist</h4>
         ${renderList(checklist, "checklist items")}
       </section>
-      ${renderOperationalAuthorityPilotSummary("planning")}
+      ${renderAircraftCapabilityContext(workspace.platform)}
       <section class="summary-block">
         <h4>Next Allowed Actions</h4>
         ${renderList(actions, "next allowed actions")}
       </section>
-      </div>
-      <div class="stack" style="margin-top: 14px;">
-        <section id="planning-blockers">
-          <h4 style="margin: 0 0 10px;">Blocking Reasons</h4>
-          ${renderList(blockers, "blocking reasons")}
-        </section>
+    </div>
+    <div class="stack" style="margin-top: 14px;">
+      <section>
+        <h4 style="margin: 0 0 10px;">Blocking Reasons</h4>
+        ${renderList(blockers, "blocking reasons")}
+      </section>
       <section>
         <h4 style="margin: 0 0 10px;">Missing Requirements</h4>
         ${renderList(missing, "missing requirements")}
@@ -1042,13 +1362,6 @@ const renderDispatch = () => {
     label: "Dispatch requirement",
     value: reason,
   }));
-  const oaPersonnelItems = getOperationalAuthorityPilotReasons().map((reason) => ({
-    label:
-      reason.code === "OA_PILOT_PENDING_AMENDMENT"
-        ? "Pending amendment"
-        : "OA personnel advisory",
-    value: reason.message,
-  }));
   const actions = (workspace.nextAllowedActions ?? []).map((action) => ({
     label: `${action.action} -> ${action.targetStatus}`,
     value: action.allowed
@@ -1056,9 +1369,9 @@ const renderDispatch = () => {
       : action.error?.message ?? `Blocked from ${action.currentStatus}`,
   }));
 
-    dispatchPanel.innerHTML = `
-      <div class="stack">
-        <section class="summary-block">
+  dispatchPanel.innerHTML = `
+    <div class="stack">
+      <section class="summary-block">
         <h4>Dispatch Status</h4>
         <div class="kv">
           <div class="k">Mission lifecycle</div>
@@ -1071,8 +1384,8 @@ const renderDispatch = () => {
           <div>${renderBadge(workspace.dispatch.launchPreflight.allowed ? "Allowed" : "Blocked")}</div>
         </div>
       </section>
-        <section class="summary-block">
-          <h4>Approval and Evidence</h4>
+      <section class="summary-block">
+        <h4>Approval and Evidence</h4>
         <div class="kv">
           <div class="k">Approval handoff</div>
           <div>${escapeHtml(workspace.approval.handoffCreated ? "Recorded" : "Missing")}</div>
@@ -1082,14 +1395,9 @@ const renderDispatch = () => {
           <div>${escapeHtml(workspace.dispatch.latestDispatchEvidenceLink?.id ?? "Missing")}</div>
         </div>
       </section>
-      ${renderOperationalAuthorityPilotSummary("dispatch")}
-        <section id="dispatch-blockers">
-          <h4 style="margin: 0 0 10px;">Launch Blockers</h4>
-          ${renderList(blockers, "launch blockers")}
-        </section>
       <section>
-        <h4 style="margin: 0 0 10px;">OA Personnel Advisories</h4>
-        ${renderList(oaPersonnelItems, "oa personnel advisories")}
+        <h4 style="margin: 0 0 10px;">Launch Blockers</h4>
+        ${renderList(blockers, "launch blockers")}
       </section>
       <section>
         <h4 style="margin: 0 0 10px;">Missing Dispatch Requirements</h4>
@@ -1265,22 +1573,27 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
   if (!missionId) {
     uiState.missionId = "";
     uiState.planningWorkspace = null;
-      uiState.dispatchWorkspace = null;
-      uiState.timeline = null;
-      uiState.riskMap = null;
-      renderMissionBrowser();
+    uiState.dispatchWorkspace = null;
+    uiState.timeline = null;
+    uiState.regulatoryReviewImpact = null;
+    uiState.postOperationSnapshots = [];
+    uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReadiness = null;
+    uiState.postOperationEvidenceReportError = "";
+    renderMissionBrowser();
     uiState.transitionChecks = {};
     uiState.actionStatus = {};
     uiState.busyAction = null;
     uiState.helperStatus = {};
     uiState.busyHelper = null;
+    uiState.busyAlertAction = null;
     setConnectionState("Enter a mission UUID", "tone-warn");
     setLoadedMission("");
     overviewMetrics.innerHTML = "";
     actionsPanel.innerHTML = `<div class="empty-state">Load a mission before lifecycle actions can be evaluated.</div>`;
-      evidencePanel.innerHTML = `<div class="empty-state">Load a mission before evidence helpers can be used.</div>`;
-      riskMapPanel.innerHTML = `<div class="empty-state">Load a mission before the risk heat surface can be evaluated.</div>`;
-      planningPanel.innerHTML = `<div class="empty-state">Enter a mission UUID to load the planning workspace.</div>`;
+    evidencePanel.innerHTML = `<div class="empty-state">Load a mission before evidence helpers can be used.</div>`;
+    regulatoryMatrixPanel.innerHTML = `<div class="empty-state">Regulatory requirement matrix is available after the workspace loads.</div>`;
+    planningPanel.innerHTML = `<div class="empty-state">Enter a mission UUID to load the planning workspace.</div>`;
     dispatchPanel.innerHTML = `<div class="empty-state">Dispatch state will appear after a mission is loaded.</div>`;
     timelinePanel.innerHTML = `<div class="empty-state">Timeline data will appear after a mission is loaded.</div>`;
     return;
@@ -1297,28 +1610,56 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
 
   try {
     const [
-        planningResponse,
-        dispatchResponse,
-        timelineResponse,
-        riskMapResponse,
-      ] = await Promise.all([
-        fetchJson(`/missions/${missionId}/planning-workspace`),
-        fetchJson(`/missions/${missionId}/dispatch-workspace`),
-        fetchJson(`/missions/${missionId}/operations-timeline`),
-        fetchJson(`/missions/${missionId}/risk-map`),
-      ]);
+      planningResponse,
+      dispatchResponse,
+      timelineResponse,
+      regulatoryReviewImpactResponse,
+      postOperationSnapshotsResponse,
+    ] = await Promise.all([
+      fetchJson(`/missions/${missionId}/planning-workspace`),
+      fetchJson(`/missions/${missionId}/dispatch-workspace`),
+      fetchJson(`/missions/${missionId}/operations-timeline`),
+      fetchJson(`/missions/${missionId}/regulatory-review-impact`),
+      fetchJson(`/missions/${missionId}/post-operation/evidence-snapshots`),
+    ]);
 
     uiState.planningWorkspace = planningResponse.workspace;
-      uiState.dispatchWorkspace = dispatchResponse.workspace;
-      uiState.timeline = timelineResponse.timeline;
-      uiState.riskMap = riskMapResponse;
-      await refreshTransitionChecks(missionId);
+    uiState.dispatchWorkspace = dispatchResponse.workspace;
+    uiState.timeline = timelineResponse.timeline;
+    uiState.regulatoryReviewImpact = regulatoryReviewImpactResponse;
+    uiState.postOperationSnapshots = postOperationSnapshotsResponse.snapshots ?? [];
+    uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReadiness = null;
+    uiState.postOperationEvidenceReportError = "";
+    const postOperationSnapshot = latestPostOperationSnapshot();
 
-      renderMissionBrowser();
-      renderOverview();
-      renderRiskMap();
-      renderActions();
+    if (postOperationSnapshot) {
+      try {
+        const [reportResponse, readinessResponse] = await Promise.all([
+          fetchJson(postOperationExportLinks(postOperationSnapshot.id).renderUrl),
+          fetchJson(
+            `/missions/${encodeURIComponent(
+              missionId,
+            )}/post-operation/evidence-snapshots/${encodeURIComponent(
+              postOperationSnapshot.id,
+            )}/readiness`,
+          ),
+        ]);
+        uiState.postOperationEvidenceReport = reportResponse.report;
+        uiState.postOperationEvidenceReadiness = readinessResponse.readiness;
+      } catch (error) {
+        uiState.postOperationEvidenceReportError =
+          error instanceof Error ? error.message : "Report/readiness unavailable";
+      }
+    }
+
+    await refreshTransitionChecks(missionId);
+
+    renderMissionBrowser();
+    renderOverview();
+    renderActions();
     renderEvidenceHelpers();
+    renderRegulatoryMatrix();
     renderPlanning();
     renderDispatch();
     renderTimeline();
@@ -1326,18 +1667,22 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load mission workspace";
     uiState.planningWorkspace = null;
-      uiState.dispatchWorkspace = null;
-      uiState.timeline = null;
-      uiState.riskMap = null;
-      uiState.transitionChecks = {};
+    uiState.dispatchWorkspace = null;
+    uiState.timeline = null;
+    uiState.regulatoryReviewImpact = null;
+    uiState.postOperationSnapshots = [];
+    uiState.postOperationEvidenceReport = null;
+    uiState.postOperationEvidenceReadiness = null;
+    uiState.postOperationEvidenceReportError = "";
+    uiState.transitionChecks = {};
     renderMissionBrowser();
     uiState.helperStatus = {};
     uiState.busyHelper = null;
     setConnectionState(message, "tone-bad");
-      actionsPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
-      evidencePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
-      riskMapPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
-      planningPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    actionsPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    evidencePanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    renderRegulatoryMatrix();
+    planningPanel.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
     dispatchPanel.innerHTML = `<div class="empty-state">Dispatch view unavailable because the mission workspace did not load.</div>`;
     timelinePanel.innerHTML = `<div class="empty-state">Timeline view unavailable because the mission workspace did not load.</div>`;
     overviewMetrics.innerHTML = "";
@@ -1347,6 +1692,39 @@ const loadMissionWorkspace = async (missionId, options = {}) => {
 const executeEvidenceHelper = async (helper) => {
   const missionId = uiState.missionId;
   if (!missionId) {
+    return;
+  }
+
+  const definition = EVIDENCE_HELPERS[helper];
+  const missionStatus = uiState.planningWorkspace?.mission?.status ?? "Unknown";
+  if (definition.requiresCompletedMission && missionStatus !== "completed") {
+    uiState.helperStatus[helper] = {
+      message: "Complete the mission before capturing post-operation evidence",
+    };
+    renderEvidenceHelpers();
+    return;
+  }
+  const postOperationSnapshot = latestPostOperationSnapshot();
+  const signoffRecordId = reportFieldValue(
+    "Accountable manager sign-off",
+    "Sign-off record ID",
+  );
+  const signoffRecorded =
+    Boolean(signoffRecordId) && signoffRecordId !== "Pending sign-off";
+
+  if (definition.requiresPostOperationSnapshot && !postOperationSnapshot) {
+    uiState.helperStatus[helper] = {
+      message: "Capture post-operation evidence before sign-off",
+    };
+    renderEvidenceHelpers();
+    return;
+  }
+
+  if (definition.requiresPostOperationSnapshot && signoffRecorded) {
+    uiState.helperStatus[helper] = {
+      message: "Accountable-manager sign-off is already recorded",
+    };
+    renderEvidenceHelpers();
     return;
   }
 
@@ -1366,7 +1744,6 @@ const executeEvidenceHelper = async (helper) => {
   renderEvidenceHelpers();
 
   try {
-    const definition = EVIDENCE_HELPERS[helper];
     await fetchJson(definition.endpoint(missionId), {
       method: definition.method,
       body: JSON.stringify(payload),
@@ -1387,6 +1764,37 @@ const executeEvidenceHelper = async (helper) => {
     renderEvidenceHelpers();
     setConnectionState(
       error instanceof Error ? error.message : "Evidence helper failed",
+      "tone-bad",
+    );
+  }
+};
+
+const executeAlertLifecycleAction = async (action, alertId) => {
+  const missionId = uiState.missionId;
+  if (!missionId) {
+    return;
+  }
+
+  uiState.busyAlertAction = alertActionKey(action, alertId);
+  renderRegulatoryMatrix();
+  setConnectionState(`${action === "resolve" ? "Resolving" : "Acknowledging"} alert...`, "tone-info");
+
+  try {
+    await fetchJson(`/missions/${missionId}/alerts/${alertId}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    uiState.busyAlertAction = null;
+    await loadMissionWorkspace(missionId, { preserveActionStatus: true });
+    setConnectionState(
+      action === "resolve" ? "Alert resolved" : "Alert acknowledged",
+      "tone-ok",
+    );
+  } catch (error) {
+    uiState.busyAlertAction = null;
+    renderRegulatoryMatrix();
+    setConnectionState(
+      error instanceof Error ? error.message : "Alert lifecycle action failed",
       "tone-bad",
     );
   }
@@ -1492,10 +1900,10 @@ openApiButton.addEventListener("click", () => {
 
 openLiveOpsButton?.addEventListener("click", () => {
   const missionId = missionIdInput.value.trim();
-  const target = missionId
-    ? `/operator/missions/${encodeURIComponent(missionId)}/live-operations`
-    : "/operator/live-operations-map";
-  window.location.assign(target);
+  const previousMissionId = uiState.missionId;
+  uiState.missionId = missionId;
+  window.location.assign(liveOpsMapEvidenceUrl());
+  uiState.missionId = previousMissionId;
 });
 
 const initialMissionId = getMissionIdFromLocation();
@@ -1504,4 +1912,5 @@ if (initialMissionId) {
 }
 
 loadMissionList("");
+loadRegulatoryMatrix();
 loadMissionWorkspace(initialMissionId);

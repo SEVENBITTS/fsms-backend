@@ -14,7 +14,6 @@ import type { MissionLifecycleAction } from "../modules/missions/domain/missionL
 import type { MissionTelemetryRecordDto } from "../missions/mission-telemetry.types";
 
 export interface CreateMissionPlanningDraftInput {
-  organisationId?: string | null;
   missionPlanId?: string | null;
   platformId?: string | null;
   pilotId?: string | null;
@@ -23,7 +22,6 @@ export interface CreateMissionPlanningDraftInput {
 }
 
 export interface UpdateMissionPlanningDraftInput {
-  organisationId?: string | null;
   missionPlanId?: string | null;
   platformId?: string | null;
   pilotId?: string | null;

@@ -78,6 +78,72 @@ export class AuditEvidenceController {
     }
   };
 
+  createLiveOpsMapViewStateSnapshot = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const snapshot =
+        await this.auditEvidenceService.createLiveOpsMapViewStateSnapshot(
+          req.params.missionId,
+          req.body,
+        );
+      res.status(201).json({ snapshot });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listLiveOpsMapViewStateSnapshots = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const snapshots =
+        await this.auditEvidenceService.listLiveOpsMapViewStateSnapshots(
+          req.params.missionId,
+        );
+      res.status(200).json({ snapshots });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createConflictGuidanceAcknowledgement = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const acknowledgement =
+        await this.auditEvidenceService.createConflictGuidanceAcknowledgement(
+          req.params.missionId,
+          req.body,
+        );
+      res.status(201).json({ acknowledgement });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listConflictGuidanceAcknowledgements = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const acknowledgements =
+        await this.auditEvidenceService.listConflictGuidanceAcknowledgements(
+          req.params.missionId,
+        );
+      res.status(200).json({ acknowledgements });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   createPostOperationEvidenceSnapshot = async (
     req: Request<MissionIdParams>,
     res: Response,
@@ -140,6 +206,23 @@ export class AuditEvidenceController {
           req.params.snapshotId,
         );
       res.status(200).json({ report });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getPostOperationEvidenceReadiness = async (
+    req: Request<PostOperationSnapshotParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const readiness =
+        await this.auditEvidenceService.getPostOperationEvidenceReadiness(
+          req.params.missionId,
+          req.params.snapshotId,
+        );
+      res.status(200).json({ readiness });
     } catch (error) {
       next(error);
     }

@@ -3,6 +3,7 @@ import { SmsFrameworkRepository } from "./sms-framework.repository";
 import type {
   SmsControlMapping,
   SmsFramework,
+  RegulatoryRequirementMapping,
 } from "./sms-framework.types";
 
 export class SmsFrameworkService {
@@ -32,6 +33,20 @@ export class SmsFrameworkService {
 
     try {
       return await this.smsFrameworkRepository.listControlMappings(client);
+    } finally {
+      client.release();
+    }
+  }
+
+  async listRegulatoryRequirementMappings(): Promise<
+    RegulatoryRequirementMapping[]
+  > {
+    const client = await this.pool.connect();
+
+    try {
+      return await this.smsFrameworkRepository.listRegulatoryRequirementMappings(
+        client,
+      );
     } finally {
       client.release();
     }

@@ -129,6 +129,7 @@ import { AccountableManagerDashboardRepository } from "./accountable-manager-das
 import { AccountableManagerDashboardService } from "./accountable-manager-dashboard/accountable-manager-dashboard.service";
 import { AccountableManagerDashboardController } from "./accountable-manager-dashboard/accountable-manager-dashboard.controller";
 import { createAccountableManagerDashboardRouter } from "./accountable-manager-dashboard/accountable-manager-dashboard.routes";
+import { BRANDING } from "./config/branding";
 
 const projectRoot = path.resolve(__dirname, "..");
 const staticRoot = path.resolve(projectRoot, "static");
@@ -178,7 +179,13 @@ const missionEventRepo = new MissionEventRepository();
 const missionLifecyclePolicy = new MissionLifecyclePolicy();
 const missionTelemetryRepo = new MissionTelemetryRepository();
 const alertRepository = new AlertRepository();
-const alertService = new AlertService(pool, alertRepository);
+const smsFrameworkRepository = new SmsFrameworkRepository();
+const alertService = new AlertService(
+  pool,
+  alertRepository,
+  undefined,
+  smsFrameworkRepository,
+);
 const alertController = new AlertController(alertService);
 
 const missionTelemetryService = new MissionTelemetryService(
@@ -252,7 +259,6 @@ const missionController = new MissionController(
 const missionPlanningController = new MissionPlanningController(
   missionPlanningService,
 );
-const smsFrameworkRepository = new SmsFrameworkRepository();
 const smsFrameworkService = new SmsFrameworkService(
   pool,
   smsFrameworkRepository,
@@ -502,7 +508,7 @@ app.get(
   },
 );
 app.get("/", (_req, res) => {
-  res.status(200).send("FSMS backend is running");
+  res.status(200).send(BRANDING.backendStatusText);
 });
 
 

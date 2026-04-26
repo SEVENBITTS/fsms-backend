@@ -22,13 +22,16 @@ const clearTables = async () => {
   await pool.query("delete from air_safety_meetings");
   await pool.query("delete from post_operation_audit_signoffs");
   await pool.query("delete from post_operation_evidence_snapshots");
+  await pool.query("delete from live_ops_map_view_state_snapshots");
   await pool.query("delete from mission_planning_approval_handoffs");
   await pool.query("delete from mission_decision_evidence_links");
+  await pool.query("delete from conflict_guidance_acknowledgements");
   await pool.query("delete from audit_evidence_snapshots");
   await pool.query("delete from airspace_compliance_inputs");
   await pool.query("delete from mission_risk_inputs");
   await pool.query("delete from mission_events");
   await pool.query("delete from missions");
+  await pool.query("delete from mission_external_overlays");
   await pool.query("delete from pilot_readiness_evidence");
   await pool.query("delete from pilots");
   await pool.query("delete from maintenance_records");
@@ -173,6 +176,127 @@ const createReadyMission = async () => {
   };
 };
 
+const createConflictOverlay = async (missionId: string) => {
+  const overlayId = randomUUID();
+
+  await pool.query(
+    `
+    insert into mission_external_overlays (
+      id,
+      mission_id,
+      overlay_kind,
+      source_provider,
+      source_type,
+      source_record_id,
+      observed_at,
+      geometry_type,
+      latitude,
+      longitude,
+      severity
+    )
+    values ($1, $2, 'crewed_traffic', 'test-radar', 'adsb', 'traffic-1', $3, 'point', 51.5, -0.12, 'critical')
+    `,
+    [overlayId, missionId, "2026-04-18T12:00:00.000Z"],
+  );
+
+  return overlayId;
+};
+
+const createConflictGuidanceAcknowledgement = async (
+  missionId: string,
+  params?: {
+    conflictId?: string;
+    guidanceActionCode?: string;
+    evidenceAction?: string;
+    acknowledgementRole?: string;
+    acknowledgedBy?: string;
+    acknowledgementNote?: string;
+    guidanceSummary?: string;
+  },
+) => {
+  const overlayId = await createConflictOverlay(missionId);
+  const response = await request(app)
+    .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+    .send({
+      conflictId: params?.conflictId ?? "conflict-critical-export",
+      overlayId,
+      guidanceActionCode: params?.guidanceActionCode ?? "hold_or_suspend",
+      evidenceAction: params?.evidenceAction ?? "record_supervisor_review",
+      acknowledgementRole: params?.acknowledgementRole ?? "supervisor",
+      acknowledgedBy: params?.acknowledgedBy ?? "ops-supervisor",
+      acknowledgementNote:
+        params?.acknowledgementNote ??
+        "Reviewed for post-operation evidence export.",
+      guidanceSummary:
+        params?.guidanceSummary ?? "Critical live-ops conflict advisory reviewed.",
+    });
+
+  expect(response.status).toBe(201);
+  return response.body.acknowledgement as {
+    id: string;
+    conflictId: string;
+    overlayId: string;
+    guidanceActionCode: string;
+    evidenceAction: string;
+    acknowledgementRole: string;
+    acknowledgedBy: string;
+    acknowledgementNote: string | null;
+    pilotInstructionStatus: string;
+  };
+};
+
+const createRegulatoryAmendmentAlert = async (
+  missionId: string,
+  params?: {
+    acknowledge?: boolean;
+    resolve?: boolean;
+  },
+) => {
+  const response = await request(app)
+    .post(`/missions/${missionId}/regulatory-amendments`)
+    .send({
+      sourceDocument: "CAA CAP 722",
+      previousVersion: "9.1",
+      currentVersion: "9.2",
+      publishedAt: "2026-04-18T09:00:00.000Z",
+      effectiveFrom: "2026-05-01T00:00:00.000Z",
+      amendmentSummary: "Updated operator assessment evidence expectations.",
+      changeImpact:
+        "Review affected operating safety case and post-operation evidence pack.",
+      affectedRequirementRefs: ["CAP722-OSC", "CAP722-Records"],
+      reviewAction:
+        "Accountable manager to confirm mission evidence remains current.",
+    });
+
+  expect(response.status).toBe(201);
+  let alert = response.body.alerts[0] as {
+    id: string;
+    status: string;
+    acknowledgedAt: string | null;
+    resolvedAt: string | null;
+  };
+
+  if (params?.acknowledge) {
+    const acknowledgeResponse = await request(app)
+      .post(`/missions/${missionId}/alerts/${alert.id}/acknowledge`)
+      .send({ acknowledgedAt: "2026-04-18T10:00:00.000Z" });
+
+    expect(acknowledgeResponse.status).toBe(200);
+    alert = acknowledgeResponse.body.alert;
+  }
+
+  if (params?.resolve) {
+    const resolveResponse = await request(app)
+      .post(`/missions/${missionId}/alerts/${alert.id}/resolve`)
+      .send({ resolvedAt: "2026-04-18T11:00:00.000Z" });
+
+    expect(resolveResponse.status).toBe(200);
+    alert = resolveResponse.body.alert;
+  }
+
+  return alert;
+};
+
 const createDecisionEvidenceLink = async (
   missionId: string,
   decisionType: "approval" | "dispatch",
@@ -283,7 +407,9 @@ const countRows = async (missionId: string) => {
     select
       (select status from missions where id = $1) as mission_status,
       (select count(*)::int from audit_evidence_snapshots where mission_id = $1) as snapshot_count,
+      (select count(*)::int from conflict_guidance_acknowledgements where mission_id = $1) as conflict_guidance_acknowledgement_count,
       (select count(*)::int from post_operation_evidence_snapshots where mission_id = $1) as post_operation_snapshot_count,
+      (select count(*)::int from live_ops_map_view_state_snapshots where mission_id = $1) as live_ops_map_view_state_snapshot_count,
       (select count(*)::int from post_operation_audit_signoffs where mission_id = $1) as post_operation_signoff_count,
       (select count(*)::int from mission_decision_evidence_links where mission_id = $1) as decision_link_count,
       (select count(*)::int from mission_events where mission_id = $1) as mission_event_count,
@@ -301,7 +427,9 @@ const countRows = async (missionId: string) => {
   return result.rows[0] as {
     mission_status: string;
     snapshot_count: number;
+    conflict_guidance_acknowledgement_count: number;
     post_operation_snapshot_count: number;
+    live_ops_map_view_state_snapshot_count: number;
     post_operation_signoff_count: number;
     decision_link_count: number;
     mission_event_count: number;
@@ -654,6 +782,187 @@ describe("audit evidence snapshots", () => {
     });
   });
 
+  it("captures live-ops map view-state metadata as audit evidence", async () => {
+    const { missionId } = await createReadyMission();
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "2 / 4",
+        replayTimestamp: "2026-04-18T12:01:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        createdBy: " live-ops-controller ",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.snapshot).toMatchObject({
+      missionId,
+      evidenceType: "live_ops_map_view_state",
+      replayCursor: "2 / 4",
+      replayTimestamp: "2026-04-18T12:01:00.000Z",
+      areaFreshnessFilter: "degraded",
+      visibleAreaOverlayCount: 2,
+      totalAreaOverlayCount: 4,
+      degradedAreaOverlayCount: 2,
+      openAlertCount: 3,
+      activeConflictCount: 1,
+      areaRefreshRunCount: 5,
+      captureScope: "metadata_only",
+      pilotInstructionStatus: "not_a_pilot_command",
+      createdBy: "live-ops-controller",
+      snapshotMetadata: {
+        formatVersion: 1,
+        evidenceType: "live_ops_map_view_state",
+        captureScope: "metadata_only",
+        pilotInstructionStatus: "not_a_pilot_command",
+        screenshotStatus: "not_captured",
+        fileGenerationStatus: "not_requested",
+        viewState: {
+          replayCursor: "2 / 4",
+          areaFreshnessFilter: "degraded",
+          visibleAreaOverlayCount: 2,
+          totalAreaOverlayCount: 4,
+          degradedAreaOverlayCount: 2,
+          openAlertCount: 3,
+          activeConflictCount: 1,
+          areaRefreshRunCount: 5,
+        },
+      },
+    });
+    expect(response.body.snapshot.id).toEqual(expect.any(String));
+    expect(response.body.snapshot.createdAt).toEqual(expect.any(String));
+    expect(await countRows(missionId)).toEqual({
+      ...before,
+      live_ops_map_view_state_snapshot_count:
+        before.live_ops_map_view_state_snapshot_count + 1,
+    });
+  });
+
+  it("lists live-ops map view-state snapshots for the owning mission only", async () => {
+    const first = await createReadyMission();
+    const second = await createReadyMission();
+
+    const firstSnapshot = await request(app)
+      .post(
+        `/missions/${first.missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "1 / 3",
+        replayTimestamp: null,
+        areaFreshnessFilter: "all",
+        visibleAreaOverlayCount: 3,
+        totalAreaOverlayCount: 3,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 1,
+      });
+    const secondSnapshot = await request(app)
+      .post(
+        `/missions/${second.missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "2 / 3",
+        areaFreshnessFilter: "hidden",
+        visibleAreaOverlayCount: 0,
+        totalAreaOverlayCount: 3,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 1,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 1,
+      });
+
+    expect(firstSnapshot.status).toBe(201);
+    expect(secondSnapshot.status).toBe(201);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/live-operations/map-view-state/audit-snapshots`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.snapshots).toHaveLength(1);
+    expect(response.body.snapshots[0]).toMatchObject({
+      id: firstSnapshot.body.snapshot.id,
+      missionId: first.missionId,
+      replayCursor: "1 / 3",
+      areaFreshnessFilter: "all",
+    });
+  });
+
+  it("rejects invalid live-ops map view-state snapshot metadata", async () => {
+    const { missionId } = await createReadyMission();
+    const before = await countRows(missionId);
+
+    const unsupportedFilterResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "1 / 2",
+        areaFreshnessFilter: "stale",
+        visibleAreaOverlayCount: 1,
+        totalAreaOverlayCount: 2,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 0,
+      });
+    const impossibleCountsResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 2",
+        areaFreshnessFilter: "all",
+        visibleAreaOverlayCount: 3,
+        totalAreaOverlayCount: 2,
+        degradedAreaOverlayCount: 1,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 0,
+      });
+
+    expect(unsupportedFilterResponse.status).toBe(400);
+    expect(impossibleCountsResponse.status).toBe(400);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("returns 404 for unknown live-ops map view-state snapshot missions", async () => {
+    const missingMissionId = randomUUID();
+
+    const createResponse = await request(app)
+      .post(
+        `/missions/${missingMissionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "1 / 1",
+        areaFreshnessFilter: "all",
+        visibleAreaOverlayCount: 0,
+        totalAreaOverlayCount: 0,
+        degradedAreaOverlayCount: 0,
+        openAlertCount: 0,
+        activeConflictCount: 0,
+        areaRefreshRunCount: 0,
+      });
+    const listResponse = await request(app).get(
+      `/missions/${missingMissionId}/live-operations/map-view-state/audit-snapshots`,
+    );
+
+    expect(createResponse.status).toBe(404);
+    expect(listResponse.status).toBe(404);
+  });
+
   it("returns 404 for unknown missions", async () => {
     const missingMissionId = randomUUID();
 
@@ -829,6 +1138,225 @@ describe("audit evidence snapshots", () => {
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.snapshots[0]).toEqual(beforeSnapshot);
+  });
+
+  it("records conflict guidance acknowledgements as decision-support evidence", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: " conflict-critical-1 ",
+        overlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: " ops-supervisor ",
+        acknowledgementNote: " Supervisor reviewed the advisory. ",
+        guidanceSummary: " Critical crewed traffic conflict advisory. ",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.acknowledgement).toMatchObject({
+      missionId,
+      conflictId: "conflict-critical-1",
+      overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "ops-supervisor",
+      acknowledgementNote: "Supervisor reviewed the advisory.",
+      guidanceSummary: "Critical crewed traffic conflict advisory.",
+      pilotInstructionStatus: "not_a_pilot_command",
+    });
+    expect(response.body.acknowledgement.id).toEqual(expect.any(String));
+    expect(response.body.acknowledgement.createdAt).toEqual(expect.any(String));
+    expect(await countRows(missionId)).toEqual({
+      ...before,
+      conflict_guidance_acknowledgement_count:
+        before.conflict_guidance_acknowledgement_count + 1,
+    });
+  });
+
+  it("lists conflict guidance acknowledgements only for the requested mission", async () => {
+    const first = await createReadyMission();
+    const second = await createReadyMission();
+    const firstOverlayId = await createConflictOverlay(first.missionId);
+    const secondOverlayId = await createConflictOverlay(second.missionId);
+
+    const firstResponse = await request(app)
+      .post(`/missions/${first.missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "first-conflict",
+        overlayId: firstOverlayId,
+        guidanceActionCode: "prepare_deconfliction",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+        guidanceSummary: "Operator reviewed separation advisory.",
+      });
+    const secondResponse = await request(app)
+      .post(`/missions/${second.missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "second-conflict",
+        overlayId: secondOverlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: "supervisor-b",
+        guidanceSummary: "Supervisor reviewed hold-or-suspend advisory.",
+      });
+
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+
+    const response = await request(app).get(
+      `/missions/${first.missionId}/conflict-guidance-acknowledgements`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.acknowledgements).toHaveLength(1);
+    expect(response.body.acknowledgements[0]).toMatchObject({
+      missionId: first.missionId,
+      conflictId: "first-conflict",
+      overlayId: firstOverlayId,
+      evidenceAction: "record_operator_review",
+      pilotInstructionStatus: "not_a_pilot_command",
+    });
+  });
+
+  it("rejects duplicate conflict guidance acknowledgements for the same overlay and guidance", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const endpoint = `/missions/${missionId}/conflict-guidance-acknowledgements`;
+
+    const firstResponse = await request(app).post(endpoint).send({
+      conflictId: "first-conflict-id",
+      overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "supervisor-a",
+      guidanceSummary: "Supervisor reviewed initial duplicate advisory.",
+    });
+    const beforeDuplicate = await countRows(missionId);
+    const duplicateResponse = await request(app).post(endpoint).send({
+      conflictId: "new-assessment-conflict-id",
+      overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "supervisor-b",
+      guidanceSummary: "Supervisor reviewed duplicate advisory.",
+    });
+
+    expect(firstResponse.status).toBe(201);
+    expect(duplicateResponse.status).toBe(409);
+    expect(duplicateResponse.body).toMatchObject({
+      error: {
+        type: "conflict_guidance_acknowledgement_already_exists",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(beforeDuplicate);
+  });
+
+  it("rejects invalid conflict guidance acknowledgement requests", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    const missingActorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-a",
+        overlayId,
+        guidanceActionCode: "review_separation",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "operator",
+        guidanceSummary: "Operator review required.",
+      });
+    const missingGuidanceSummaryResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-summary",
+        overlayId,
+        guidanceActionCode: "review_separation",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+        guidanceSummary: " ",
+      });
+    const monitorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-b",
+        overlayId,
+        guidanceActionCode: "monitor_context",
+        evidenceAction: "none",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+        guidanceSummary: "Monitor action is not acknowledgement evidence.",
+      });
+    const supervisorEvidenceByOperatorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-c",
+        overlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "operator",
+        acknowledgedBy: "operator-a",
+        guidanceSummary: "Supervisor evidence cannot be acknowledged by operator.",
+      });
+    const operatorEvidenceBySupervisorResponse = await request(app)
+      .post(`/missions/${missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "conflict-d",
+        overlayId,
+        guidanceActionCode: "review_separation",
+        evidenceAction: "record_operator_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: "supervisor-a",
+        guidanceSummary: "Operator evidence cannot be acknowledged by supervisor.",
+      });
+
+    expect(missingActorResponse.status).toBe(400);
+    expect(missingGuidanceSummaryResponse.status).toBe(400);
+    expect(monitorResponse.status).toBe(400);
+    expect(supervisorEvidenceByOperatorResponse.status).toBe(400);
+    expect(operatorEvidenceBySupervisorResponse.status).toBe(400);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("does not acknowledge conflict guidance for another mission overlay", async () => {
+    const first = await createReadyMission();
+    const second = await createReadyMission();
+    const secondOverlayId = await createConflictOverlay(second.missionId);
+    const firstBefore = await countRows(first.missionId);
+    const secondBefore = await countRows(second.missionId);
+
+    const response = await request(app)
+      .post(`/missions/${first.missionId}/conflict-guidance-acknowledgements`)
+      .send({
+        conflictId: "wrong-overlay-conflict",
+        overlayId: secondOverlayId,
+        guidanceActionCode: "hold_or_suspend",
+        evidenceAction: "record_supervisor_review",
+        acknowledgementRole: "supervisor",
+        acknowledgedBy: "supervisor-a",
+        guidanceSummary: "Supervisor reviewed the wrong overlay reference.",
+      });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      error: {
+        type: "conflict_guidance_overlay_not_found",
+      },
+    });
+    expect(await countRows(first.missionId)).toEqual(firstBefore);
+    expect(await countRows(second.missionId)).toEqual(secondBefore);
   });
 
   it("captures post-operation completion evidence without mutating the mission", async () => {
@@ -1042,7 +1570,149 @@ describe("audit evidence snapshots", () => {
     expect(response.body.export.completionSnapshot).toEqual(
       snapshotResponse.body.snapshot.completionSnapshot,
     );
+    expect(response.body.export.liveOpsMapViewStateSnapshots).toEqual([]);
+    expect(response.body.export.conflictGuidanceAcknowledgements).toEqual([]);
     expect(response.body.export.safetyActionClosureEvidence).toEqual([]);
+    expect(response.body.export.regulatoryAmendmentAlerts).toEqual([]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("exports live-ops map view-state snapshots in post-operation evidence", async () => {
+    const { missionId } = await createCompletedMission();
+    const mapSnapshotResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 5",
+        replayTimestamp: "2026-04-18T12:03:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        createdBy: "live-ops-ui",
+      });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(mapSnapshotResponse.status).toBe(201);
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.liveOpsMapViewStateSnapshots).toHaveLength(1);
+    expect(response.body.export.liveOpsMapViewStateSnapshots[0]).toMatchObject({
+      id: mapSnapshotResponse.body.snapshot.id,
+      missionId,
+      evidenceType: "live_ops_map_view_state",
+      replayCursor: "3 / 5",
+      replayTimestamp: "2026-04-18T12:03:00.000Z",
+      areaFreshnessFilter: "degraded",
+      visibleAreaOverlayCount: 2,
+      totalAreaOverlayCount: 4,
+      degradedAreaOverlayCount: 2,
+      openAlertCount: 3,
+      activeConflictCount: 1,
+      areaRefreshRunCount: 5,
+      captureScope: "metadata_only",
+      pilotInstructionStatus: "not_a_pilot_command",
+      createdBy: "live-ops-ui",
+      snapshotMetadata: {
+        screenshotStatus: "not_captured",
+        fileGenerationStatus: "not_requested",
+      },
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("exports live conflict guidance acknowledgements in post-operation evidence", async () => {
+    const { missionId } = await createCompletedMission();
+    const acknowledgement = await createConflictGuidanceAcknowledgement(
+      missionId,
+      {
+        conflictId: "conflict-export-1",
+        acknowledgedBy: "night-ops-supervisor",
+        acknowledgementNote: "Supervisor acknowledged the live-ops advisory.",
+      },
+    );
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.conflictGuidanceAcknowledgements).toHaveLength(1);
+    expect(response.body.export.conflictGuidanceAcknowledgements[0]).toMatchObject({
+      id: acknowledgement.id,
+      missionId,
+      conflictId: "conflict-export-1",
+      overlayId: acknowledgement.overlayId,
+      guidanceActionCode: "hold_or_suspend",
+      evidenceAction: "record_supervisor_review",
+      acknowledgementRole: "supervisor",
+      acknowledgedBy: "night-ops-supervisor",
+      acknowledgementNote: "Supervisor acknowledged the live-ops advisory.",
+      pilotInstructionStatus: "not_a_pilot_command",
+    });
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("exports regulatory amendment alert review state in post-operation evidence", async () => {
+    const { missionId } = await createCompletedMission();
+    const alert = await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+      resolve: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.export.regulatoryAmendmentAlerts).toHaveLength(1);
+    expect(response.body.export.regulatoryAmendmentAlerts[0]).toMatchObject({
+      id: alert.id,
+      status: "resolved",
+      severity: "warning",
+      message:
+        "Regulatory amendment detected: CAA CAP 722 9.1 -> 9.2",
+      sourceDocument: "CAA CAP 722",
+      previousVersion: "9.1",
+      currentVersion: "9.2",
+      publishedAt: "2026-04-18T09:00:00.000Z",
+      effectiveFrom: "2026-05-01T00:00:00.000Z",
+      amendmentSummary: "Updated operator assessment evidence expectations.",
+      changeImpact:
+        "Review affected operating safety case and post-operation evidence pack.",
+      affectedRequirementRefs: ["CAP722-OSC", "CAP722-Records"],
+      reviewAction:
+        "Accountable manager to confirm mission evidence remains current.",
+      triggeredAt: "2026-04-18T09:00:00.000Z",
+      acknowledgedAt: "2026-04-18T10:00:00.000Z",
+      resolvedAt: "2026-04-18T11:00:00.000Z",
+    });
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -1103,6 +1773,167 @@ describe("audit evidence snapshots", () => {
         decision: "completed",
         decidedBy: "safety-manager",
         decisionNotes: "Implementation completed.",
+      }),
+    ]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("returns post-operation evidence readiness prompts without mutating audit state", async () => {
+    const { missionId } = await createCompletedMission();
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/readiness`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.readiness).toMatchObject({
+      missionId,
+      snapshotId: snapshotResponse.body.snapshot.id,
+      lifecycleState: "completed",
+      completionStatus: "completed",
+      evidenceCapturedAt: snapshotResponse.body.snapshot.createdAt,
+      signoff: {
+        status: "pending",
+        reviewDecision: null,
+        signoffId: null,
+        signedAt: null,
+      },
+      summary: {
+        hasLiveOpsMapViewStateSnapshots: false,
+        hasConflictGuidanceAcknowledgements: false,
+        hasSafetyActionClosureEvidence: false,
+        hasRegulatoryAmendmentReviews: false,
+        emptyCategoryCount: 4,
+        message:
+          "Empty categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+      },
+    });
+    expect(response.body.readiness.categories).toEqual([
+      expect.objectContaining({
+        key: "live_ops_map_view_state_snapshots",
+        label: "Live-ops map view-state snapshots",
+        count: 0,
+        status: "not_recorded",
+        message:
+          "No live-ops map view-state metadata is recorded in this evidence pack; this is a review prompt only, not an automatic rejection or compliance certificate.",
+      }),
+      expect.objectContaining({
+        key: "conflict_guidance_acknowledgements",
+        count: 0,
+        status: "not_recorded",
+      }),
+      expect.objectContaining({
+        key: "safety_action_closure_evidence",
+        count: 0,
+        status: "not_recorded",
+      }),
+      expect.objectContaining({
+        key: "regulatory_amendment_reviews",
+        count: 0,
+        status: "not_recorded",
+      }),
+    ]);
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("summarizes post-operation evidence readiness with records and sign-off state", async () => {
+    const { missionId } = await createCompletedMission();
+    await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "2 / 4",
+        replayTimestamp: "2026-04-18T12:01:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+      });
+    await createConflictGuidanceAcknowledgement(missionId, {
+      conflictId: "conflict-readiness-1",
+    });
+    await createSafetyActionClosureEvidence(missionId);
+    await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const signoffResponse = await request(app)
+      .post(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/signoffs`,
+      )
+      .send({
+        accountableManagerName: "Alex Accountable",
+        accountableManagerRole: "Accountable Manager",
+        reviewDecision: "approved",
+        signedAt: "2026-04-18T18:00:00.000Z",
+        signatureReference: "signature://accountable-manager/alex",
+        createdBy: "audit-admin",
+      });
+
+    expect(signoffResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/readiness`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.readiness).toMatchObject({
+      missionId,
+      snapshotId: snapshotResponse.body.snapshot.id,
+      signoff: {
+        status: "recorded",
+        reviewDecision: "approved",
+        signoffId: signoffResponse.body.signoff.id,
+        signedAt: "2026-04-18T18:00:00.000Z",
+      },
+      summary: {
+        hasLiveOpsMapViewStateSnapshots: true,
+        hasConflictGuidanceAcknowledgements: true,
+        hasSafetyActionClosureEvidence: true,
+        hasRegulatoryAmendmentReviews: true,
+        emptyCategoryCount: 0,
+        message:
+          "All tracked evidence categories have records for accountable-manager review.",
+      },
+    });
+    expect(response.body.readiness.categories).toEqual([
+      expect.objectContaining({
+        key: "live_ops_map_view_state_snapshots",
+        label: "Live-ops map view-state snapshots",
+        count: 1,
+        status: "present",
+        message:
+          "Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance.",
+      }),
+      expect.objectContaining({
+        key: "conflict_guidance_acknowledgements",
+        count: 1,
+        status: "present",
+      }),
+      expect.objectContaining({
+        key: "safety_action_closure_evidence",
+        count: 1,
+        status: "present",
+      }),
+      expect.objectContaining({
+        key: "regulatory_amendment_reviews",
+        count: 1,
+        status: "present",
       }),
     ]);
     expect(await countRows(missionId)).toEqual(before);
@@ -1261,11 +2092,78 @@ describe("audit evidence snapshots", () => {
             ]),
           },
           {
+            heading: "Evidence readiness summary",
+            fields: expect.arrayContaining([
+              {
+                label: "Readiness boundary",
+                value:
+                  "Evidence readiness categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+              },
+              {
+                label: "Sign-off separation",
+                value:
+                  "Accountable-manager sign-off remains separate from evidence category readiness.",
+              },
+              {
+                label: "Live-ops map view-state snapshots count",
+                value: 0,
+              },
+              {
+                label: "Live-ops map view-state snapshots status",
+                value: "not_recorded",
+              },
+              {
+                label: "Conflict guidance acknowledgements count",
+                value: 0,
+              },
+              {
+                label: "Safety action closure evidence count",
+                value: 0,
+              },
+              {
+                label: "Regulatory amendment reviews count",
+                value: 0,
+              },
+            ]),
+          },
+          {
+            heading: "Live-ops map view-state evidence",
+            fields: [
+              {
+                label: "Live-ops map view-state evidence",
+                value: "No live-ops map view-state snapshots recorded",
+              },
+              {
+                label: "Map view-state evidence boundary",
+                value:
+                  "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+              },
+            ],
+          },
+          {
+            heading: "Live conflict guidance acknowledgements",
+            fields: [
+              {
+                label: "Live conflict guidance acknowledgements",
+                value: "No live conflict guidance acknowledgements recorded",
+              },
+            ],
+          },
+          {
             heading: "Safety action closure evidence",
             fields: [
               {
                 label: "Safety action closure evidence",
                 value: "No safety action closure evidence recorded",
+              },
+            ],
+          },
+          {
+            heading: "Regulatory amendment alert review",
+            fields: [
+              {
+                label: "Regulatory amendment alerts",
+                value: "No regulatory amendment alerts recorded",
               },
             ],
           },
@@ -1301,6 +2199,27 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.report.report.plainText).toContain(
+      "Evidence readiness summary",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Readiness boundary: Evidence readiness categories are review prompts only and do not automatically reject the evidence pack or certify compliance.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Sign-off separation: Accountable-manager sign-off remains separate from evidence category readiness.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state snapshots status: not_recorded",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state evidence: No live-ops map view-state snapshots recorded",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state evidence boundary: Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live conflict guidance acknowledgements: No live conflict guidance acknowledgements recorded",
+    );
+    expect(response.body.report.report.plainText).toContain(
       "Safety action closure evidence: No safety action closure evidence recorded",
     );
     expect(response.body.report.report.plainText).toContain(
@@ -1311,6 +2230,245 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Post-operation report and sign-off controls",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders live-ops map view-state snapshots in post-operation reports", async () => {
+    const { missionId } = await createCompletedMission();
+    const mapSnapshotResponse = await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 5",
+        replayTimestamp: "2026-04-18T12:03:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+      });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(mapSnapshotResponse.status).toBe(201);
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Evidence readiness summary",
+      fields: expect.arrayContaining([
+        {
+          label: "Live-ops map view-state snapshots count",
+          value: 1,
+        },
+        {
+          label: "Live-ops map view-state snapshots status",
+          value: "present",
+        },
+        {
+          label: "Live-ops map view-state snapshots review prompt",
+          value:
+            "Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance.",
+        },
+        {
+          label: "Conflict guidance acknowledgements status",
+          value: "not_recorded",
+        },
+      ]),
+    });
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Live-ops map view-state evidence",
+      fields: expect.arrayContaining([
+        {
+          label: "Map view-state snapshot 1 ID",
+          value: mapSnapshotResponse.body.snapshot.id,
+        },
+        {
+          label: "Map view-state snapshot 1 replay cursor",
+          value: "3 / 5",
+        },
+        {
+          label: "Map view-state snapshot 1 area freshness filter",
+          value: "degraded",
+        },
+        {
+          label: "Map view-state snapshot 1 area overlays",
+          value: "2/4 visible; 2 degraded",
+        },
+        {
+          label: "Map view-state snapshot 1 alerts and conflicts",
+          value: "3 open alerts; 1 active conflicts",
+        },
+        {
+          label: "Map view-state snapshot 1 capture scope",
+          value: "metadata_only",
+        },
+        {
+          label: "Map view-state snapshot 1 pilot instruction status",
+          value: "not_a_pilot_command",
+        },
+        {
+          label: "Map view-state snapshot 1 evidence boundary",
+          value:
+            "Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state evidence",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state snapshots status: present",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Live-ops map view-state snapshots review prompt: Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 replay cursor: 3 / 5",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 area overlays: 2/4 visible; 2 degraded",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 pilot instruction status: not_a_pilot_command",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 evidence boundary: Metadata-only evidence; no screenshot/file capture and not pilot command guidance.",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders live conflict guidance acknowledgements in post-operation reports", async () => {
+    const { missionId } = await createCompletedMission();
+    const acknowledgement = await createConflictGuidanceAcknowledgement(
+      missionId,
+      {
+        conflictId: "conflict-report-1",
+        acknowledgedBy: "report-supervisor",
+        acknowledgementNote: "Included in post-operation report.",
+        guidanceSummary:
+          "Critical conflict advisory reviewed before accountable-manager sign-off.",
+      },
+    );
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Live conflict guidance acknowledgements",
+      fields: expect.arrayContaining([
+        {
+          label: "Conflict acknowledgement 1 ID",
+          value: acknowledgement.id,
+        },
+        {
+          label: "Conflict acknowledgement 1 conflict ID",
+          value: "conflict-report-1",
+        },
+        {
+          label: "Conflict acknowledgement 1 action code",
+          value: "hold_or_suspend",
+        },
+        {
+          label: "Conflict acknowledgement 1 guidance summary",
+          value:
+            "Critical conflict advisory reviewed before accountable-manager sign-off.",
+        },
+        {
+          label: "Conflict acknowledgement 1 pilot instruction status",
+          value: "not_a_pilot_command",
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Live conflict guidance acknowledgements",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Conflict acknowledgement 1 acknowledged by: report-supervisor",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Conflict acknowledgement 1 guidance summary: Critical conflict advisory reviewed before accountable-manager sign-off.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Conflict acknowledgement 1 pilot instruction status: not_a_pilot_command",
+    );
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("renders regulatory amendment alert reviews in post-operation reports", async () => {
+    const { missionId } = await createCompletedMission();
+    const alert = await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({ createdBy: "accountable-manager" });
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app).get(
+      `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.report.report.sections).toContainEqual({
+      heading: "Regulatory amendment alert review",
+      fields: expect.arrayContaining([
+        {
+          label: "Regulatory amendment alert 1 ID",
+          value: alert.id,
+        },
+        {
+          label: "Regulatory amendment alert 1 status",
+          value: "acknowledged",
+        },
+        {
+          label: "Regulatory amendment alert 1 source",
+          value: "CAA CAP 722",
+        },
+        {
+          label: "Regulatory amendment alert 1 version change",
+          value: "9.1 -> 9.2",
+        },
+        {
+          label: "Regulatory amendment alert 1 affected references",
+          value: "CAP722-OSC, CAP722-Records",
+        },
+        {
+          label: "Regulatory amendment alert 1 acknowledged at",
+          value: "2026-04-18T10:00:00.000Z",
+        },
+      ]),
+    });
+    expect(response.body.report.report.plainText).toContain(
+      "Regulatory amendment alert review",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Regulatory amendment alert 1 review action: Accountable manager to confirm mission evidence remains current.",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Regulatory amendment alert 1 affected references: CAP722-OSC, CAP722-Records",
     );
     expect(await countRows(missionId)).toEqual(before);
   });
@@ -1633,6 +2791,33 @@ describe("audit evidence snapshots", () => {
       "Review decision/status: Pending sign-off",
     );
     expect(response.body.toString("latin1")).toContain(
+      "Evidence readiness summary",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Evidence readiness categories are review prompts only",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "automatically reject the evidence pack or certify compliance.",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Sign-off separation: Accountable-manager sign-off remains separate",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Live-ops map view-state snapshots status: not_recorded",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Live-ops map view-state evidence",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "No live-ops map view-state snapshots recorded",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "Live conflict guidance acknowledgements",
+    );
+    expect(response.body.toString("latin1")).toContain(
+      "No live conflict guidance acknowledgements recorded",
+    );
+    expect(response.body.toString("latin1")).toContain(
       "Safety action closure evidence",
     );
     expect(response.body.toString("latin1")).toContain(
@@ -1645,6 +2830,98 @@ describe("audit evidence snapshots", () => {
       "Mission readiness gate controls",
     );
     expect(response.body.toString("latin1")).toContain("1.5 SMS documentation");
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("includes live-ops map view-state evidence boundaries in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    await request(app)
+      .post(
+        `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+      )
+      .send({
+        replayCursor: "3 / 5",
+        replayTimestamp: "2026-04-18T12:03:00.000Z",
+        areaFreshnessFilter: "degraded",
+        visibleAreaOverlayCount: 2,
+        totalAreaOverlayCount: 4,
+        degradedAreaOverlayCount: 2,
+        openAlertCount: 3,
+        activeConflictCount: 1,
+        areaRefreshRunCount: 5,
+        viewStateUrl:
+          "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+      });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    const pdfText = response.body.toString("latin1");
+    expect(pdfText).toContain("Live-ops map view-state evidence");
+    expect(pdfText).toContain("Map view-state snapshot 1 replay cursor: 3 / 5");
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 capture scope: metadata_only",
+    );
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 pilot instruction status",
+    );
+    expect(pdfText).toContain("not_a_pilot_command");
+    expect(pdfText).toContain("Metadata-only evidence; no screenshot/file");
+    expect(pdfText).toContain("not pilot command guidance.");
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("includes live conflict guidance acknowledgements in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    await createConflictGuidanceAcknowledgement(missionId, {
+      conflictId: "conflict-pdf-1",
+      acknowledgedBy: "pdf-supervisor",
+      acknowledgementNote: "PDF export should include this review.",
+      guidanceSummary:
+        "PDF export should preserve the conflict advisory summary.",
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    const pdfText = response.body.toString("latin1");
+    expect(pdfText).toContain("Live conflict guidance acknowledgements");
+    expect(pdfText).toContain(
+      "Conflict acknowledgement 1 conflict ID: conflict-pdf-1",
+    );
+    expect(pdfText).toContain(
+      "Conflict acknowledgement 1 acknowledged by: pdf-supervisor",
+    );
+    expect(pdfText).toContain("Conflict acknowledgement 1 guidance summary");
+    expect(pdfText).toContain(
+      "PDF export should preserve the conflict",
+    );
+    expect(pdfText).toContain("advisory summary.");
+    expect(pdfText).toContain(
+      "Conflict acknowledgement 1 pilot instruction status: not_a_pilot_command",
+    );
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -1677,6 +2954,47 @@ describe("audit evidence snapshots", () => {
       "Closure 1 implementation summary: Motor mount inspection closed",
     );
     expect(pdfText).toContain("Closure 1 action decisions: accepted, completed");
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("includes regulatory amendment alert reviews in post-operation audit PDFs", async () => {
+    const { missionId } = await createCompletedMission();
+    await createRegulatoryAmendmentAlert(missionId, {
+      acknowledge: true,
+      resolve: true,
+    });
+    const snapshotResponse = await request(app)
+      .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
+      .send({});
+
+    expect(snapshotResponse.status).toBe(201);
+    const before = await countRows(missionId);
+
+    const response = await request(app)
+      .get(
+        `/missions/${missionId}/post-operation/evidence-snapshots/${snapshotResponse.body.snapshot.id}/export/render/pdf`,
+      )
+      .buffer(true)
+      .parse(parseBinaryResponse);
+
+    expect(response.status).toBe(200);
+    const pdfText = response.body.toString("latin1");
+    expect(pdfText).toContain("Regulatory amendment alert review");
+    expect(pdfText).toContain("Regulatory amendment alert 1 status: resolved");
+    expect(pdfText).toContain("Regulatory amendment alert 1 source: CAA CAP 722");
+    expect(pdfText).toContain(
+      "Regulatory amendment alert 1 version change: 9.1 -> 9.2",
+    );
+    expect(pdfText).toContain("Regulatory amendment alert 1 affected references");
+    expect(pdfText).toContain("CAP722-OSC, CAP722-Records");
+    expect(pdfText).toContain("Regulatory amendment alert 1 review action");
+    expect(pdfText).toContain(
+      "Accountable manager to confirm mission evidence",
+    );
+    expect(pdfText).toContain("remains current.");
+    expect(pdfText).toContain(
+      "Regulatory amendment alert 1 resolved at: 2026-04-18T11:00:00.000Z",
+    );
     expect(await countRows(missionId)).toEqual(before);
   });
 
@@ -2079,6 +3397,154 @@ describe("audit evidence snapshots", () => {
 
     expect(await countRows(first.missionId)).toEqual(firstBefore);
     expect(await countRows(second.missionId)).toEqual(secondBefore);
+  });
+
+  it("rejects direct conflict guidance acknowledgement records with mismatched evidence roles", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into conflict_guidance_acknowledgements (
+          id,
+          mission_id,
+          conflict_id,
+          overlay_id,
+          guidance_action_code,
+          evidence_action,
+          acknowledgement_role,
+          acknowledged_by,
+          guidance_summary
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `,
+        [
+          randomUUID(),
+          missionId,
+          "conflict-db-mismatch",
+          overlayId,
+          "hold_or_suspend",
+          "record_supervisor_review",
+          "operator",
+          "operator-a",
+          "Direct DB role mismatch summary.",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23514",
+    });
+
+    expect(await countRows(missionId)).toEqual(before);
+  });
+
+  it("rejects direct duplicate conflict guidance acknowledgement records", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+
+    await pool.query(
+      `
+      insert into conflict_guidance_acknowledgements (
+        id,
+        mission_id,
+        conflict_id,
+        overlay_id,
+        guidance_action_code,
+        evidence_action,
+        acknowledgement_role,
+        acknowledged_by,
+        guidance_summary
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `,
+      [
+        randomUUID(),
+        missionId,
+        "conflict-db-duplicate-first",
+        overlayId,
+        "hold_or_suspend",
+        "record_supervisor_review",
+        "supervisor",
+        "supervisor-a",
+        "First direct duplicate summary.",
+      ],
+    );
+    const beforeDuplicate = await countRows(missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into conflict_guidance_acknowledgements (
+          id,
+          mission_id,
+          conflict_id,
+          overlay_id,
+          guidance_action_code,
+          evidence_action,
+          acknowledgement_role,
+          acknowledged_by,
+          guidance_summary
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `,
+        [
+          randomUUID(),
+          missionId,
+          "conflict-db-duplicate-second",
+          overlayId,
+          "hold_or_suspend",
+          "record_supervisor_review",
+          "supervisor",
+          "supervisor-b",
+          "Second direct duplicate summary.",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23505",
+    });
+
+    expect(await countRows(missionId)).toEqual(beforeDuplicate);
+  });
+
+  it("rejects direct conflict guidance acknowledgement records without a guidance summary", async () => {
+    const { missionId } = await createReadyMission();
+    const overlayId = await createConflictOverlay(missionId);
+    const before = await countRows(missionId);
+
+    await expect(
+      pool.query(
+        `
+        insert into conflict_guidance_acknowledgements (
+          id,
+          mission_id,
+          conflict_id,
+          overlay_id,
+          guidance_action_code,
+          evidence_action,
+          acknowledgement_role,
+          acknowledged_by,
+          guidance_summary
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `,
+        [
+          randomUUID(),
+          missionId,
+          "conflict-db-empty-summary",
+          overlayId,
+          "hold_or_suspend",
+          "record_supervisor_review",
+          "supervisor",
+          "supervisor-a",
+          " ",
+        ],
+      ),
+    ).rejects.toMatchObject({
+      code: "23514",
+    });
+
+    expect(await countRows(missionId)).toEqual(before);
   });
 
   it("rejects unsupported accountable-manager sign-off review decisions", async () => {

@@ -9,6 +9,7 @@ export type MaintenanceScheduleStatus = "active" | "inactive";
 
 export interface CreatePlatformInput {
   name?: string;
+  aircraftTypeSpecId?: string | null;
   registration?: string | null;
   platformType?: string | null;
   manufacturer?: string | null;
@@ -22,6 +23,8 @@ export interface CreatePlatformInput {
 export interface Platform {
   id: string;
   name: string;
+  aircraftTypeSpecId: string | null;
+  aircraftTypeSpec: AircraftTypeSpec | null;
   registration: string | null;
   platformType: string | null;
   manufacturer: string | null;
@@ -112,4 +115,71 @@ export interface PlatformReadinessCheck {
   result: PlatformReadinessResult;
   reasons: PlatformReadinessReason[];
   maintenanceStatus: PlatformMaintenanceStatus;
+}
+
+export type AircraftSpecSourceType =
+  | "manufacturer"
+  | "curated"
+  | "operator"
+  | "api";
+
+export interface CreateAircraftTypeSpecInput {
+  displayName?: string;
+  manufacturer?: string;
+  model?: string;
+  aircraftType?: string | null;
+  mtomKg?: number | null;
+  maxPayloadKg?: number | null;
+  maxWindMps?: number | null;
+  maxGustMps?: number | null;
+  minOperatingTempC?: number | null;
+  maxOperatingTempC?: number | null;
+  maxFlightTimeMin?: number | null;
+  maxRangeM?: number | null;
+  ipRating?: string | null;
+  gnssCapability?: string | null;
+  rtkCapable?: boolean;
+  manufacturerMaintenanceScheduleRef?: string | null;
+  manufacturerMaintenanceScheduleVersion?: string | null;
+  manufacturerMaintenanceScheduleUrl?: string | null;
+  manufacturerMaintenanceAdvice?: string | null;
+  recommendedInspectionIntervalDays?: number | null;
+  recommendedInspectionIntervalFlightHours?: number | null;
+  sourceType?: AircraftSpecSourceType;
+  sourceReference?: string;
+  sourceVersion?: string | null;
+  sourceUrl?: string | null;
+  notes?: string | null;
+}
+
+export interface AircraftTypeSpec {
+  id: string;
+  displayName: string;
+  manufacturer: string;
+  model: string;
+  aircraftType: string | null;
+  mtomKg: number | null;
+  maxPayloadKg: number | null;
+  maxWindMps: number | null;
+  maxGustMps: number | null;
+  minOperatingTempC: number | null;
+  maxOperatingTempC: number | null;
+  maxFlightTimeMin: number | null;
+  maxRangeM: number | null;
+  ipRating: string | null;
+  gnssCapability: string | null;
+  rtkCapable: boolean;
+  manufacturerMaintenanceScheduleRef: string | null;
+  manufacturerMaintenanceScheduleVersion: string | null;
+  manufacturerMaintenanceScheduleUrl: string | null;
+  manufacturerMaintenanceAdvice: string | null;
+  recommendedInspectionIntervalDays: number | null;
+  recommendedInspectionIntervalFlightHours: number | null;
+  sourceType: AircraftSpecSourceType;
+  sourceReference: string;
+  sourceVersion: string | null;
+  sourceUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -1,7 +1,9 @@
 import { PlatformValidationError } from "./platform.errors";
 import type {
+  AircraftSpecSourceType,
   CreateMaintenanceRecordInput,
   CreateMaintenanceScheduleInput,
+  CreateAircraftTypeSpecInput,
   CreatePlatformInput,
   MaintenanceScheduleStatus,
   PlatformStatus,
@@ -18,6 +20,13 @@ const PLATFORM_STATUSES = new Set<PlatformStatus>([
 const SCHEDULE_STATUSES = new Set<MaintenanceScheduleStatus>([
   "active",
   "inactive",
+]);
+
+const AIRCRAFT_SPEC_SOURCE_TYPES = new Set<AircraftSpecSourceType>([
+  "manufacturer",
+  "curated",
+  "operator",
+  "api",
 ]);
 
 function optionalTrimmed(value: unknown, fieldName: string): string | null {
@@ -82,6 +91,30 @@ function optionalPositiveNumber(value: unknown, fieldName: string): number | nul
   return value;
 }
 
+function optionalFiniteNumber(value: unknown, fieldName: string): number | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new PlatformValidationError(`${fieldName} must be a finite number`);
+  }
+
+  return value;
+}
+
+function optionalBoolean(value: unknown, fieldName: string): boolean {
+  if (value === undefined || value === null || value === "") {
+    return false;
+  }
+
+  if (typeof value !== "boolean") {
+    throw new PlatformValidationError(`${fieldName} must be a boolean`);
+  }
+
+  return value;
+}
+
 function optionalDate(value: unknown, fieldName: string): Date | null {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -107,6 +140,10 @@ export function validateCreatePlatformInput(input: CreatePlatformInput) {
 
   return {
     name: requiredTrimmed(input.name, "name"),
+    aircraftTypeSpecId: optionalTrimmed(
+      input.aircraftTypeSpecId,
+      "aircraftTypeSpecId",
+    ),
     registration: optionalTrimmed(input.registration, "registration"),
     platformType: optionalTrimmed(input.platformType, "platformType"),
     manufacturer: optionalTrimmed(input.manufacturer, "manufacturer"),
@@ -175,5 +212,87 @@ export function validateCreateMaintenanceRecordInput(
     ),
     notes: optionalTrimmed(input.notes, "notes"),
     evidenceRef: optionalTrimmed(input.evidenceRef, "evidenceRef"),
+  };
+}
+
+export function validateCreateAircraftTypeSpecInput(
+  input: CreateAircraftTypeSpecInput,
+) {
+  if (!input || typeof input !== "object") {
+    throw new PlatformValidationError("Request body must be an object");
+  }
+
+  const sourceType = input.sourceType ?? "curated";
+  if (!AIRCRAFT_SPEC_SOURCE_TYPES.has(sourceType)) {
+    throw new PlatformValidationError("sourceType is not supported");
+  }
+
+  const minOperatingTempC = optionalFiniteNumber(
+    input.minOperatingTempC,
+    "minOperatingTempC",
+  );
+  const maxOperatingTempC = optionalFiniteNumber(
+    input.maxOperatingTempC,
+    "maxOperatingTempC",
+  );
+
+  if (
+    minOperatingTempC !== null &&
+    maxOperatingTempC !== null &&
+    minOperatingTempC > maxOperatingTempC
+  ) {
+    throw new PlatformValidationError(
+      "minOperatingTempC must be less than or equal to maxOperatingTempC",
+    );
+  }
+
+  return {
+    displayName: requiredTrimmed(input.displayName, "displayName"),
+    manufacturer: requiredTrimmed(input.manufacturer, "manufacturer"),
+    model: requiredTrimmed(input.model, "model"),
+    aircraftType: optionalTrimmed(input.aircraftType, "aircraftType"),
+    mtomKg: optionalPositiveNumber(input.mtomKg, "mtomKg"),
+    maxPayloadKg: optionalNonNegativeNumber(input.maxPayloadKg, "maxPayloadKg"),
+    maxWindMps: optionalPositiveNumber(input.maxWindMps, "maxWindMps"),
+    maxGustMps: optionalPositiveNumber(input.maxGustMps, "maxGustMps"),
+    minOperatingTempC,
+    maxOperatingTempC,
+    maxFlightTimeMin: optionalPositiveInteger(
+      input.maxFlightTimeMin,
+      "maxFlightTimeMin",
+    ),
+    maxRangeM: optionalPositiveInteger(input.maxRangeM, "maxRangeM"),
+    ipRating: optionalTrimmed(input.ipRating, "ipRating"),
+    gnssCapability: optionalTrimmed(input.gnssCapability, "gnssCapability"),
+    rtkCapable: optionalBoolean(input.rtkCapable, "rtkCapable"),
+    manufacturerMaintenanceScheduleRef: optionalTrimmed(
+      input.manufacturerMaintenanceScheduleRef,
+      "manufacturerMaintenanceScheduleRef",
+    ),
+    manufacturerMaintenanceScheduleVersion: optionalTrimmed(
+      input.manufacturerMaintenanceScheduleVersion,
+      "manufacturerMaintenanceScheduleVersion",
+    ),
+    manufacturerMaintenanceScheduleUrl: optionalTrimmed(
+      input.manufacturerMaintenanceScheduleUrl,
+      "manufacturerMaintenanceScheduleUrl",
+    ),
+    manufacturerMaintenanceAdvice: optionalTrimmed(
+      input.manufacturerMaintenanceAdvice,
+      "manufacturerMaintenanceAdvice",
+    ),
+    recommendedInspectionIntervalDays: optionalPositiveInteger(
+      input.recommendedInspectionIntervalDays,
+      "recommendedInspectionIntervalDays",
+    ),
+    recommendedInspectionIntervalFlightHours: optionalPositiveNumber(
+      input.recommendedInspectionIntervalFlightHours,
+      "recommendedInspectionIntervalFlightHours",
+    ),
+    sourceType,
+    sourceReference: requiredTrimmed(input.sourceReference, "sourceReference"),
+    sourceVersion: optionalTrimmed(input.sourceVersion, "sourceVersion"),
+    sourceUrl: optionalTrimmed(input.sourceUrl, "sourceUrl"),
+    notes: optionalTrimmed(input.notes, "notes"),
   };
 }
