@@ -1,32 +1,32 @@
 # NEXT STEP
 
 ## Goal
-Add accountable review outcomes for safety and regulatory source records.
+Connect SOP-linked change recommendations to mission evidence.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- add lightweight review outcome controls to safety/SOP and regulatory source-record panels
-- capture review state such as noted, needs action, or accepted for evidence pack
-- show latest review outcome next to the source record before accountable-manager sign-off
+- generate draft change recommendation records against linked SOP documents
+- show which SOP code, SOP clause, and parent OA condition a recommendation relates to
+- keep the recommendation visible in the post-operation review flow before accountable-manager sign-off
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- keep review outcomes framed as internal accountable review notes, not compliance certification or regulatory submission
+- keep recommendations framed as accountable review prompts, not automatic SOP amendment or regulatory submission
 
 ### 3. Tests
-- add backend and mission workspace UI tests for source-record review outcomes
+- add backend and mission workspace UI tests for SOP-linked recommendation records
 - run mission-planning UI tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Safety/SOP and regulatory source records can carry an explicit accountable review outcome
-- Mission workspace shows latest outcome state without implying certification or automatic closure
+- Post-operation review can show draft recommendations linked to a specific SOP and parent OA condition
+- Mission workspace shows recommendation state without implying the SOP has been amended automatically
 - Copy remains explicit that links support audit review, not compliance certification
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation

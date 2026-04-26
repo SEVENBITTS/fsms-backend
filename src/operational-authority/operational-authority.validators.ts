@@ -7,10 +7,12 @@ import type {
   CreateOperationalAuthorityDocumentInput,
   CreateOperationalAuthorityPilotAuthorisationInput,
   CreateOperationalAuthorityPilotAuthorisationReviewInput,
+  CreateOperationalAuthoritySopDocumentInput,
   MissionOperationType,
   OperationalAuthorityConditionCode,
   OperationalAuthorityPilotAuthorisationReviewDecision,
   OperationalAuthorityPilotAuthorisationState,
+  OperationalAuthoritySopDocumentStatus,
   UpdateOperationalAuthorityPilotAuthorisationInput,
   UploadOperationalAuthorityDocumentInput,
 } from "./operational-authority.types";
@@ -45,6 +47,13 @@ const PILOT_AUTHORISATION_REVIEW_DECISIONS =
     "deferred",
     "amendment_approved",
   ]);
+
+const SOP_DOCUMENT_STATUSES = new Set<OperationalAuthoritySopDocumentStatus>([
+  "draft",
+  "active",
+  "under_review",
+  "superseded",
+]);
 
 function requiredTrimmed(value: unknown, fieldName: string): string {
   if (typeof value !== "string") {
@@ -81,6 +90,22 @@ function optionalBoolean(value: unknown, fieldName: string): boolean | undefined
   }
 
   return value;
+}
+
+function optionalStringArray(value: unknown, fieldName: string): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new OperationalAuthorityValidationError(
+      `${fieldName} must be an array of strings`,
+    );
+  }
+
+  return value.map((item, index) =>
+    requiredTrimmed(item, `${fieldName}[${index}]`),
+  );
 }
 
 function requiredIsoDate(value: unknown, fieldName: string): string {
@@ -255,6 +280,23 @@ function validatePilotAuthorisationReviewDecision(
   return value as OperationalAuthorityPilotAuthorisationReviewDecision;
 }
 
+function validateSopDocumentStatus(
+  value: unknown,
+): OperationalAuthoritySopDocumentStatus {
+  if (value === undefined || value === null || value === "") {
+    return "draft";
+  }
+
+  if (
+    typeof value !== "string" ||
+    !SOP_DOCUMENT_STATUSES.has(value as OperationalAuthoritySopDocumentStatus)
+  ) {
+    throw new OperationalAuthorityValidationError("status is not supported");
+  }
+
+  return value as OperationalAuthoritySopDocumentStatus;
+}
+
 export function validateCreateOperationalAuthorityDocumentInput(
   input: CreateOperationalAuthorityDocumentInput | undefined,
 ) {
@@ -336,6 +378,43 @@ export function validateUploadOperationalAuthorityDocumentInput(
       "documentReviewNotes",
     ),
     uploadedBy: optionalTrimmed(input.uploadedBy, "uploadedBy"),
+  };
+}
+
+export function validateCreateOperationalAuthoritySopDocumentInput(
+  input: CreateOperationalAuthoritySopDocumentInput | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new OperationalAuthorityValidationError("Request body must be an object");
+  }
+
+  return {
+    sopCode: requiredTrimmed(input.sopCode, "sopCode"),
+    title: requiredTrimmed(input.title, "title"),
+    version: requiredTrimmed(input.version, "version"),
+    status: validateSopDocumentStatus(input.status),
+    owner: optionalTrimmed(input.owner, "owner"),
+    sourceDocumentId: optionalTrimmed(
+      input.sourceDocumentId,
+      "sourceDocumentId",
+    ),
+    sourceDocumentType: optionalTrimmed(
+      input.sourceDocumentType,
+      "sourceDocumentType",
+    ),
+    sourceClauseRefs: optionalStringArray(
+      input.sourceClauseRefs,
+      "sourceClauseRefs",
+    ),
+    linkedOaConditionIds: optionalStringArray(
+      input.linkedOaConditionIds,
+      "linkedOaConditionIds",
+    ),
+    changeRecommendationScope: optionalStringArray(
+      input.changeRecommendationScope,
+      "changeRecommendationScope",
+    ),
+    reviewNotes: optionalTrimmed(input.reviewNotes, "reviewNotes"),
   };
 }
 

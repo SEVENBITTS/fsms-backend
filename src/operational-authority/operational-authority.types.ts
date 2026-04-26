@@ -53,6 +53,26 @@ export interface UploadOperationalAuthorityDocumentInput {
   uploadedBy?: string | null;
 }
 
+export type OperationalAuthoritySopDocumentStatus =
+  | "draft"
+  | "active"
+  | "under_review"
+  | "superseded";
+
+export interface CreateOperationalAuthoritySopDocumentInput {
+  sopCode?: string;
+  title?: string;
+  version?: string;
+  status?: OperationalAuthoritySopDocumentStatus;
+  owner?: string | null;
+  sourceDocumentId?: string | null;
+  sourceDocumentType?: string | null;
+  sourceClauseRefs?: string[] | null;
+  linkedOaConditionIds?: string[] | null;
+  changeRecommendationScope?: string[] | null;
+  reviewNotes?: string | null;
+}
+
 export interface ActivateOperationalAuthorityProfileInput {
   activatedBy?: string;
 }
@@ -135,6 +155,25 @@ export interface OperationalAuthorityCondition {
   conditionTitle: string;
   clauseReference: string | null;
   conditionPayload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OperationalAuthoritySopDocument {
+  id: string;
+  operationalAuthorityProfileId: string;
+  organisationId: string;
+  sopCode: string;
+  title: string;
+  version: string;
+  status: OperationalAuthoritySopDocumentStatus;
+  owner: string | null;
+  sourceDocumentId: string | null;
+  sourceDocumentType: string | null;
+  sourceClauseRefs: string[];
+  linkedOaConditionIds: string[];
+  changeRecommendationScope: string[];
+  reviewNotes: string | null;
   createdAt: string;
   updatedAt: string;
 }

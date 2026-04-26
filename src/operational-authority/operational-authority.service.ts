@@ -11,6 +11,7 @@ import type {
   CreateOperationalAuthorityDocumentInput,
   CreateOperationalAuthorityPilotAuthorisationInput,
   CreateOperationalAuthorityPilotAuthorisationReviewInput,
+  CreateOperationalAuthoritySopDocumentInput,
   OperationalAuthorityAssessment,
   OperationalAuthorityAssessmentReason,
   OperationalAuthorityPilotAuthorisation,
@@ -22,6 +23,7 @@ import {
   validateCreateOperationalAuthorityDocumentInput,
   validateCreateOperationalAuthorityPilotAuthorisationInput,
   validateCreateOperationalAuthorityPilotAuthorisationReviewInput,
+  validateCreateOperationalAuthoritySopDocumentInput,
   validateUpdateOperationalAuthorityPilotAuthorisationInput,
   validateUploadOperationalAuthorityDocumentInput,
 } from "./operational-authority.validators";
@@ -229,6 +231,77 @@ export class OperationalAuthorityService {
       }
 
       return mission.organisationId;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createSopDocument(
+    profileId: string,
+    input: CreateOperationalAuthoritySopDocumentInput | undefined,
+  ) {
+    const validated = validateCreateOperationalAuthoritySopDocumentInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const profile = await this.operationalAuthorityRepository.getProfileById(
+        client,
+        profileId,
+      );
+
+      if (!profile) {
+        throw new OperationalAuthorityProfileNotFoundError(profileId);
+      }
+
+      const sopDocument =
+        await this.operationalAuthorityRepository.insertSopDocument(client, {
+          profileId,
+          organisationId: profile.organisationId,
+          sopCode: validated.sopCode,
+          title: validated.title,
+          version: validated.version,
+          status: validated.status,
+          owner: validated.owner,
+          sourceDocumentId: validated.sourceDocumentId,
+          sourceDocumentType: validated.sourceDocumentType,
+          sourceClauseRefs: validated.sourceClauseRefs,
+          linkedOaConditionIds: validated.linkedOaConditionIds,
+          changeRecommendationScope: validated.changeRecommendationScope,
+          reviewNotes: validated.reviewNotes,
+        });
+
+      await client.query("COMMIT");
+      return { profile, sopDocument };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSopDocuments(profileId: string) {
+    const client = await this.pool.connect();
+
+    try {
+      const profile = await this.operationalAuthorityRepository.getProfileById(
+        client,
+        profileId,
+      );
+
+      if (!profile) {
+        throw new OperationalAuthorityProfileNotFoundError(profileId);
+      }
+
+      const sopDocuments =
+        await this.operationalAuthorityRepository.listSopDocumentsForProfile(
+          client,
+          profileId,
+        );
+
+      return { profile, sopDocuments };
     } finally {
       client.release();
     }

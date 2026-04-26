@@ -85,6 +85,13 @@ The hierarchy should be:
 
 The original OA remains a controlled evidence object.
 
+Important modelling rule:
+
+- the OA is the controlling approval envelope issued by the CAA
+- SOPs are distinct linked procedures beneath that OA profile
+- VerityATLAS should not collapse SOPs into the OA record itself
+- change recommendations should point to the relevant SOP procedure or clause wherever possible, while retaining the parent OA condition that gives the SOP its authority context
+
 Minimum fields:
 
 - `id`
@@ -138,6 +145,8 @@ SOPs are separate from the OA but must be linked to it.
 
 SOPs define how the company intends to operate inside its authorised envelope.
 
+In implementation terms, SOPs should sit below the active OA profile as linked procedure records. The OA remains the main title and compliance envelope; SOPs become the subtitle/procedure layer used for mission method assurance and change recommendation targeting.
+
 Minimum fields:
 
 - `sopId`
@@ -150,6 +159,19 @@ Minimum fields:
 - `supersededBy`
 - `owner`
 - `approvalRecord`
+- `linkedOaConditionIds`
+- `changeRecommendationScope`
+
+Recommended operator-facing labels:
+
+- main section: `Operational Authority`
+- subsection: `Linked SOPs / Standard Operating Procedures`
+- recommendation target: `SOP clause or procedure requiring review`
+
+Example change recommendation wording:
+
+- "This finding may require accountable review of SOP-FLT-003 clause SOP 3.2 under OA condition OA 7.1."
+- "This does not alter the OA or SOP automatically; it surfaces a linked procedure review requirement for the operator."
 
 ### 5. Mission Assurance Against OA And SOP
 

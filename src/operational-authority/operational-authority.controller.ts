@@ -181,6 +181,69 @@ export class OperationalAuthorityController {
     }
   };
 
+  listSopDocuments = async (
+    req: Request<ProfileIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const user = requireCurrentUser(req);
+      const organisationId =
+        await this.operationalAuthorityService.getProfileOrganisationId(
+          req.params.profileId,
+        );
+      await this.organisationMembershipsService.requireMembership(
+        user.id,
+        organisationId,
+        [
+          "viewer",
+          "operator",
+          "operations_manager",
+          "compliance_manager",
+          "accountable_manager",
+          "admin",
+        ],
+      );
+      const listed = await this.operationalAuthorityService.listSopDocuments(
+        req.params.profileId,
+      );
+      res.status(200).json(listed);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createSopDocument = async (
+    req: Request<ProfileIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const user = requireCurrentUser(req);
+      const organisationId =
+        await this.operationalAuthorityService.getProfileOrganisationId(
+          req.params.profileId,
+        );
+      await this.organisationMembershipsService.requireMembership(
+        user.id,
+        organisationId,
+        [
+          "operations_manager",
+          "compliance_manager",
+          "accountable_manager",
+          "admin",
+        ],
+      );
+      const created = await this.operationalAuthorityService.createSopDocument(
+        req.params.profileId,
+        req.body,
+      );
+      res.status(201).json(created);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   createPilotAuthorisation = async (
     req: Request<ProfileIdParams>,
     res: Response,

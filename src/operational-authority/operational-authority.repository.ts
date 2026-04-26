@@ -6,6 +6,7 @@ import type {
   OperationalAuthorityPilotAuthorisation,
   OperationalAuthorityPilotAuthorisationReview,
   OperationalAuthorityProfile,
+  OperationalAuthoritySopDocument,
 } from "./operational-authority.types";
 
 interface MissionGovernanceRow extends QueryResultRow {
@@ -57,6 +58,25 @@ interface OperationalAuthorityConditionRow extends QueryResultRow {
   condition_title: string;
   clause_reference: string | null;
   condition_payload: Record<string, unknown>;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface OperationalAuthoritySopDocumentRow extends QueryResultRow {
+  id: string;
+  operational_authority_profile_id: string;
+  organisation_id: string;
+  sop_code: string;
+  title: string;
+  version: string;
+  status: OperationalAuthoritySopDocument["status"];
+  owner: string | null;
+  source_document_id: string | null;
+  source_document_type: string | null;
+  source_clause_refs: string[] | null;
+  linked_oa_condition_ids: string[] | null;
+  change_recommendation_scope: string[] | null;
+  review_notes: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -137,6 +157,27 @@ const toCondition = (
   conditionTitle: row.condition_title,
   clauseReference: row.clause_reference,
   conditionPayload: row.condition_payload,
+  createdAt: row.created_at.toISOString(),
+  updatedAt: row.updated_at.toISOString(),
+});
+
+const toSopDocument = (
+  row: OperationalAuthoritySopDocumentRow,
+): OperationalAuthoritySopDocument => ({
+  id: row.id,
+  operationalAuthorityProfileId: row.operational_authority_profile_id,
+  organisationId: row.organisation_id,
+  sopCode: row.sop_code,
+  title: row.title,
+  version: row.version,
+  status: row.status,
+  owner: row.owner,
+  sourceDocumentId: row.source_document_id,
+  sourceDocumentType: row.source_document_type,
+  sourceClauseRefs: row.source_clause_refs ?? [],
+  linkedOaConditionIds: row.linked_oa_condition_ids ?? [],
+  changeRecommendationScope: row.change_recommendation_scope ?? [],
+  reviewNotes: row.review_notes,
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
 });
@@ -487,6 +528,83 @@ export class OperationalAuthorityRepository {
     );
 
     return result.rows.map((row) => toCondition(row));
+  }
+
+  async insertSopDocument(
+    tx: PoolClient,
+    params: {
+      profileId: string;
+      organisationId: string;
+      sopCode: string;
+      title: string;
+      version: string;
+      status: OperationalAuthoritySopDocument["status"];
+      owner: string | null;
+      sourceDocumentId: string | null;
+      sourceDocumentType: string | null;
+      sourceClauseRefs: string[];
+      linkedOaConditionIds: string[];
+      changeRecommendationScope: string[];
+      reviewNotes: string | null;
+    },
+  ): Promise<OperationalAuthoritySopDocument> {
+    const result = await tx.query<OperationalAuthoritySopDocumentRow>(
+      `
+      insert into operational_authority_sop_documents (
+        id,
+        operational_authority_profile_id,
+        organisation_id,
+        sop_code,
+        title,
+        version,
+        status,
+        owner,
+        source_document_id,
+        source_document_type,
+        source_clause_refs,
+        linked_oa_condition_ids,
+        change_recommendation_scope,
+        review_notes
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14)
+      returning *
+      `,
+      [
+        randomUUID(),
+        params.profileId,
+        params.organisationId,
+        params.sopCode,
+        params.title,
+        params.version,
+        params.status,
+        params.owner,
+        params.sourceDocumentId,
+        params.sourceDocumentType,
+        JSON.stringify(params.sourceClauseRefs),
+        JSON.stringify(params.linkedOaConditionIds),
+        JSON.stringify(params.changeRecommendationScope),
+        params.reviewNotes,
+      ],
+    );
+
+    return toSopDocument(result.rows[0]);
+  }
+
+  async listSopDocumentsForProfile(
+    tx: PoolClient,
+    profileId: string,
+  ): Promise<OperationalAuthoritySopDocument[]> {
+    const result = await tx.query<OperationalAuthoritySopDocumentRow>(
+      `
+      select *
+      from operational_authority_sop_documents
+      where operational_authority_profile_id = $1
+      order by status asc, sop_code asc, version desc, created_at asc, id asc
+      `,
+      [profileId],
+    );
+
+    return result.rows.map((row) => toSopDocument(row));
   }
 
   async getPilotAuthorisationForProfile(

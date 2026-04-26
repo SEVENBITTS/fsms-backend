@@ -37,7 +37,8 @@
       "Recovered Operational Authority, insurance, mission governance, risk-map, accountable-manager dashboard, auth, membership, stored-file, organisation-document, and OA pilot-authorisation modules into the GitHub-connected branch",
       "Integrated governance migrations 031-047 into the recovered branch, including OA/insurance profiles, stored files, users, sessions, memberships, and pilot authorisation review tables",
       "Restored investor and architecture documentation for OA, insurance, SOP assurance, renewal readiness, evidence packs, deployment model, security, GDPR readiness, market positioning, and competitor framing",
-      "Added governance-focused test coverage for OA, insurance, mission governance, risk map, accountable-manager dashboard, auth, stored files, and organisation documents"
+      "Added governance-focused test coverage for OA, insurance, mission governance, risk map, accountable-manager dashboard, auth, stored files, and organisation documents",
+      "Added first-class Operational Authority linked SOP document scaffolding so SOPs sit below the OA profile instead of being collapsed into OA conditions"
     ],
     "modified": [
       "Merged the recovered governance build with latest main-branch live operations, regulatory review, evidence, map, and mission workspace improvements",
@@ -47,7 +48,8 @@
       "Added mission workspace drill-down links from post-operation readiness categories to live-ops map evidence, conflict review context, operations timeline, regulatory matrix, and rendered audit report",
       "Extended post-operation evidence readiness categories with source record metadata for latest map, conflict, safety, and regulatory evidence",
       "Added URL-driven visual focus for source-record drill-downs into live-ops map evidence, conflict acknowledgements, operations timeline, and regulatory matrix review sections",
-      "Added focused safety/SOP and regulatory source-record detail panels inside the mission workspace timeline and regulatory review sections"
+      "Added focused safety/SOP and regulatory source-record detail panels inside the mission workspace timeline and regulatory review sections",
+      "Documented the OA/SOP hierarchy as OA controlling approval envelope with SOPs as distinct linked procedures used for recommendation targeting"
     ],
     "removed": [],
     "fixed": [
@@ -77,13 +79,15 @@
   "dataModels": {
     "newRuntimeVariables": [
       "Operational Authority profiles, conditions, pilot authorisations, and pilot authorisation reviews",
+      "Operational Authority linked SOP documents with SOP code, version, source clauses, linked OA condition IDs, and change recommendation scope",
       "Insurance documents, profiles, conditions, source upload metadata, and assessment reasons",
       "Stored files, organisation documents, users, user sessions, and organisation memberships"
     ],
     "updatedStructures": [
       "Mission governance summaries now join OA and insurance readiness for mission-level advisory review",
       "Risk-map summaries now accept governance renewal, competency, maintenance, and override-pressure signals",
-      "Pilot readiness can include OA authorisation and pending-amendment context"
+      "Pilot readiness can include OA authorisation and pending-amendment context",
+      "SOP records are now modelled as linked procedures under an OA profile rather than as OA conditions, preserving the distinction between authority envelope and operating method"
     ],
     "assumptions": [
       "The platform remains focused on commercial operators using an Operational Authority, with open-category access treated as a possible future constrained mode",
@@ -93,6 +97,7 @@
   "apisServices": {
     "endpointsUsed": [
       "Operational Authority routes for document/profile/condition and pilot-authorisation management",
+      "Operational Authority profile routes for listing and creating linked SOP documents",
       "Insurance routes for policy/profile/condition assessment and source upload metadata",
       "Mission governance routes for combined OA and insurance mission readiness",
       "Risk-map and accountable-manager dashboard routes for early-warning summary surfaces",
@@ -125,19 +130,22 @@
       "Operators can jump from post-operation readiness prompts to the relevant evidence review surface instead of manually hunting through the workspace",
       "Operators can open the latest source record or source JSON behind each populated post-operation readiness category",
       "Operators now see a focused review cue when a source-record drill-down lands on the relevant live-ops or mission-workspace evidence area",
-      "Operators can review safety/SOP and regulatory source-record IDs, summaries, timestamps, source JSON links, and review surfaces without manually hunting through the workspace"
+      "Operators can review safety/SOP and regulatory source-record IDs, summaries, timestamps, source JSON links, and review surfaces without manually hunting through the workspace",
+      "Compliance teams can record SOP documents as distinct linked procedures under the OA profile so later change recommendations can target the relevant SOP"
     ]
   },
   "complianceImplications": {
     "truth": [
       "Uploaded OA, insurance, membership, and stored-file records become traceable source evidence for governance assessment",
-      "Pending OA amendment is represented explicitly and is not treated as granted authorisation"
+      "Pending OA amendment is represented explicitly and is not treated as granted authorisation",
+      "The OA is treated as the controlling approval envelope while SOPs are modelled as separate linked operating methods under that envelope"
     ],
     "prediction": [
       "Renewal-soon and override-pressure stages provide early warning before operational readiness degrades"
     ],
     "advisory": [
       "The system surfaces where operations may need accountable review, policy change, SOP amendment, OA renewal, insurance renewal, or mission adjustment",
+      "SOP change recommendations should target the relevant SOP code or clause while preserving the parent OA condition context",
       "Insurance assessment can advise what mission characteristic may need changing to remain within cover rather than presenting a stark no-go"
     ],
     "auditTraceabilityImpact": [
@@ -145,7 +153,8 @@
       "Document preview/download and evidence-pack concepts preserve source-document accountability",
       "Post-operation readiness now carries source record IDs, review URLs, and API URLs so audit prompts remain traceable to underlying evidence",
       "Source-record drill-down review URLs preserve evidence IDs and highlight the relevant review surface without treating the item as certified, closed, or automatically resolved",
-      "Safety/SOP and regulatory drill-down sections now display source-record detail as accountable review support, not compliance certification or automatic closure"
+      "Safety/SOP and regulatory drill-down sections now display source-record detail as accountable review support, not compliance certification or automatic closure",
+      "Linked SOP documents create the first traceable target for future post-operation SOP amendment recommendations"
     ]
   },
   "risksLimitations": {
@@ -188,11 +197,12 @@
       "Validated recovered migrations with npm run migrate:test against the configured Postgres test database after PR 238 merged",
       "Validated source-record drill-down metadata with audit evidence and mission planning focused tests",
       "Validated source-record drill-down focus state with TypeScript build and mission-planning UI tests",
-      "Validated safety/SOP and regulatory focused source-record detail panels with TypeScript build and mission-planning UI tests"
+      "Validated safety/SOP and regulatory focused source-record detail panels with TypeScript build and mission-planning UI tests",
+      "Validated OA-linked SOP document creation/listing, role access, TypeScript build, and operational-authority integration tests"
     ]
 
   },
-  "nextBuildStep": "Add accountable review outcomes for safety and regulatory source records.",
+  "nextBuildStep": "Connect SOP-linked change recommendations to mission evidence.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
