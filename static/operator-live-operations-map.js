@@ -873,6 +873,13 @@ const formatRangeBearing = (metrics) => {
   return `${rangeText} @ ${bearingText}`;
 };
 
+const formatConflictRangeBearing = (conflict) => {
+  const formatted = formatRangeBearing(conflict?.metrics);
+  return formatted === "Not recorded"
+    ? "Range/bearing to conflict not recorded"
+    : `Range/bearing to conflict: ${formatted}`;
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
@@ -2656,6 +2663,7 @@ const buildMapMarkup = () => {
   const conflictWindowSummary = currentConflictWindowSummary();
   const conflictEnvelopeSummary = conflictProximityEnvelopeSummary();
   const conflictEnvelopeTargets = activeConflictEnvelopeTargets();
+  const primaryConflictTarget = conflictEnvelopeTargets[0] ?? null;
   const conflictTrackWindow = conflictTrackWindowPoints();
   const mapRiskSeverity = [highestAlertSeverity, readinessState.tone, dispatchState.tone, riskState.tone, airspaceState.tone]
     .sort((left, right) => severityRank(right) - severityRank(left))[0];
@@ -2941,6 +2949,51 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
+  const conflictRangeBearingVector =
+    currentMapPoint && primaryConflictTarget
+      ? (() => {
+          const targetPoint = toPoint(
+            Number(primaryConflictTarget.lat),
+            Number(primaryConflictTarget.lng),
+          );
+          const stroke = severityStroke(primaryConflictTarget.conflict.severity);
+          const midpoint = {
+            x: (currentMapPoint.x + targetPoint.x) / 2,
+            y: (currentMapPoint.y + targetPoint.y) / 2,
+          };
+
+          return `
+            <g class="conflict-range-bearing-vector">
+              <line
+                x1="${currentMapPoint.x}"
+                y1="${currentMapPoint.y}"
+                x2="${targetPoint.x}"
+                y2="${targetPoint.y}"
+                stroke="${stroke}"
+                stroke-width="3"
+                stroke-dasharray="10 8"
+                stroke-linecap="round"
+                opacity="0.92"
+              />
+              <circle cx="${targetPoint.x}" cy="${targetPoint.y}" r="7" fill="${stroke}" fill-opacity="0.86" stroke="#edf3fb" stroke-width="2" />
+              <text
+                x="${midpoint.x + 12}"
+                y="${midpoint.y - 10}"
+                fill="${stroke}"
+                font-size="12"
+                font-weight="800"
+              >${escapeHtml(formatConflictRangeBearing(primaryConflictTarget.conflict))}</text>
+              <text
+                x="${midpoint.x + 12}"
+                y="${midpoint.y + 6}"
+                fill="#d8ecff"
+                font-size="10"
+                font-weight="700"
+              >Dynamic from current mission aircraft position to active conflict object</text>
+            </g>
+          `;
+        })()
+      : "";
 
   return `
     <div class="map-grid"></div>
@@ -2960,6 +3013,7 @@ const buildMapMarkup = () => {
       ${completedReplayPath ? `<polyline points="${completedReplayPath}" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />` : ""}
       ${conflictTrackHighlight}
       ${alertTrackHighlight}
+      ${conflictRangeBearingVector}
       ${replayDots}
       ${weatherMarker}
       ${conflictSeverityBands}
@@ -3362,7 +3416,7 @@ const renderStatus = () => {
           <div class="k">Range / bearing</div>
           <div>${escapeHtml(
             primaryConflict
-              ? formatRangeBearing(primaryConflict.metrics)
+              ? formatConflictRangeBearing(primaryConflict)
               : "Not recorded",
           )}</div>
           <div class="k">Time relevance</div>
@@ -3595,7 +3649,7 @@ const renderConflictAssessment = () => {
                   <br />`
                       : ""
                   }
-                  Range / bearing: ${escapeHtml(formatRangeBearing(primaryConflict.metrics))}<br />
+                  ${escapeHtml(formatConflictRangeBearing(primaryConflict))}<br />
                   Time relevance: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatTemporalContext(primaryConflict) : "Not applicable")}<br />
                   Vertical context: ${escapeHtml(primaryConflict.overlayKind === "area_conflict" ? formatVerticalContext(primaryConflict) : formatVerticalSeparation(primaryConflict.metrics?.altitudeDeltaFt))}<br />
                   Replay relevance: ${escapeHtml(primaryConflict.replayRelevant ? "Current replay window" : `${primaryConflict.replayTimeDeltaSeconds} s from replay cursor`)}

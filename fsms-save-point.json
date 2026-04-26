@@ -56,7 +56,8 @@
       "Added authenticated accountable-manager routes for recording and listing SOP recommendation review decisions",
       "Added mission workspace SOP recommendation decision display that loads schema-backed recommendation review state when an authorised governance session is present",
       "Restricted SOP recommendation and review-history read access to governance and management roles so draft SOP changes are not exposed as operator instructions",
-      "Added a live-ops mission telemetry display strip with toggleable mission heading, speed, altitude, and progress fields"
+      "Added a live-ops mission telemetry display strip with toggleable mission heading, speed, altitude, and progress fields",
+      "Added a dynamic live-ops range/bearing vector from current mission aircraft position to the active conflict object"
     ],
     "removed": [],
     "fixed": [
@@ -146,7 +147,8 @@
       "Governance users can record draft SOP change recommendations against mission evidence without amending the SOP automatically",
       "Accountable managers can record review decisions against SOP recommendations while preserving the recommendation history as advisory evidence",
       "Authorised governance users can see SOP recommendation decision state in the mission workspace before sign-off; unauthorised users see controlled-access advisory wording instead",
-      "Operators can now view or hide ownship mission heading in the live-ops telemetry surface, separate from traffic range/bearing and CPA advisory context"
+      "Operators can now view or hide ownship mission heading in the live-ops telemetry surface, separate from traffic range/bearing and CPA advisory context",
+      "Operators can see a moving range/bearing-to-conflict line on the live-ops map when the active conflict has map-native point geometry"
     ]
   },
   "complianceImplications": {
@@ -162,7 +164,8 @@
       "The system surfaces where operations may need accountable review, policy change, SOP amendment, OA renewal, insurance renewal, or mission adjustment",
       "SOP change recommendations should target the relevant SOP code or clause while preserving the parent OA condition context",
       "Insurance assessment can advise what mission characteristic may need changing to remain within cover rather than presenting a stark no-go",
-      "Live-ops heading is treated as ownship mission telemetry, while range/bearing remains relative position and CPA remains a future closest-approach calculation"
+      "Live-ops heading is treated as ownship mission telemetry, while range/bearing remains relative position and CPA remains a future closest-approach calculation",
+      "Live-ops conflict range/bearing labels now identify the active conflict reference instead of implying they are ownship heading or CPA"
     ],
     "auditTraceabilityImpact": [
       "Mission governance joins OA and insurance state into dispatch evidence",
@@ -221,7 +224,8 @@
       "Validated schema-backed SOP change recommendation creation/listing, role access, TypeScript build, and operational-authority integration tests",
       "Validated schema-backed SOP recommendation review decision creation/listing, accountable-manager role access, TypeScript build, and operational-authority integration tests",
       "Validated role-controlled SOP recommendation visibility and mission workspace decision display copy with TypeScript build, operational-authority tests, and mission-planning UI bundle tests",
-      "Validated live-ops mission heading telemetry display and toggle copy with TypeScript build and mission-planning UI bundle tests"
+      "Validated live-ops mission heading telemetry display and toggle copy with TypeScript build and mission-planning UI bundle tests",
+      "Validated dynamic conflict range/bearing vector wording in the live-ops UI bundle tests"
     ]
 
   },
