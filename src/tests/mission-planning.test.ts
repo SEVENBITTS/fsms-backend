@@ -2017,6 +2017,12 @@ describe("mission planning drafts", () => {
       expect(response.text).toContain("renderWorkspaceFocusNote");
       expect(response.text).toContain("applyWorkspaceFocusState");
       expect(response.text).toContain("opened from a post-operation source-record drill-down");
+      expect(response.text).toContain("renderFocusedSourceRecordDetails");
+      expect(response.text).toContain("Regulatory Source Records");
+      expect(response.text).toContain("Safety and SOP Source Records");
+      expect(response.text).toContain("Latest source record");
+      expect(response.text).toContain("Open review surface");
+      expect(response.text).toContain("These records support accountable review only");
       expect(response.text).toContain("Open live-ops map evidence");
       expect(response.text).toContain("Review live conflict evidence");
       expect(response.text).toContain("Review operations timeline");
