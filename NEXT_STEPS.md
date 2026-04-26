@@ -1,14 +1,14 @@
 # NEXT STEP
 
 ## Goal
-Connect SOP-linked change recommendations to mission evidence.
+Add schema-backed SOP-linked change recommendations to mission evidence.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- generate draft change recommendation records against linked SOP documents
+- add migration-backed draft change recommendation records against linked SOP documents
 - show which SOP code, SOP clause, and parent OA condition a recommendation relates to
 - keep the recommendation visible in the post-operation review flow before accountable-manager sign-off
 
@@ -18,7 +18,7 @@ Connect SOP-linked change recommendations to mission evidence.
 - keep recommendations framed as accountable review prompts, not automatic SOP amendment or regulatory submission
 
 ### 3. Tests
-- add backend and mission workspace UI tests for SOP-linked recommendation records
+- add backend, migration, and mission workspace UI tests for SOP-linked recommendation records
 - run mission-planning UI tests
 - run TypeScript build and diff whitespace check
 

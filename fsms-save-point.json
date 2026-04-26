@@ -202,7 +202,7 @@
     ]
 
   },
-  "nextBuildStep": "Connect SOP-linked change recommendations to mission evidence.",
+  "nextBuildStep": "Add schema-backed SOP-linked change recommendations to mission evidence.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
