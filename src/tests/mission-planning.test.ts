@@ -2004,6 +2004,17 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Pre-sign-off Evidence Summary");
     expect(response.text).toContain("Rendered Report Readiness Summary");
     expect(response.text).toContain("renderReportReadinessSummary");
+    expect(response.text).toContain("SOP Recommendation Decisions");
+    expect(response.text).toContain("renderSopRecommendationDecisionSummary");
+    expect(response.text).toContain("/sop-change-recommendations");
+    expect(response.text).toContain("/operational-authority-sop-change-recommendations/");
+    expect(response.text).toContain("Accepted for action");
+    expect(response.text).toContain("Awaiting accountable review");
+    expect(response.text).toContain("Role-controlled accountable review record only");
+    expect(response.text).toContain("no automatic SOP amendment, operational authorisation, or regulatory submission");
+    expect(response.text).toContain("Sign in with an authorised governance or management role");
+    expect(response.text).toContain("does not authorise operators to use draft changes");
+    expect(response.text).toContain("Draft recommendations are not operating instructions");
     expect(response.text).toContain("Evidence Drill-down Links");
     expect(response.text).toContain("renderReadinessDrilldowns");
     expect(response.text).toContain("renderReadinessDrilldownCard");
