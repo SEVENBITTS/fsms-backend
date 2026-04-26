@@ -70,10 +70,70 @@ import { createExternalOverlayRouter } from "./external-overlays/external-overla
 import { TrafficConflictAssessmentService } from "./conflict-assessment/traffic-conflict-assessment.service";
 import { TrafficConflictAssessmentController } from "./conflict-assessment/traffic-conflict-assessment.controller";
 import { createTrafficConflictAssessmentRouter } from "./conflict-assessment/traffic-conflict-assessment.routes";
+import { OperationalAuthorityRepository } from "./operational-authority/operational-authority.repository";
+import { OperationalAuthorityService } from "./operational-authority/operational-authority.service";
+import { OperationalAuthorityController } from "./operational-authority/operational-authority.controller";
+import {
+  createOperationalAuthorityDocumentRouter,
+  createOperationalAuthorityMissionRouter,
+  createOperationalAuthorityOrganisationRouter,
+  createOperationalAuthorityPilotAuthorisationRouter,
+  createOperationalAuthorityProfileRouter,
+} from "./operational-authority/operational-authority.routes";
+import { InsuranceRepository } from "./insurance/insurance.repository";
+import { InsuranceService } from "./insurance/insurance.service";
+import { InsuranceController } from "./insurance/insurance.controller";
+import {
+  createInsuranceDocumentRouter,
+  createInsuranceMissionRouter,
+  createInsuranceOrganisationRouter,
+  createInsuranceProfileRouter,
+} from "./insurance/insurance.routes";
+import { MissionGovernanceService } from "./mission-governance/mission-governance.service";
+import { MissionGovernanceController } from "./mission-governance/mission-governance.controller";
+import { createMissionGovernanceRouter } from "./mission-governance/mission-governance.routes";
+import { RiskMapRepository } from "./risk-map/risk-map.repository";
+import { RiskMapService } from "./risk-map/risk-map.service";
+import { RiskMapController } from "./risk-map/risk-map.controller";
+import { createRiskMapRouter } from "./risk-map/risk-map.routes";
+import { OrganisationDocumentsRepository } from "./organisation-documents/organisation-documents.repository";
+import { OrganisationDocumentsService } from "./organisation-documents/organisation-documents.service";
+import { OrganisationDocumentsController } from "./organisation-documents/organisation-documents.controller";
+import {
+  createOrganisationDocumentsOrganisationRouter,
+  createOrganisationDocumentsUploadRouter,
+} from "./organisation-documents/organisation-documents.routes";
+import { StoredFilesRepository } from "./stored-files/stored-files.repository";
+import { StoredFilesService } from "./stored-files/stored-files.service";
+import { StoredFilesController } from "./stored-files/stored-files.controller";
+import {
+  createStoredFilesOrganisationRouter,
+  createStoredFilesRouter,
+} from "./stored-files/stored-files.routes";
+import { UsersRepository } from "./users/users.repository";
+import { UsersService } from "./users/users.service";
+import { UsersController } from "./users/users.controller";
+import { createUsersRouter } from "./users/users.routes";
+import { OrganisationMembershipsRepository } from "./organisation-memberships/organisation-memberships.repository";
+import { OrganisationMembershipsService } from "./organisation-memberships/organisation-memberships.service";
+import { OrganisationMembershipsController } from "./organisation-memberships/organisation-memberships.controller";
+import { createOrganisationMembershipsRouter } from "./organisation-memberships/organisation-memberships.routes";
+import { AuthRepository } from "./auth/auth.repository";
+import { AuthService } from "./auth/auth.service";
+import { AuthController } from "./auth/auth.controller";
+import { createAuthRouter } from "./auth/auth.routes";
+import { createAuthMiddleware } from "./auth/auth.middleware";
+import { MissionAccessRepository } from "./mission-access/mission-access.repository";
+import { MissionAccessService } from "./mission-access/mission-access.service";
+import { AccountableManagerDashboardRepository } from "./accountable-manager-dashboard/accountable-manager-dashboard.repository";
+import { AccountableManagerDashboardService } from "./accountable-manager-dashboard/accountable-manager-dashboard.service";
+import { AccountableManagerDashboardController } from "./accountable-manager-dashboard/accountable-manager-dashboard.controller";
+import { createAccountableManagerDashboardRouter } from "./accountable-manager-dashboard/accountable-manager-dashboard.routes";
 import { BRANDING } from "./config/branding";
 
 const projectRoot = path.resolve(__dirname, "..");
 const staticRoot = path.resolve(projectRoot, "static");
+const uploadsRoot = path.resolve(projectRoot, "data", "uploads");
 
 function readStaticHtml(fileName: string): string {
   return fs.readFileSync(path.resolve(staticRoot, fileName), "utf8");
@@ -231,8 +291,166 @@ const trafficConflictAssessmentService = new TrafficConflictAssessmentService(
 );
 const trafficConflictAssessmentController =
   new TrafficConflictAssessmentController(trafficConflictAssessmentService);
+const usersRepository = new UsersRepository();
+const usersService = new UsersService(pool, usersRepository);
+const usersController = new UsersController(usersService);
+const organisationMembershipsRepository = new OrganisationMembershipsRepository();
+const organisationMembershipsService = new OrganisationMembershipsService(
+  pool,
+  organisationMembershipsRepository,
+);
+const organisationMembershipsController = new OrganisationMembershipsController(
+  organisationMembershipsService,
+);
+const authRepository = new AuthRepository();
+const authService = new AuthService(pool, authRepository, usersRepository);
+const authController = new AuthController(authService);
+const authMiddleware = createAuthMiddleware(authService);
+const missionAccessRepository = new MissionAccessRepository();
+const missionAccessService = new MissionAccessService(
+  pool,
+  missionAccessRepository,
+);
+const operationalAuthorityRepository = new OperationalAuthorityRepository();
+const operationalAuthorityService = new OperationalAuthorityService(
+  pool,
+  operationalAuthorityRepository,
+);
+const operationalAuthorityController = new OperationalAuthorityController(
+  operationalAuthorityService,
+  organisationMembershipsService,
+);
+const insuranceRepository = new InsuranceRepository();
+const insuranceService = new InsuranceService(pool, insuranceRepository);
+const insuranceController = new InsuranceController(
+  insuranceService,
+  organisationMembershipsService,
+);
+const missionGovernanceService = new MissionGovernanceService(
+  operationalAuthorityService,
+  insuranceService,
+  pilotService,
+  missionAccessService,
+);
+const missionGovernanceController = new MissionGovernanceController(
+  missionGovernanceService,
+  missionAccessService,
+  organisationMembershipsService,
+);
+const riskMapRepository = new RiskMapRepository();
+const riskMapService = new RiskMapService(
+  pool,
+  riskMapRepository,
+  missionGovernanceService,
+  platformService,
+  pilotService,
+);
+const riskMapController = new RiskMapController(
+  riskMapService,
+  missionAccessService,
+  organisationMembershipsService,
+);
+const accountableManagerDashboardRepository =
+  new AccountableManagerDashboardRepository();
+const accountableManagerDashboardService =
+  new AccountableManagerDashboardService(
+    pool,
+    accountableManagerDashboardRepository,
+    riskMapService,
+    operationalAuthorityRepository,
+    insuranceRepository,
+  );
+const accountableManagerDashboardController =
+  new AccountableManagerDashboardController(
+    accountableManagerDashboardService,
+    organisationMembershipsService,
+  );
+const organisationDocumentsRepository = new OrganisationDocumentsRepository();
+const organisationDocumentsService = new OrganisationDocumentsService(
+  pool,
+  organisationDocumentsRepository,
+  operationalAuthorityRepository,
+  insuranceRepository,
+  pilotRepository,
+);
+const organisationDocumentsController = new OrganisationDocumentsController(
+  organisationDocumentsService,
+  organisationMembershipsService,
+);
+const storedFilesRepository = new StoredFilesRepository();
+const storedFilesService = new StoredFilesService(
+  pool,
+  storedFilesRepository,
+  uploadsRoot,
+);
+const storedFilesController = new StoredFilesController(
+  storedFilesService,
+  organisationMembershipsService,
+);
 
 app.use("/mission-plans", createMissionPlanningRouter(missionPlanningController));
+app.use("/users", createUsersRouter(usersController));
+app.use("/auth", createAuthRouter(authController, authMiddleware));
+app.use(
+  "/organisations",
+  createOrganisationMembershipsRouter(organisationMembershipsController),
+);
+app.use(
+  "/organisations",
+  authMiddleware,
+  createOperationalAuthorityOrganisationRouter(operationalAuthorityController),
+);
+app.use(
+  "/operational-authority-documents",
+  authMiddleware,
+  createOperationalAuthorityDocumentRouter(operationalAuthorityController),
+);
+app.use(
+  "/operational-authority-profiles",
+  authMiddleware,
+  createOperationalAuthorityProfileRouter(operationalAuthorityController),
+);
+app.use(
+  "/operational-authority-pilot-authorisations",
+  authMiddleware,
+  createOperationalAuthorityPilotAuthorisationRouter(operationalAuthorityController),
+);
+app.use(
+  "/organisations",
+  authMiddleware,
+  createInsuranceOrganisationRouter(insuranceController),
+);
+app.use(
+  "/organisations",
+  authMiddleware,
+  createAccountableManagerDashboardRouter(accountableManagerDashboardController),
+);
+app.use(
+  "/organisations",
+  authMiddleware,
+  createOrganisationDocumentsOrganisationRouter(organisationDocumentsController),
+);
+app.use(
+  "/organisations",
+  authMiddleware,
+  createStoredFilesOrganisationRouter(storedFilesController),
+);
+app.use(
+  "/organisation-documents",
+  authMiddleware,
+  createOrganisationDocumentsUploadRouter(organisationDocumentsController),
+);
+app.use(
+  "/insurance-documents",
+  authMiddleware,
+  createInsuranceDocumentRouter(insuranceController),
+);
+app.use("/files", authMiddleware, createStoredFilesRouter(storedFilesController));
+app.use(
+  "/insurance-profiles",
+  authMiddleware,
+  createInsuranceProfileRouter(insuranceController),
+);
 app.use("/sms", createSmsFrameworkRouter(smsFrameworkController));
 app.use(
   "/air-safety-meetings",
@@ -251,6 +469,14 @@ app.use("/missions", createAuditEvidenceRouter(auditEvidenceController));
 app.use("/missions", createMissionReplayRouter(missionReplayController));
 app.use("/missions", createMissionTelemetryRouter(missionTelemetryController));
 app.use("/missions", createAlertRouter(alertController));
+app.use(
+  "/missions",
+  authMiddleware,
+  createOperationalAuthorityMissionRouter(operationalAuthorityController),
+);
+app.use("/missions", authMiddleware, createInsuranceMissionRouter(insuranceController));
+app.use("/missions", authMiddleware, createMissionGovernanceRouter(missionGovernanceController));
+app.use("/missions", authMiddleware, createRiskMapRouter(riskMapController));
 app.use("/platforms", createPlatformRouter(platformController));
 app.use("/pilots", createPilotRouter(pilotController));
 app.use("/timeline", createTimelineRouter(timelineService));
@@ -266,6 +492,21 @@ app.get("/operator/live-operations-map", (_req, res) => {
 app.get("/operator/missions/:missionId/live-operations", (_req, res) => {
   res.type("html").send(readStaticHtml("operator-live-operations-map.html"));
 });
+app.get("/operator/document-portal", (_req, res) => {
+  res.type("html").send(readStaticHtml("operator-document-portal.html"));
+});
+app.get("/operator/organisations/:organisationId/document-portal", (_req, res) => {
+  res.type("html").send(readStaticHtml("operator-document-portal.html"));
+});
+app.get("/operator/accountable-manager-dashboard", (_req, res) => {
+  res.type("html").send(readStaticHtml("accountable-manager-dashboard.html"));
+});
+app.get(
+  "/operator/organisations/:organisationId/accountable-manager-dashboard",
+  (_req, res) => {
+    res.type("html").send(readStaticHtml("accountable-manager-dashboard.html"));
+  },
+);
 app.get("/", (_req, res) => {
   res.status(200).send(BRANDING.backendStatusText);
 });

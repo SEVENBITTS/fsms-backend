@@ -102,6 +102,18 @@ export class PilotRepository {
     return result.rows[0] ? toPilot(result.rows[0]) : null;
   }
 
+  async listPilots(tx: PoolClient): Promise<Pilot[]> {
+    const result = await tx.query<PilotRow>(
+      `
+      select *
+      from pilots
+      order by display_name asc, created_at asc, id asc
+      `,
+    );
+
+    return result.rows.map(toPilot);
+  }
+
   async insertEvidence(
     tx: PoolClient,
     input: CreatePilotEvidenceRow,

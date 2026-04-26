@@ -4,7 +4,7 @@
     "build": "tsc",
     "build:runtime": "tsc -p tsconfig.runtime.json",
     "start": "node dist/server.js",
-    "test": "vitest run",
+    "test": "vitest run --pool=forks --no-file-parallelism --maxWorkers=1 --reporter=dot",
     "validate:savepoint": "node scripts/validate-save-point.mjs",
     "migrate": "tsx src/scripts/run-migrations.ts",
     "migrate:test": "dotenv -e .env.test -- tsx src/scripts/run-migrations.ts",

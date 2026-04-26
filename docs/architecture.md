@@ -9,6 +9,15 @@ For the current TypeScript/Express mission workflow and live-operations directio
 - `docs/FSMS_DIRECTION.md`
 - `docs/live-operations-external-overlay-model.md`
 
+## Current Note
+
+This file still reflects the earlier Python/Flask replay-era architecture and is retained as legacy context.
+
+For the current TypeScript/Express mission workflow and live-operations direction, see:
+
+- `docs/FSMS_DIRECTION.md`
+- `docs/live-operations-external-overlay-model.md`
+
 ## Overview
 
 The VerityAtlas backend provides airspace monitoring, compliance evaluation, and replay visualization for flight telemetry.

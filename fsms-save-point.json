@@ -1,8 +1,8 @@
 {
   "$schema": "./fsms-save-point.schema.json",
-  "module": "Mission Lifecycle",
-"date": "2026-04-10",
-"buildId": "v0.3-mission-lifecycle-preflight",
+  "module": "VerityATLAS Governance Recovery",
+"date": "2026-04-26",
+"buildId": "v0.4-governance-recovery-integration",
   "systemLayerMap": [
     "Replay",
     "Compliance",
@@ -12,59 +12,141 @@
     "HUD"
   ],
   "systemState": {
-    "workingEndToEndFlows": [],
-    "visibleUiHudElements": [],
-    "confirmedInputOutputChains": []
+    "workingEndToEndFlows": [
+      "Operational Authority document/profile assessment can surface valid, renewal-soon, expired, review-required, and pending-amendment states",
+      "Insurance document/profile assessment can surface validity, coverage, advisory review, and renewal signals",
+      "Mission governance can combine OA and insurance readiness into one advisory dispatch view",
+      "Accountable manager dashboard can summarise OA, insurance, competency, maintenance, and override-pressure early-warning stages",
+      "Organisation document portal can upload, store, preview, and download controlled source documents through authenticated membership-aware access"
+    ],
+    "visibleUiHudElements": [
+      "Accountable manager governance summary and risk-stage surface",
+      "Operator document portal cards with preview/download actions and role-context access wording",
+      "Mission planning and dispatch governance panels with OA, insurance, pilot authorisation, and pending-amendment status"
+    ],
+    "confirmedInputOutputChains": [
+      "OA/insurance source document metadata -> assessment service -> mission governance summary -> risk-map/dashboard output",
+      "Stored file upload -> membership-derived access check -> preview/download response",
+      "OA pilot authorisation and pending-amendment state -> pilot readiness and mission dispatch advisory"
+    ]
   },
   "changesThisSession": {
     "added": [
-      "Shared mission lifecycle transition map and action metadata in src/missions/domain/missionLifecycle.ts",
-      "Read-only mission lifecycle transition preflight endpoint for action validation without state mutation",
-      "Integration coverage for transition preflight allowed, rejected, and unsupported-action cases"
+      "Recovered Operational Authority, insurance, mission governance, risk-map, accountable-manager dashboard, auth, membership, stored-file, organisation-document, and OA pilot-authorisation modules into the GitHub-connected branch",
+      "Integrated governance migrations 031-047 into the recovered branch, including OA/insurance profiles, stored files, users, sessions, memberships, and pilot authorisation review tables",
+      "Restored investor and architecture documentation for OA, insurance, SOP assurance, renewal readiness, evidence packs, deployment model, security, GDPR readiness, market positioning, and competitor framing",
+      "Added governance-focused test coverage for OA, insurance, mission governance, risk map, accountable-manager dashboard, auth, stored files, and organisation documents"
     ],
     "modified": [
-      "Mission service lifecycle commands now validate transitions through the shared domain transition guard",
-      "Mission controller and router extended with read-only lifecycle transition checking"
+      "Merged the recovered governance build with latest main-branch live operations, regulatory review, evidence, map, and mission workspace improvements",
+      "Rewired app route ordering so governance routes coexist with the evolved mission and live-ops route set",
+      "Updated package dependencies to patch known vulnerable dev dependency versions",
+      "Adjusted organisation document portal test expectations to remain stable with expanded seeded pilot data"
     ],
     "removed": [],
     "fixed": [
-      "Removed duplicated per-handler mission transition validation logic while preserving 409 invalid-transition semantics and audit-safe rejection behavior",
-      "Verified preflight transition checks do not mutate mission state or append mission events"
+      "Resolved merge conflicts between the recovered VerityATLAS governance branch and current main",
+      "Preserved the current main live-ops/regulatory/map evidence work while restoring missing governance architecture files and source modules",
+      "Re-added pilot repository listing support needed by the organisation document portal",
+      "Ignored runtime upload binaries under data/uploads so local document ingestion does not pollute source control"
     ]
 },
 
   "decisionsMade": {
-    "architectural": [],
-    "tradeoffsAccepted": [],
-    "deferredDecisions": []
+    "architectural": [
+      "Treat OA and insurance readiness as advisory compliance-surfacing inputs rather than absolute automated blocks",
+      "Use authenticated organisation membership as the access foundation for stored file preview/download routes",
+      "Roll OA, insurance, competency, maintenance, and override-pressure signals into a single accountable-manager early-warning surface"
+    ],
+    "tradeoffsAccepted": [
+      "Keep source document extraction and policy/OA interpretation lightweight at this stage, with structured upload fields and assessment reasons ready for deeper parsing later",
+      "Surface pending OA amendments as accountable review states instead of implying CAA approval has already been granted"
+    ],
+    "deferredDecisions": [
+      "Full role assignment UI and fine-grained enterprise RBAC policies",
+      "Production object storage, antivirus scanning, retention rules, and document redaction workflows",
+      "Clean Postgres migration rehearsal against an empty production-like database"
+    ]
   },
   "dataModels": {
-    "newRuntimeVariables": [],
-    "updatedStructures": [],
-    "assumptions": []
+    "newRuntimeVariables": [
+      "Operational Authority profiles, conditions, pilot authorisations, and pilot authorisation reviews",
+      "Insurance documents, profiles, conditions, source upload metadata, and assessment reasons",
+      "Stored files, organisation documents, users, user sessions, and organisation memberships"
+    ],
+    "updatedStructures": [
+      "Mission governance summaries now join OA and insurance readiness for mission-level advisory review",
+      "Risk-map summaries now accept governance renewal, competency, maintenance, and override-pressure signals",
+      "Pilot readiness can include OA authorisation and pending-amendment context"
+    ],
+    "assumptions": [
+      "The platform remains focused on commercial operators using an Operational Authority, with open-category access treated as a possible future constrained mode",
+      "System advice supports accountable operator review and does not certify regulatory compliance on behalf of the operator or the CAA"
+    ]
   },
   "apisServices": {
-    "endpointsUsed": [],
-    "changes": [],
+    "endpointsUsed": [
+      "Operational Authority routes for document/profile/condition and pilot-authorisation management",
+      "Insurance routes for policy/profile/condition assessment and source upload metadata",
+      "Mission governance routes for combined OA and insurance mission readiness",
+      "Risk-map and accountable-manager dashboard routes for early-warning summary surfaces",
+      "Stored-file and organisation-document routes for controlled upload, preview, and download"
+    ],
+    "changes": [
+      "Converted stored-file access away from role-hint-only handling toward authenticated membership-derived checks",
+      "Exposed governance status in operator-facing mission planning, dispatch, pilot readiness, and accountable-manager views"
+    ],
     "externalDependencies": [],
-    "failureHandling": []
+    "failureHandling": [
+      "Expired, renewal-soon, review-required, pending-amendment, and missing-source states are returned as advisory review reasons",
+      "Document access can be denied by membership context without exposing stored binary content"
+    ]
   },
   "uiHudChanges": {
-    "newFields": [],
-    "changedMeaning": [],
+    "newFields": [
+      "OA readiness, insurance readiness, pilot OA authorisation, pending amendment, renewal stage, and override-pressure indicators",
+      "Document portal preview/download actions with access-context copy",
+      "Accountable-manager stage tiles for early review of operational risk pressure"
+    ],
+    "changedMeaning": [
+      "Governance warnings are framed as advisory/accountable review signals rather than hard compliance certification",
+      "Renewal evidence packs are operator-activated support outputs, not automatic regulatory submissions"
+    ],
     "removedElements": [],
-    "userVisibleBehaviorChanges": []
+    "userVisibleBehaviorChanges": [
+      "Operators can see why an OA, insurance policy, or pilot authorisation needs review before mission dispatch",
+      "Accountable managers can inspect headline risk pressure earlier from a single dashboard surface"
+    ]
   },
   "complianceImplications": {
-    "truth": [],
-    "prediction": [],
-    "advisory": [],
-    "auditTraceabilityImpact": []
+    "truth": [
+      "Uploaded OA, insurance, membership, and stored-file records become traceable source evidence for governance assessment",
+      "Pending OA amendment is represented explicitly and is not treated as granted authorisation"
+    ],
+    "prediction": [
+      "Renewal-soon and override-pressure stages provide early warning before operational readiness degrades"
+    ],
+    "advisory": [
+      "The system surfaces where operations may need accountable review, policy change, SOP amendment, OA renewal, insurance renewal, or mission adjustment",
+      "Insurance assessment can advise what mission characteristic may need changing to remain within cover rather than presenting a stark no-go"
+    ],
+    "auditTraceabilityImpact": [
+      "Mission governance joins OA and insurance state into dispatch evidence",
+      "Document preview/download and evidence-pack concepts preserve source-document accountability"
+    ]
   },
   "risksLimitations": {
-    "knownBugs": [],
-    "edgeCases": [],
-    "technicalDebt": [],
+    "knownBugs": [
+      "Full Vitest suite assertions are green after the merge, but the runner can intermittently report worker fork teardown errors on the combined suite"
+    ],
+    "edgeCases": [
+      "Real OA and insurance wording can vary by operator and will need stronger extraction, review, and human confirmation workflows before production reliance",
+      "Multiple concurrent tenants require continued tenant-isolation propagation across all operational domains"
+    ],
+    "technicalDebt": [
+      "Role assignment UI, enterprise RBAC policy depth, production file storage, document scanning, and retention controls remain backlog items",
+      "Migration order should be rehearsed against a clean Postgres database before production hardening"
+    ],
     "performanceConcerns": []
   },
   "validationDone": {
@@ -85,11 +167,15 @@
       "Validated complete after aborted returns 409 and appends no mission.completed event",
       "Validated rejected lifecycle transitions leave mission event counts and mission state unchanged",
       "Validated shared mission lifecycle transition guard preserves existing mission and timeline behavior with full test suite green",
-      "Validated transition preflight endpoint returns allowed true for valid actions, allowed false for invalid actions, and 400 for unsupported actions without mutating mission state or appending events"
+      "Validated transition preflight endpoint returns allowed true for valid actions, allowed false for invalid actions, and 400 for unsupported actions without mutating mission state or appending events",
+      "Validated TypeScript build after recovering and merging the governance branch",
+      "Validated focused governance tests for OA, insurance, mission governance, risk map, accountable-manager dashboard, stored files, and organisation documents after the merge",
+      "Validated external overlay tests after preserving main-branch live-ops and map evidence work",
+      "Validated mission lifecycle request and correlation IDs are persisted on submitted, approved, and launched audit events"
     ]
 
   },
-  "nextBuildStep": "Add representative airspace and refresh provenance data to the live-ops demo seed.",
+  "nextBuildStep": "Validate the recovered migration chain against a clean Postgres test database and document any seed-data or ordering assumptions.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

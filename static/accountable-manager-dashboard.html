@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VerityATLAS Accountable Manager Dashboard</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08121d;
+      --bg-soft: #102033;
+      --bg-card: #14263b;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #edf3fb;
+      --muted: #9db3cc;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --info: #38bdf8;
+      --shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
+      --radius: 10px;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 26%),
+        linear-gradient(180deg, #08111a 0%, #0b1624 100%);
+      color: var(--text);
+    }
+
+    .page-shell {
+      width: min(1380px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
+
+    .hero,
+    .panel,
+    .metric,
+    .stage-tile,
+    .alert-card,
+    .hotspot-card {
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+
+    .hero-top,
+    .toolbar,
+    .panel-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    h1, h2, h3, h4, p { margin: 0; }
+    .hero h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.05; margin-bottom: 10px; }
+    .hero p { max-width: 820px; color: var(--muted); line-height: 1.6; font-size: 15px; }
+
+    .status-pill,
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .toolbar {
+      margin-top: 20px;
+      align-items: end;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 220px;
+      flex: 1 1 220px;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+
+    .field input,
+    .field button {
+      min-height: 46px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font: inherit;
+    }
+
+    .field input {
+      padding: 0 14px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+
+    .field button {
+      padding: 0 14px;
+      cursor: pointer;
+      background: var(--bg-card);
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .field button.secondary {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 18px 0 12px;
+    }
+
+    .section-title p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      padding: 18px;
+      min-height: 132px;
+    }
+
+    .metric .label,
+    .stage-tile h4,
+    .alert-card h4,
+    .hotspot-card h4,
+    .panel-header h3 {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+
+    .metric .value {
+      margin-top: 12px;
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    .metric .meta,
+    .alert-card p,
+    .hotspot-card p,
+    .table-meta,
+    .panel-header p {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .stage-grid,
+    .alert-grid,
+    .hotspot-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .stage-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .alert-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hotspot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .stage-tile,
+    .alert-card,
+    .hotspot-card {
+      padding: 16px;
+      background: var(--bg-card);
+    }
+
+    .stage-value {
+      margin-top: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .heat-pass { color: var(--ok); background: rgba(34, 197, 94, 0.08); }
+    .heat-warning { color: var(--warn); background: rgba(245, 158, 11, 0.08); }
+    .heat-fail { color: var(--bad); background: rgba(239, 68, 68, 0.08); }
+    .heat-stable { border-color: rgba(34, 197, 94, 0.35); }
+    .heat-emerging { border-color: rgba(245, 158, 11, 0.35); }
+    .heat-immediate { border-color: rgba(239, 68, 68, 0.35); }
+
+    .panel {
+      margin-top: 18px;
+    }
+
+    .panel-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .panel-body {
+      padding: 18px;
+    }
+
+    .link-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .action-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      text-decoration: none;
+      background: rgba(255, 255, 255, 0.04);
+      font-weight: 700;
+    }
+
+    .risk-list {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 11px;
+    }
+
+    .empty-state {
+      padding: 26px 18px;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tone-ok { color: var(--ok); }
+    .tone-warn { color: var(--warn); }
+    .tone-bad { color: var(--bad); }
+    .tone-info { color: var(--info); }
+
+    @media (max-width: 1100px) {
+      .metric-grid,
+      .stage-grid,
+      .alert-grid,
+      .hotspot-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>Accountable Manager Dashboard</h1>
+          <p>
+            Immediate organisational risk posture across missions, OA, insurance, personnel, maintenance,
+            and override pressure. This first screen is built directly on the live VerityATLAS governance
+            and risk-map services so the why is visible alongside the current status.
+          </p>
+        </div>
+        <div id="dashboard-status" class="status-pill">No organisation loaded</div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field">
+          <label for="organisation-id-input">Organisation ID</label>
+          <input id="organisation-id-input" type="text" placeholder="Enter organisation UUID" />
+        </div>
+        <div class="field">
+          <label for="auth-email-input">Email</label>
+          <input id="auth-email-input" type="email" placeholder="user@example.com" />
+        </div>
+        <div class="field">
+          <label for="auth-password-input">Password</label>
+          <input id="auth-password-input" type="password" placeholder="Password" />
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="login-btn" type="button">Login</button>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="load-dashboard-btn" type="button">Load dashboard</button>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="copy-link-btn" class="secondary" type="button">Copy direct link</button>
+        </div>
+      </div>
+
+      <div class="link-row">
+        <div id="auth-status" class="status-pill tone-warn">No active session</div>
+        <div id="loaded-org-pill" class="status-pill">No organisation selected</div>
+      </div>
+    </header>
+
+    <section>
+      <div class="section-title">
+        <div>
+          <h2>Posture Snapshot</h2>
+          <p>Fast overview of immediate attention, review pressure, and organisational drift indicators.</p>
+        </div>
+      </div>
+      <div id="metrics-grid" class="metric-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <div>
+          <h2>Risk Heat</h2>
+          <p>Stage-by-stage heat view so the accountable manager can see where the pressure is building and why.</p>
+        </div>
+      </div>
+      <div id="stage-grid" class="stage-grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Immediate Reasons</h3>
+          <p>Organisation-level alerts tied to current OA, insurance, and personnel posture.</p>
+        </div>
+      </div>
+      <div id="alert-grid" class="panel-body alert-grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Mission Hotspots</h3>
+          <p>Highest-pressure missions ranked by current heat and risk score, with direct links back into the mission workspace.</p>
+        </div>
+      </div>
+      <div id="hotspot-grid" class="panel-body hotspot-grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Tracked Missions</h3>
+          <p>Current mission list used to build the dashboard posture summary.</p>
+        </div>
+      </div>
+      <div id="missions-table" class="panel-body"></div>
+    </section>
+  </div>
+
+  <script type="module" src="/static/accountable-manager-dashboard.js"></script>
+</body>
+</html>
