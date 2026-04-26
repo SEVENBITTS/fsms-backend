@@ -1,32 +1,32 @@
 # NEXT STEP
 
 ## Goal
-Connect post-operation evidence drill-downs to deeper source-record detail views.
+Add visual focus handling for source-record drill-down targets.
 
 ---
 
 ## Build
 
 ### 1. Operator visibility
-- expand the new drill-down cards beyond panel-level navigation
-- link safety/SOP follow-up to the exact safety event, action proposal, or implementation evidence where available
-- link regulatory review records to the specific alert, mapping, and review action history
+- read drill-down query parameters such as map evidence ID and conflict acknowledgement ID
+- highlight the matching source record in live-ops evidence history or conflict review context
+- highlight timeline/regulatory sections when opened from the mission workspace drill-down cards
 
 ### 2. Product boundary
 - continue to label demo airspace data as synthetic/local
 - do not imply live CAA, NOTAM, or manufacturer feed connectivity
-- keep source-record links framed as audit review support, not compliance certification
+- keep visual focus framed as audit review support, not compliance certification or automated closure
 
 ### 3. Tests
-- add focused API and UI tests for source-record drill-down targets
+- add focused live-ops and mission workspace UI tests for drill-down focus state
 - run mission-planning UI tests
 - run TypeScript build and diff whitespace check
 
 ---
 
 ## Done When
-- Mission workspace can jump from summary readiness prompts to the most relevant source evidence records
-- Links target the current mission and existing source evidence views
+- Source-record drill-down links visually focus the relevant record or review section
+- Focus state remains shareable by URL and safe when the referenced record is missing
 - Copy remains explicit that links support audit review, not compliance certification
 - Degraded or carried-forward overlays remain visually distinguishable
 - The demo remains clearly synthetic and safe for local presentation

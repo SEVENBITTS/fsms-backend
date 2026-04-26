@@ -1820,6 +1820,7 @@ describe("audit evidence snapshots", () => {
         label: "Live-ops map view-state snapshots",
         count: 0,
         status: "not_recorded",
+        sourceRecords: [],
         message:
           "No live-ops map view-state metadata is recorded in this evidence pack; this is a review prompt only, not an automatic rejection or compliance certificate.",
       }),
@@ -1844,7 +1845,7 @@ describe("audit evidence snapshots", () => {
 
   it("summarizes post-operation evidence readiness with records and sign-off state", async () => {
     const { missionId } = await createCompletedMission();
-    await request(app)
+    const mapSnapshotResponse = await request(app)
       .post(
         `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
       )
@@ -1859,11 +1860,12 @@ describe("audit evidence snapshots", () => {
         activeConflictCount: 1,
         areaRefreshRunCount: 5,
       });
-    await createConflictGuidanceAcknowledgement(missionId, {
+    expect(mapSnapshotResponse.status).toBe(201);
+    const acknowledgement = await createConflictGuidanceAcknowledgement(missionId, {
       conflictId: "conflict-readiness-1",
     });
-    await createSafetyActionClosureEvidence(missionId);
-    await createRegulatoryAmendmentAlert(missionId, {
+    const closure = await createSafetyActionClosureEvidence(missionId);
+    const alert = await createRegulatoryAmendmentAlert(missionId, {
       acknowledge: true,
     });
     const snapshotResponse = await request(app)
@@ -1917,6 +1919,14 @@ describe("audit evidence snapshots", () => {
         label: "Live-ops map view-state snapshots",
         count: 1,
         status: "present",
+        sourceRecords: [
+          expect.objectContaining({
+            id: mapSnapshotResponse.body.snapshot.id,
+            label: "Map view-state snapshot",
+            apiUrl: `/missions/${missionId}/live-operations/map-view-state/audit-snapshots`,
+            reviewUrl: `/operator/missions/${missionId}/live-operations?mapEvidenceId=${mapSnapshotResponse.body.snapshot.id}`,
+          }),
+        ],
         message:
           "Live-ops map view-state metadata is included for accountable-manager review; it is metadata-only evidence and not pilot command guidance.",
       }),
@@ -1924,16 +1934,40 @@ describe("audit evidence snapshots", () => {
         key: "conflict_guidance_acknowledgements",
         count: 1,
         status: "present",
+        sourceRecords: [
+          expect.objectContaining({
+            id: acknowledgement.id,
+            label: "Conflict acknowledgement",
+            apiUrl: `/missions/${missionId}/conflict-guidance-acknowledgements`,
+            reviewUrl: `/operator/missions/${missionId}/live-operations?conflictAcknowledgementId=${acknowledgement.id}`,
+          }),
+        ],
       }),
       expect.objectContaining({
         key: "safety_action_closure_evidence",
         count: 1,
         status: "present",
+        sourceRecords: [
+          expect.objectContaining({
+            id: closure.evidence.id,
+            label: "Safety action implementation evidence",
+            apiUrl: `/safety-events/${closure.event.id}/agenda-links/${closure.agendaLink.id}/action-proposals/${closure.proposal.id}/implementation-evidence`,
+            reviewUrl: `/operator/mission-workspace?missionId=${missionId}#timeline-panel`,
+          }),
+        ],
       }),
       expect.objectContaining({
         key: "regulatory_amendment_reviews",
         count: 1,
         status: "present",
+        sourceRecords: [
+          expect.objectContaining({
+            id: alert.id,
+            label: "Regulatory amendment alert",
+            apiUrl: `/missions/${missionId}/alerts`,
+            reviewUrl: `/operator/mission-workspace?missionId=${missionId}#regulatory-matrix-panel`,
+          }),
+        ],
       }),
     ]);
     expect(await countRows(missionId)).toEqual(before);

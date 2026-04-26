@@ -2007,6 +2007,12 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Evidence Drill-down Links");
     expect(response.text).toContain("renderReadinessDrilldowns");
     expect(response.text).toContain("renderReadinessDrilldownCard");
+    expect(response.text).toContain("latestReadinessSourceRecord");
+    expect(response.text).toContain("Latest source record:");
+    expect(response.text).toContain("Open source JSON");
+    expect(response.text).toContain("sourceRecords");
+    expect(response.text).toContain("reviewUrl");
+    expect(response.text).toContain("apiUrl");
     expect(response.text).toContain("Open live-ops map evidence");
     expect(response.text).toContain("Review live conflict evidence");
     expect(response.text).toContain("Review operations timeline");

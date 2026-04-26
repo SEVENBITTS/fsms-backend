@@ -310,6 +310,16 @@ export interface PostOperationEvidenceReadinessCategory {
   count: number;
   status: "present" | "not_recorded";
   message: string;
+  sourceRecords: PostOperationEvidenceReadinessSourceRecord[];
+}
+
+export interface PostOperationEvidenceReadinessSourceRecord {
+  id: string;
+  label: string;
+  summary: string;
+  recordedAt: string;
+  apiUrl: string;
+  reviewUrl: string;
 }
 
 export interface PostOperationEvidenceReadiness {

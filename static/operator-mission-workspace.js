@@ -393,6 +393,9 @@ const readinessCategory = (key) =>
 const readinessCategoryLabel = (category) =>
   category ? `${category.count} ${category.status}` : "Not loaded";
 
+const latestReadinessSourceRecord = (category) =>
+  category?.sourceRecords?.[0] ?? null;
+
 const renderReadinessDrilldownCard = ({
   title,
   category,
@@ -400,26 +403,43 @@ const renderReadinessDrilldownCard = ({
   actionLabel,
   description,
   targetBlank = false,
-}) => `
-  <section class="action-card">
-    <h4>${escapeHtml(title)}</h4>
-    <div>${renderBadge(readinessCategoryLabel(category))}</div>
-    <div class="action-meta">
-      ${escapeHtml(category?.message ?? description)}
-    </div>
-    <div class="action-footer" style="justify-content: flex-start;">
-      ${
-        href
-          ? `<a class="action-button link-button" href="${escapeHtml(href)}"${
-              targetBlank ? ' target="_blank" rel="noopener"' : ""
-            }>
-              ${escapeHtml(actionLabel)}
-            </a>`
-          : `<div class="action-status tone-warn">Create a post-operation snapshot before this drill-down is available.</div>`
-      }
-    </div>
-  </section>
-`;
+}) => {
+  const sourceRecord = latestReadinessSourceRecord(category);
+  const reviewHref = sourceRecord?.reviewUrl ?? href;
+  const apiHref = sourceRecord?.apiUrl ?? "";
+  const linkTarget = targetBlank ? ' target="_blank" rel="noopener"' : "";
+
+  return `
+    <section class="action-card">
+      <h4>${escapeHtml(title)}</h4>
+      <div>${renderBadge(readinessCategoryLabel(category))}</div>
+      <div class="action-meta">
+        ${escapeHtml(category?.message ?? description)}
+        ${
+          sourceRecord
+            ? `<br />Latest source record: ${escapeHtml(sourceRecord.label)} ${escapeHtml(sourceRecord.id)} recorded ${escapeHtml(formatDateTime(sourceRecord.recordedAt))}.`
+            : ""
+        }
+      </div>
+      <div class="action-footer" style="justify-content: flex-start;">
+        ${
+          reviewHref
+            ? `<a class="action-button link-button" href="${escapeHtml(reviewHref)}"${linkTarget}>
+                ${escapeHtml(sourceRecord ? `Open ${sourceRecord.label}` : actionLabel)}
+              </a>`
+            : `<div class="action-status tone-warn">Create a post-operation snapshot before this drill-down is available.</div>`
+        }
+        ${
+          apiHref
+            ? `<a class="action-button link-button" href="${escapeHtml(apiHref)}" target="_blank" rel="noopener">
+                Open source JSON
+              </a>`
+            : ""
+        }
+      </div>
+    </section>
+  `;
+};
 
 const renderReadinessDrilldowns = ({
   mapEvidenceUrl,
