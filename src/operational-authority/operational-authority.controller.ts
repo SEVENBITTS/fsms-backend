@@ -149,6 +149,71 @@ export class OperationalAuthorityController {
     }
   };
 
+  listMissionSopChangeRecommendations = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const user = requireCurrentUser(req);
+      const organisationId =
+        await this.operationalAuthorityService.getMissionOrganisationId(
+          req.params.missionId,
+        );
+      await this.organisationMembershipsService.requireMembership(
+        user.id,
+        organisationId,
+        [
+          "viewer",
+          "operator",
+          "operations_manager",
+          "compliance_manager",
+          "accountable_manager",
+          "admin",
+        ],
+      );
+      const listed =
+        await this.operationalAuthorityService.listSopChangeRecommendations(
+          req.params.missionId,
+        );
+      res.status(200).json(listed);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createMissionSopChangeRecommendation = async (
+    req: Request<MissionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const user = requireCurrentUser(req);
+      const organisationId =
+        await this.operationalAuthorityService.getMissionOrganisationId(
+          req.params.missionId,
+        );
+      await this.organisationMembershipsService.requireMembership(
+        user.id,
+        organisationId,
+        [
+          "operations_manager",
+          "compliance_manager",
+          "accountable_manager",
+          "admin",
+        ],
+      );
+      const created =
+        await this.operationalAuthorityService.createSopChangeRecommendation(
+          req.params.missionId,
+          req.body,
+        );
+      res.status(201).json(created);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   listPilotAuthorisations = async (
     req: Request<ProfileIdParams>,
     res: Response,

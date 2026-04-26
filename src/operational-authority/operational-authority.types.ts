@@ -73,6 +73,32 @@ export interface CreateOperationalAuthoritySopDocumentInput {
   reviewNotes?: string | null;
 }
 
+export type OperationalAuthoritySopChangeRecommendationType =
+  | "sop_review_recommended"
+  | "sop_amendment_recommended"
+  | "new_sop_required"
+  | "oa_variation_review_recommended";
+
+export type OperationalAuthoritySopChangeRecommendationStatus =
+  | "draft"
+  | "under_review"
+  | "accepted_for_action"
+  | "rejected"
+  | "closed";
+
+export interface CreateOperationalAuthoritySopChangeRecommendationInput {
+  profileId?: string;
+  sopDocumentId?: string;
+  parentOaConditionId?: string | null;
+  sopClauseRef?: string | null;
+  recommendationType?: OperationalAuthoritySopChangeRecommendationType;
+  evidenceSourceType?: string;
+  evidenceSourceId?: string;
+  findingSummary?: string;
+  recommendation?: string;
+  createdBy?: string;
+}
+
 export interface ActivateOperationalAuthorityProfileInput {
   activatedBy?: string;
 }
@@ -174,6 +200,26 @@ export interface OperationalAuthoritySopDocument {
   linkedOaConditionIds: string[];
   changeRecommendationScope: string[];
   reviewNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OperationalAuthoritySopChangeRecommendation {
+  id: string;
+  missionId: string;
+  organisationId: string;
+  operationalAuthorityProfileId: string;
+  operationalAuthoritySopDocumentId: string;
+  parentOaConditionId: string | null;
+  sopCode: string;
+  sopClauseRef: string | null;
+  recommendationType: OperationalAuthoritySopChangeRecommendationType;
+  status: OperationalAuthoritySopChangeRecommendationStatus;
+  evidenceSourceType: string;
+  evidenceSourceId: string;
+  findingSummary: string;
+  recommendation: string;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 }

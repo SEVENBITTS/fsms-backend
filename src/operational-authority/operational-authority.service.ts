@@ -11,6 +11,7 @@ import type {
   CreateOperationalAuthorityDocumentInput,
   CreateOperationalAuthorityPilotAuthorisationInput,
   CreateOperationalAuthorityPilotAuthorisationReviewInput,
+  CreateOperationalAuthoritySopChangeRecommendationInput,
   CreateOperationalAuthoritySopDocumentInput,
   OperationalAuthorityAssessment,
   OperationalAuthorityAssessmentReason,
@@ -23,6 +24,7 @@ import {
   validateCreateOperationalAuthorityDocumentInput,
   validateCreateOperationalAuthorityPilotAuthorisationInput,
   validateCreateOperationalAuthorityPilotAuthorisationReviewInput,
+  validateCreateOperationalAuthoritySopChangeRecommendationInput,
   validateCreateOperationalAuthoritySopDocumentInput,
   validateUpdateOperationalAuthorityPilotAuthorisationInput,
   validateUploadOperationalAuthorityDocumentInput,
@@ -302,6 +304,106 @@ export class OperationalAuthorityService {
         );
 
       return { profile, sopDocuments };
+    } finally {
+      client.release();
+    }
+  }
+
+  async createSopChangeRecommendation(
+    missionId: string,
+    input: CreateOperationalAuthoritySopChangeRecommendationInput | undefined,
+  ) {
+    const validated =
+      validateCreateOperationalAuthoritySopChangeRecommendationInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const mission =
+        await this.operationalAuthorityRepository.getMissionGovernanceContext(
+          client,
+          missionId,
+        );
+
+      if (!mission?.organisationId) {
+        throw new OperationalAuthorityMissionNotFoundError(missionId);
+      }
+
+      const profile = await this.operationalAuthorityRepository.getProfileById(
+        client,
+        validated.profileId,
+      );
+
+      if (!profile || profile.organisationId !== mission.organisationId) {
+        throw new OperationalAuthorityProfileNotFoundError(validated.profileId);
+      }
+
+      const sopDocument =
+        await this.operationalAuthorityRepository.getSopDocumentById(
+          client,
+          validated.sopDocumentId,
+        );
+
+      if (
+        !sopDocument ||
+        sopDocument.organisationId !== mission.organisationId ||
+        sopDocument.operationalAuthorityProfileId !== profile.id
+      ) {
+        throw new OperationalAuthorityProfileNotFoundError(validated.profileId);
+      }
+
+      const recommendation =
+        await this.operationalAuthorityRepository.insertSopChangeRecommendation(
+          client,
+          {
+            missionId,
+            organisationId: mission.organisationId,
+            profileId: profile.id,
+            sopDocumentId: sopDocument.id,
+            parentOaConditionId: validated.parentOaConditionId,
+            sopCode: sopDocument.sopCode,
+            sopClauseRef: validated.sopClauseRef,
+            recommendationType: validated.recommendationType,
+            evidenceSourceType: validated.evidenceSourceType,
+            evidenceSourceId: validated.evidenceSourceId,
+            findingSummary: validated.findingSummary,
+            recommendation: validated.recommendation,
+            createdBy: validated.createdBy,
+          },
+        );
+
+      await client.query("COMMIT");
+      return { recommendation };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSopChangeRecommendations(missionId: string) {
+    const client = await this.pool.connect();
+
+    try {
+      const mission =
+        await this.operationalAuthorityRepository.getMissionGovernanceContext(
+          client,
+          missionId,
+        );
+
+      if (!mission) {
+        throw new OperationalAuthorityMissionNotFoundError(missionId);
+      }
+
+      const recommendations =
+        await this.operationalAuthorityRepository.listSopChangeRecommendationsForMission(
+          client,
+          missionId,
+        );
+
+      return { missionId, recommendations };
     } finally {
       client.release();
     }

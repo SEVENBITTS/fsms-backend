@@ -20,6 +20,14 @@ export function createOperationalAuthorityMissionRouter(
   const router = Router();
 
   router.get("/:missionId/oa-assessment", controller.getMissionOperationalAuthorityAssessment);
+  router.get(
+    "/:missionId/sop-change-recommendations",
+    controller.listMissionSopChangeRecommendations,
+  );
+  router.post(
+    "/:missionId/sop-change-recommendations",
+    controller.createMissionSopChangeRecommendation,
+  );
 
   return router;
 }

@@ -6,6 +6,7 @@ import type {
   OperationalAuthorityPilotAuthorisation,
   OperationalAuthorityPilotAuthorisationReview,
   OperationalAuthorityProfile,
+  OperationalAuthoritySopChangeRecommendation,
   OperationalAuthoritySopDocument,
 } from "./operational-authority.types";
 
@@ -77,6 +78,26 @@ interface OperationalAuthoritySopDocumentRow extends QueryResultRow {
   linked_oa_condition_ids: string[] | null;
   change_recommendation_scope: string[] | null;
   review_notes: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface OperationalAuthoritySopChangeRecommendationRow extends QueryResultRow {
+  id: string;
+  mission_id: string;
+  organisation_id: string;
+  operational_authority_profile_id: string;
+  operational_authority_sop_document_id: string;
+  parent_oa_condition_id: string | null;
+  sop_code: string;
+  sop_clause_ref: string | null;
+  recommendation_type: OperationalAuthoritySopChangeRecommendation["recommendationType"];
+  status: OperationalAuthoritySopChangeRecommendation["status"];
+  evidence_source_type: string;
+  evidence_source_id: string;
+  finding_summary: string;
+  recommendation: string;
+  created_by: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -178,6 +199,28 @@ const toSopDocument = (
   linkedOaConditionIds: row.linked_oa_condition_ids ?? [],
   changeRecommendationScope: row.change_recommendation_scope ?? [],
   reviewNotes: row.review_notes,
+  createdAt: row.created_at.toISOString(),
+  updatedAt: row.updated_at.toISOString(),
+});
+
+const toSopChangeRecommendation = (
+  row: OperationalAuthoritySopChangeRecommendationRow,
+): OperationalAuthoritySopChangeRecommendation => ({
+  id: row.id,
+  missionId: row.mission_id,
+  organisationId: row.organisation_id,
+  operationalAuthorityProfileId: row.operational_authority_profile_id,
+  operationalAuthoritySopDocumentId: row.operational_authority_sop_document_id,
+  parentOaConditionId: row.parent_oa_condition_id,
+  sopCode: row.sop_code,
+  sopClauseRef: row.sop_clause_ref,
+  recommendationType: row.recommendation_type,
+  status: row.status,
+  evidenceSourceType: row.evidence_source_type,
+  evidenceSourceId: row.evidence_source_id,
+  findingSummary: row.finding_summary,
+  recommendation: row.recommendation,
+  createdBy: row.created_by,
   createdAt: row.created_at.toISOString(),
   updatedAt: row.updated_at.toISOString(),
 });
@@ -605,6 +648,99 @@ export class OperationalAuthorityRepository {
     );
 
     return result.rows.map((row) => toSopDocument(row));
+  }
+
+  async getSopDocumentById(
+    tx: PoolClient,
+    sopDocumentId: string,
+  ): Promise<OperationalAuthoritySopDocument | null> {
+    const result = await tx.query<OperationalAuthoritySopDocumentRow>(
+      `
+      select *
+      from operational_authority_sop_documents
+      where id = $1
+      `,
+      [sopDocumentId],
+    );
+
+    return result.rows[0] ? toSopDocument(result.rows[0]) : null;
+  }
+
+  async insertSopChangeRecommendation(
+    tx: PoolClient,
+    params: {
+      missionId: string;
+      organisationId: string;
+      profileId: string;
+      sopDocumentId: string;
+      parentOaConditionId: string | null;
+      sopCode: string;
+      sopClauseRef: string | null;
+      recommendationType: OperationalAuthoritySopChangeRecommendation["recommendationType"];
+      evidenceSourceType: string;
+      evidenceSourceId: string;
+      findingSummary: string;
+      recommendation: string;
+      createdBy: string;
+    },
+  ): Promise<OperationalAuthoritySopChangeRecommendation> {
+    const result = await tx.query<OperationalAuthoritySopChangeRecommendationRow>(
+      `
+      insert into operational_authority_sop_change_recommendations (
+        id,
+        mission_id,
+        organisation_id,
+        operational_authority_profile_id,
+        operational_authority_sop_document_id,
+        parent_oa_condition_id,
+        sop_code,
+        sop_clause_ref,
+        recommendation_type,
+        evidence_source_type,
+        evidence_source_id,
+        finding_summary,
+        recommendation,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      returning *
+      `,
+      [
+        randomUUID(),
+        params.missionId,
+        params.organisationId,
+        params.profileId,
+        params.sopDocumentId,
+        params.parentOaConditionId,
+        params.sopCode,
+        params.sopClauseRef,
+        params.recommendationType,
+        params.evidenceSourceType,
+        params.evidenceSourceId,
+        params.findingSummary,
+        params.recommendation,
+        params.createdBy,
+      ],
+    );
+
+    return toSopChangeRecommendation(result.rows[0]);
+  }
+
+  async listSopChangeRecommendationsForMission(
+    tx: PoolClient,
+    missionId: string,
+  ): Promise<OperationalAuthoritySopChangeRecommendation[]> {
+    const result = await tx.query<OperationalAuthoritySopChangeRecommendationRow>(
+      `
+      select *
+      from operational_authority_sop_change_recommendations
+      where mission_id = $1
+      order by created_at desc, id desc
+      `,
+      [missionId],
+    );
+
+    return result.rows.map((row) => toSopChangeRecommendation(row));
   }
 
   async getPilotAuthorisationForProfile(
