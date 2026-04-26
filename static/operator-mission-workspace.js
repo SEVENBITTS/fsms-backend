@@ -390,6 +390,107 @@ const readinessCategory = (key) =>
     (category) => category.key === key,
   ) ?? null;
 
+const readinessCategoryLabel = (category) =>
+  category ? `${category.count} ${category.status}` : "Not loaded";
+
+const renderReadinessDrilldownCard = ({
+  title,
+  category,
+  href,
+  actionLabel,
+  description,
+  targetBlank = false,
+}) => `
+  <section class="action-card">
+    <h4>${escapeHtml(title)}</h4>
+    <div>${renderBadge(readinessCategoryLabel(category))}</div>
+    <div class="action-meta">
+      ${escapeHtml(category?.message ?? description)}
+    </div>
+    <div class="action-footer" style="justify-content: flex-start;">
+      ${
+        href
+          ? `<a class="action-button link-button" href="${escapeHtml(href)}"${
+              targetBlank ? ' target="_blank" rel="noopener"' : ""
+            }>
+              ${escapeHtml(actionLabel)}
+            </a>`
+          : `<div class="action-status tone-warn">Create a post-operation snapshot before this drill-down is available.</div>`
+      }
+    </div>
+  </section>
+`;
+
+const renderReadinessDrilldowns = ({
+  mapEvidenceUrl,
+  exportLinks,
+  mapViewStateReadiness,
+  conflictReadiness,
+  safetyActionReadiness,
+  regulatoryReadiness,
+}) => {
+  const reportUrl = exportLinks.renderUrl || "";
+
+  return `
+    <section id="evidence-drilldown-links" class="summary-block" style="margin-bottom: 14px;">
+      <h4>Evidence Drill-down Links</h4>
+      <div class="action-grid">
+        ${renderReadinessDrilldownCard({
+          title: "Map view-state evidence",
+          category: mapViewStateReadiness,
+          href: mapEvidenceUrl,
+          actionLabel: "Open live-ops map evidence",
+          description:
+            "Review or capture metadata-only map view-state evidence in the live operations view.",
+        })}
+        ${renderReadinessDrilldownCard({
+          title: "Conflict acknowledgements",
+          category: conflictReadiness,
+          href: mapEvidenceUrl,
+          actionLabel: "Review live conflict evidence",
+          description:
+            "Review conflict advisory acknowledgement evidence in the live operations context.",
+        })}
+        ${renderReadinessDrilldownCard({
+          title: "Safety and SOP follow-up",
+          category: safetyActionReadiness,
+          href: "#timeline-panel",
+          actionLabel: "Review operations timeline",
+          description:
+            "Review post-operation timeline evidence and safety follow-up cues before sign-off.",
+        })}
+        ${renderReadinessDrilldownCard({
+          title: "Regulatory review records",
+          category: regulatoryReadiness,
+          href: "#regulatory-matrix-panel",
+          actionLabel: "Review regulatory matrix",
+          description:
+            "Review regulatory amendment alerts and source mappings that may need accountable review.",
+        })}
+        ${renderReadinessDrilldownCard({
+          title: "Rendered evidence report",
+          category: reportUrl
+            ? {
+                count: 1,
+                status: "available",
+                message:
+                  "Open the rendered evidence pack to review the source report behind these prompts.",
+              }
+            : null,
+          href: reportUrl,
+          actionLabel: "Open audit report",
+          description:
+            "Open the rendered post-operation evidence report for audit review support.",
+          targetBlank: true,
+        })}
+      </div>
+      <div class="action-meta" style="margin-top: 12px;">
+        Drill-down links support accountable review and evidence navigation only. They do not certify compliance, submit records, or replace operator judgement.
+      </div>
+    </section>
+  `;
+};
+
 const renderReportReadinessSummary = () => {
   const section = reportSection("Evidence readiness summary");
 
@@ -853,7 +954,7 @@ const renderEvidenceHelpers = () => {
           <div>${escapeHtml(dispatchWorkspace.dispatch.missingRequirements.join("; ") || "None")}</div>
         </div>
       </section>
-      <section class="summary-block">
+      <section id="post-operation-evidence-pack" class="summary-block">
         <h4>Post-operation Evidence Pack</h4>
         <div class="kv">
           <div class="k">Mission state</div>
@@ -897,7 +998,7 @@ const renderEvidenceHelpers = () => {
           }
         </div>
       </section>
-      <section class="summary-block">
+      <section id="pre-signoff-evidence-summary" class="summary-block">
         <h4>Pre-sign-off Evidence Summary</h4>
         <div class="kv">
           <div class="k">Report sections</div>
@@ -937,11 +1038,19 @@ const renderEvidenceHelpers = () => {
           </div>
         </div>
       </section>
-      <section class="summary-block">
+      <section id="rendered-report-readiness-summary" class="summary-block">
         <h4>Rendered Report Readiness Summary</h4>
         ${renderReportReadinessSummary()}
       </section>
     </div>
+    ${renderReadinessDrilldowns({
+      mapEvidenceUrl,
+      exportLinks,
+      mapViewStateReadiness,
+      conflictReadiness,
+      safetyActionReadiness,
+      regulatoryReadiness,
+    })}
     <div class="action-grid">
       ${Object.entries(EVIDENCE_HELPERS)
         .map(([helper, definition]) => renderEvidenceHelperCard(helper, definition))
