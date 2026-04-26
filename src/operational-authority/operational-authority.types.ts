@@ -99,6 +99,20 @@ export interface CreateOperationalAuthoritySopChangeRecommendationInput {
   createdBy?: string;
 }
 
+export type OperationalAuthoritySopChangeRecommendationDecision =
+  | "accepted_for_action"
+  | "rejected"
+  | "deferred"
+  | "closed";
+
+export interface CreateOperationalAuthoritySopChangeRecommendationReviewInput {
+  decision?: OperationalAuthoritySopChangeRecommendationDecision;
+  reviewedBy?: string;
+  reviewRationale?: string;
+  evidenceRef?: string | null;
+  reviewedAt?: string | null;
+}
+
 export interface ActivateOperationalAuthorityProfileInput {
   activatedBy?: string;
 }
@@ -222,6 +236,19 @@ export interface OperationalAuthoritySopChangeRecommendation {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OperationalAuthoritySopChangeRecommendationReview {
+  id: string;
+  operationalAuthoritySopChangeRecommendationId: string;
+  missionId: string;
+  organisationId: string;
+  decision: OperationalAuthoritySopChangeRecommendationDecision;
+  reviewedBy: string;
+  reviewRationale: string;
+  evidenceRef: string | null;
+  reviewedAt: string;
+  createdAt: string;
 }
 
 export type OperationalAuthorityPilotAuthorisationState =

@@ -94,3 +94,20 @@ export function createOperationalAuthorityPilotAuthorisationRouter(
 
   return router;
 }
+
+export function createOperationalAuthoritySopChangeRecommendationRouter(
+  controller: OperationalAuthorityController,
+): Router {
+  const router = Router();
+
+  router.get(
+    "/:recommendationId/reviews",
+    controller.listSopChangeRecommendationReviews,
+  );
+  router.post(
+    "/:recommendationId/reviews",
+    controller.createSopChangeRecommendationReview,
+  );
+
+  return router;
+}

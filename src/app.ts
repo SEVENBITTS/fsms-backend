@@ -79,6 +79,7 @@ import {
   createOperationalAuthorityOrganisationRouter,
   createOperationalAuthorityPilotAuthorisationRouter,
   createOperationalAuthorityProfileRouter,
+  createOperationalAuthoritySopChangeRecommendationRouter,
 } from "./operational-authority/operational-authority.routes";
 import { InsuranceRepository } from "./insurance/insurance.repository";
 import { InsuranceService } from "./insurance/insurance.service";
@@ -414,6 +415,13 @@ app.use(
   "/operational-authority-pilot-authorisations",
   authMiddleware,
   createOperationalAuthorityPilotAuthorisationRouter(operationalAuthorityController),
+);
+app.use(
+  "/operational-authority-sop-change-recommendations",
+  authMiddleware,
+  createOperationalAuthoritySopChangeRecommendationRouter(
+    operationalAuthorityController,
+  ),
 );
 app.use(
   "/organisations",

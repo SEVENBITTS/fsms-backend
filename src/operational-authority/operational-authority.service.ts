@@ -12,6 +12,7 @@ import type {
   CreateOperationalAuthorityPilotAuthorisationInput,
   CreateOperationalAuthorityPilotAuthorisationReviewInput,
   CreateOperationalAuthoritySopChangeRecommendationInput,
+  CreateOperationalAuthoritySopChangeRecommendationReviewInput,
   CreateOperationalAuthoritySopDocumentInput,
   OperationalAuthorityAssessment,
   OperationalAuthorityAssessmentReason,
@@ -25,6 +26,7 @@ import {
   validateCreateOperationalAuthorityPilotAuthorisationInput,
   validateCreateOperationalAuthorityPilotAuthorisationReviewInput,
   validateCreateOperationalAuthoritySopChangeRecommendationInput,
+  validateCreateOperationalAuthoritySopChangeRecommendationReviewInput,
   validateCreateOperationalAuthoritySopDocumentInput,
   validateUpdateOperationalAuthorityPilotAuthorisationInput,
   validateUploadOperationalAuthorityDocumentInput,
@@ -404,6 +406,116 @@ export class OperationalAuthorityService {
         );
 
       return { missionId, recommendations };
+    } finally {
+      client.release();
+    }
+  }
+
+  async createSopChangeRecommendationReview(
+    recommendationId: string,
+    input:
+      | CreateOperationalAuthoritySopChangeRecommendationReviewInput
+      | undefined,
+  ) {
+    const validated =
+      validateCreateOperationalAuthoritySopChangeRecommendationReviewInput(input);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const existing =
+        await this.operationalAuthorityRepository.getSopChangeRecommendationById(
+          client,
+          recommendationId,
+        );
+
+      if (!existing) {
+        throw new OperationalAuthorityMissionNotFoundError(recommendationId);
+      }
+
+      const review =
+        await this.operationalAuthorityRepository.insertSopChangeRecommendationReview(
+          client,
+          {
+            recommendationId,
+            missionId: existing.missionId,
+            organisationId: existing.organisationId,
+            decision: validated.decision,
+            reviewedBy: validated.reviewedBy,
+            reviewRationale: validated.reviewRationale,
+            evidenceRef: validated.evidenceRef,
+            reviewedAt: validated.reviewedAt,
+          },
+        );
+
+      const status =
+        validated.decision === "deferred" ? "under_review" : validated.decision;
+      const recommendation =
+        await this.operationalAuthorityRepository.updateSopChangeRecommendationStatus(
+          client,
+          recommendationId,
+          status,
+        );
+      const reviews =
+        await this.operationalAuthorityRepository.listSopChangeRecommendationReviews(
+          client,
+          recommendationId,
+        );
+
+      await client.query("COMMIT");
+      return { recommendation, review, reviews };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSopChangeRecommendationReviews(recommendationId: string) {
+    const client = await this.pool.connect();
+
+    try {
+      const recommendation =
+        await this.operationalAuthorityRepository.getSopChangeRecommendationById(
+          client,
+          recommendationId,
+        );
+
+      if (!recommendation) {
+        throw new OperationalAuthorityMissionNotFoundError(recommendationId);
+      }
+
+      const reviews =
+        await this.operationalAuthorityRepository.listSopChangeRecommendationReviews(
+          client,
+          recommendationId,
+        );
+
+      return { recommendation, reviews };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getSopChangeRecommendationOrganisationId(
+    recommendationId: string,
+  ): Promise<string> {
+    const client = await this.pool.connect();
+
+    try {
+      const recommendation =
+        await this.operationalAuthorityRepository.getSopChangeRecommendationById(
+          client,
+          recommendationId,
+        );
+
+      if (!recommendation) {
+        throw new OperationalAuthorityMissionNotFoundError(recommendationId);
+      }
+
+      return recommendation.organisationId;
     } finally {
       client.release();
     }

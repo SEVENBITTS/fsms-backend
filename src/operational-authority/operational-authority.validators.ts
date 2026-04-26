@@ -8,11 +8,13 @@ import type {
   CreateOperationalAuthorityPilotAuthorisationInput,
   CreateOperationalAuthorityPilotAuthorisationReviewInput,
   CreateOperationalAuthoritySopChangeRecommendationInput,
+  CreateOperationalAuthoritySopChangeRecommendationReviewInput,
   CreateOperationalAuthoritySopDocumentInput,
   MissionOperationType,
   OperationalAuthorityConditionCode,
   OperationalAuthorityPilotAuthorisationReviewDecision,
   OperationalAuthorityPilotAuthorisationState,
+  OperationalAuthoritySopChangeRecommendationDecision,
   OperationalAuthoritySopChangeRecommendationType,
   OperationalAuthoritySopDocumentStatus,
   UpdateOperationalAuthorityPilotAuthorisationInput,
@@ -63,6 +65,14 @@ const SOP_CHANGE_RECOMMENDATION_TYPES =
     "sop_amendment_recommended",
     "new_sop_required",
     "oa_variation_review_recommended",
+  ]);
+
+const SOP_CHANGE_RECOMMENDATION_DECISIONS =
+  new Set<OperationalAuthoritySopChangeRecommendationDecision>([
+    "accepted_for_action",
+    "rejected",
+    "deferred",
+    "closed",
   ]);
 
 function requiredTrimmed(value: unknown, fieldName: string): string {
@@ -324,6 +334,21 @@ function validateSopChangeRecommendationType(
   return value as OperationalAuthoritySopChangeRecommendationType;
 }
 
+function validateSopChangeRecommendationDecision(
+  value: unknown,
+): OperationalAuthoritySopChangeRecommendationDecision {
+  if (
+    typeof value !== "string" ||
+    !SOP_CHANGE_RECOMMENDATION_DECISIONS.has(
+      value as OperationalAuthoritySopChangeRecommendationDecision,
+    )
+  ) {
+    throw new OperationalAuthorityValidationError("decision is not supported");
+  }
+
+  return value as OperationalAuthoritySopChangeRecommendationDecision;
+}
+
 export function validateCreateOperationalAuthorityDocumentInput(
   input: CreateOperationalAuthorityDocumentInput | undefined,
 ) {
@@ -474,6 +499,27 @@ export function validateCreateOperationalAuthoritySopChangeRecommendationInput(
     findingSummary: requiredTrimmed(input.findingSummary, "findingSummary"),
     recommendation: requiredTrimmed(input.recommendation, "recommendation"),
     createdBy: requiredTrimmed(input.createdBy, "createdBy"),
+  };
+}
+
+export function validateCreateOperationalAuthoritySopChangeRecommendationReviewInput(
+  input:
+    | CreateOperationalAuthoritySopChangeRecommendationReviewInput
+    | undefined,
+) {
+  if (!input || typeof input !== "object") {
+    throw new OperationalAuthorityValidationError("Request body must be an object");
+  }
+
+  return {
+    decision: validateSopChangeRecommendationDecision(input.decision),
+    reviewedBy: requiredTrimmed(input.reviewedBy, "reviewedBy"),
+    reviewRationale: requiredTrimmed(
+      input.reviewRationale,
+      "reviewRationale",
+    ),
+    evidenceRef: optionalTrimmed(input.evidenceRef, "evidenceRef"),
+    reviewedAt: optionalIsoDate(input.reviewedAt, "reviewedAt"),
   };
 }
 
