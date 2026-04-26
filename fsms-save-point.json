@@ -22,7 +22,8 @@
     "visibleUiHudElements": [
       "Accountable manager governance summary and risk-stage surface",
       "Operator document portal cards with preview/download actions and role-context access wording",
-      "Mission planning and dispatch governance panels with OA, insurance, pilot authorisation, and pending-amendment status"
+      "Mission planning and dispatch governance panels with OA, insurance, pilot authorisation, and pending-amendment status",
+      "Post-operation evidence readiness drill-down links in the operator mission workspace"
     ],
     "confirmedInputOutputChains": [
       "OA/insurance source document metadata -> assessment service -> mission governance summary -> risk-map/dashboard output",
@@ -41,7 +42,8 @@
       "Merged the recovered governance build with latest main-branch live operations, regulatory review, evidence, map, and mission workspace improvements",
       "Rewired app route ordering so governance routes coexist with the evolved mission and live-ops route set",
       "Updated package dependencies to patch known vulnerable dev dependency versions",
-      "Adjusted organisation document portal test expectations to remain stable with expanded seeded pilot data"
+      "Adjusted organisation document portal test expectations to remain stable with expanded seeded pilot data",
+      "Added mission workspace drill-down links from post-operation readiness categories to live-ops map evidence, conflict review context, operations timeline, regulatory matrix, and rendered audit report"
     ],
     "removed": [],
     "fixed": [
@@ -115,7 +117,8 @@
     "removedElements": [],
     "userVisibleBehaviorChanges": [
       "Operators can see why an OA, insurance policy, or pilot authorisation needs review before mission dispatch",
-      "Accountable managers can inspect headline risk pressure earlier from a single dashboard surface"
+      "Accountable managers can inspect headline risk pressure earlier from a single dashboard surface",
+      "Operators can jump from post-operation readiness prompts to the relevant evidence review surface instead of manually hunting through the workspace"
     ]
   },
   "complianceImplications": {
@@ -171,11 +174,12 @@
       "Validated TypeScript build after recovering and merging the governance branch",
       "Validated focused governance tests for OA, insurance, mission governance, risk map, accountable-manager dashboard, stored files, and organisation documents after the merge",
       "Validated external overlay tests after preserving main-branch live-ops and map evidence work",
-      "Validated mission lifecycle request and correlation IDs are persisted on submitted, approved, and launched audit events"
+      "Validated mission lifecycle request and correlation IDs are persisted on submitted, approved, and launched audit events",
+      "Validated recovered migrations with npm run migrate:test against the configured Postgres test database after PR 238 merged"
     ]
 
   },
-  "nextBuildStep": "Validate the recovered migration chain against a clean Postgres test database and document any seed-data or ordering assumptions.",
+  "nextBuildStep": "Connect post-operation evidence drill-downs to deeper source-record detail views.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
