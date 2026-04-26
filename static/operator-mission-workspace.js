@@ -663,7 +663,7 @@ const renderSopRecommendationDecisionSummary = () => {
           ${escapeHtml(uiState.sopChangeRecommendationError)}
         </div>
         <div class="action-meta" style="margin-top: 12px;">
-          SOP change recommendation visibility is role-controlled. This panel is advisory/accountable review support only and does not authorise operators to use draft changes.
+          SOP change recommendation visibility is role-controlled. This panel is advisory/accountable review support only and does not authorise operators to use draft changes. Any SOP change can only be implemented after the OA amendment is accepted by the controlling authority.
         </div>
       </section>
     `;
@@ -697,7 +697,7 @@ const renderSopRecommendationDecisionSummary = () => {
         <div class="k">Awaiting review</div>
         <div>${renderBadge(openCount > 0 ? `${openCount} open` : "Clear")}</div>
         <div class="k">Boundary</div>
-        <div>Role-controlled accountable review record only; no automatic SOP amendment, operational authorisation, or regulatory submission.</div>
+        <div>Role-controlled accountable review record only; no automatic SOP amendment, operational authorisation, or regulatory submission. Implementation remains pending until controlling-authority OA amendment acceptance and accountable-manager notification.</div>
       </div>
       <div class="list" style="margin-top: 12px;">
         ${recommendations
@@ -739,7 +739,7 @@ const renderSopRecommendationDecisionSummary = () => {
           .join("")}
       </div>
       <div class="action-meta" style="margin-top: 12px;">
-        Decision states make accountable review visible before sign-off while preserving SOP change control outside the automated evidence pack. Draft recommendations are not operating instructions.
+        Decision states make accountable review visible before sign-off while preserving SOP change control outside the automated evidence pack. Draft recommendations are not operating instructions; accountable managers remain responsible for communicating accepted OA/SOP changes to all necessary parties.
       </div>
     </section>
   `;

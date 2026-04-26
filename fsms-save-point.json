@@ -55,7 +55,8 @@
       "Added mission routes for creating and listing SOP-linked change recommendations as accountable review prompts",
       "Added authenticated accountable-manager routes for recording and listing SOP recommendation review decisions",
       "Added mission workspace SOP recommendation decision display that loads schema-backed recommendation review state when an authorised governance session is present",
-      "Restricted SOP recommendation and review-history read access to governance and management roles so draft SOP changes are not exposed as operator instructions"
+      "Restricted SOP recommendation and review-history read access to governance and management roles so draft SOP changes are not exposed as operator instructions",
+      "Strengthened SOP recommendation copy so implementation is explicitly dependent on controlling-authority OA amendment acceptance and accountable-manager communication"
     ],
     "removed": [],
     "fixed": [
@@ -74,7 +75,8 @@
     ],
     "tradeoffsAccepted": [
       "Keep source document extraction and policy/OA interpretation lightweight at this stage, with structured upload fields and assessment reasons ready for deeper parsing later",
-      "Surface pending OA amendments as accountable review states instead of implying CAA approval has already been granted"
+      "Surface pending OA amendments as accountable review states instead of implying CAA approval has already been granted",
+      "Treat SOP recommendation acceptance as an internal review decision only; implementation requires accepted OA amendment and subsequent accountable-manager notification"
     ],
     "deferredDecisions": [
       "Full role assignment UI and fine-grained enterprise RBAC policies",
@@ -144,14 +146,16 @@
       "Compliance teams can record SOP documents as distinct linked procedures under the OA profile so later change recommendations can target the relevant SOP",
       "Governance users can record draft SOP change recommendations against mission evidence without amending the SOP automatically",
       "Accountable managers can record review decisions against SOP recommendations while preserving the recommendation history as advisory evidence",
-      "Authorised governance users can see SOP recommendation decision state in the mission workspace before sign-off; unauthorised users see controlled-access advisory wording instead"
+      "Authorised governance users can see SOP recommendation decision state in the mission workspace before sign-off; unauthorised users see controlled-access advisory wording instead",
+      "Mission workspace now tells governance users that draft SOP recommendations are not operating instructions and cannot be implemented until the OA amendment is accepted by the controlling authority"
     ]
   },
   "complianceImplications": {
     "truth": [
       "Uploaded OA, insurance, membership, and stored-file records become traceable source evidence for governance assessment",
       "Pending OA amendment is represented explicitly and is not treated as granted authorisation",
-      "The OA is treated as the controlling approval envelope while SOPs are modelled as separate linked operating methods under that envelope"
+      "The OA is treated as the controlling approval envelope while SOPs are modelled as separate linked operating methods under that envelope",
+      "SOP changes are not treated as available for use until the controlling authority has accepted the OA amendment and accountable-manager communication has been recorded"
     ],
     "prediction": [
       "Renewal-soon and override-pressure stages provide early warning before operational readiness degrades"
@@ -159,6 +163,7 @@
     "advisory": [
       "The system surfaces where operations may need accountable review, policy change, SOP amendment, OA renewal, insurance renewal, or mission adjustment",
       "SOP change recommendations should target the relevant SOP code or clause while preserving the parent OA condition context",
+      "Accepted-for-action SOP recommendations remain internal prompts until OA amendment acceptance and affected-party notification evidence exist",
       "Insurance assessment can advise what mission characteristic may need changing to remain within cover rather than presenting a stark no-go"
     ],
     "auditTraceabilityImpact": [
@@ -217,11 +222,12 @@
       "Validated OA-linked SOP document creation/listing, role access, TypeScript build, and operational-authority integration tests",
       "Validated schema-backed SOP change recommendation creation/listing, role access, TypeScript build, and operational-authority integration tests",
       "Validated schema-backed SOP recommendation review decision creation/listing, accountable-manager role access, TypeScript build, and operational-authority integration tests",
-      "Validated role-controlled SOP recommendation visibility and mission workspace decision display copy with TypeScript build, operational-authority tests, and mission-planning UI bundle tests"
+      "Validated role-controlled SOP recommendation visibility and mission workspace decision display copy with TypeScript build, operational-authority tests, and mission-planning UI bundle tests",
+      "Validated controlling-authority OA amendment acceptance and accountable-manager communication wording in the mission workspace bundle tests"
     ]
 
   },
-  "nextBuildStep": "Add accountable-manager workspace controls for SOP recommendation decisions.",
+  "nextBuildStep": "Add OA amendment acceptance and SOP change communication tracking.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

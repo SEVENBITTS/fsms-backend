@@ -2015,6 +2015,9 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Sign in with an authorised governance or management role");
     expect(response.text).toContain("does not authorise operators to use draft changes");
     expect(response.text).toContain("Draft recommendations are not operating instructions");
+    expect(response.text).toContain("OA amendment is accepted by the controlling authority");
+    expect(response.text).toContain("accountable-manager notification");
+    expect(response.text).toContain("communicating accepted OA/SOP changes to all necessary parties");
     expect(response.text).toContain("Evidence Drill-down Links");
     expect(response.text).toContain("renderReadinessDrilldowns");
     expect(response.text).toContain("renderReadinessDrilldownCard");
