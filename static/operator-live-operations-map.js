@@ -905,6 +905,27 @@ const formatConflictRangeBearing = (conflict) => {
   return `One-way from mission aircraft to conflict: ${rangeText} / ${trueBearingText} true / ${relativeBearingText}`;
 };
 
+const fallbackConflictVectorPoint = (originPoint, conflict) => {
+  const bearing = normalizeHeadingDegrees(conflict?.metrics?.bearingDegrees);
+  if (!originPoint || bearing == null) {
+    return null;
+  }
+
+  const rangeMeters =
+    conflict?.metrics?.rangeMeters ?? conflict?.metrics?.lateralDistanceMeters;
+  const rangeScale =
+    rangeMeters == null || Number.isNaN(rangeMeters)
+      ? 110
+      : Math.min(190, Math.max(70, Math.round(Number(rangeMeters) / 12)));
+  const bearingRadians = (bearing * Math.PI) / 180;
+
+  return {
+    x: originPoint.x + Math.sin(bearingRadians) * rangeScale,
+    y: originPoint.y - Math.cos(bearingRadians) * rangeScale,
+    bearingOnly: true,
+  };
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
@@ -2974,14 +2995,24 @@ const buildMapMarkup = () => {
       `;
     })
     .join("");
+  const fallbackPrimaryConflict = primaryConflictAssessmentItem();
+  const fallbackConflictPoint =
+    currentMapPoint && !primaryConflictTarget
+      ? fallbackConflictVectorPoint(currentMapPoint, fallbackPrimaryConflict)
+      : null;
   const conflictRangeBearingVector =
-    currentMapPoint && primaryConflictTarget
+    currentMapPoint && (primaryConflictTarget || fallbackConflictPoint)
       ? (() => {
-          const targetPoint = toPoint(
-            Number(primaryConflictTarget.lat),
-            Number(primaryConflictTarget.lng),
-          );
-          const stroke = severityStroke(primaryConflictTarget.conflict.severity);
+          const conflict = primaryConflictTarget?.conflict ?? fallbackPrimaryConflict;
+          const targetPoint =
+            primaryConflictTarget != null
+              ? toPoint(
+                  Number(primaryConflictTarget.lat),
+                  Number(primaryConflictTarget.lng),
+                )
+              : fallbackConflictPoint;
+          const stroke = severityStroke(conflict?.severity);
+          const isBearingOnly = fallbackConflictPoint?.bearingOnly === true;
           const midpoint = {
             x: (currentMapPoint.x + targetPoint.x) / 2,
             y: (currentMapPoint.y + targetPoint.y) / 2,
@@ -3007,14 +3038,18 @@ const buildMapMarkup = () => {
                 fill="${stroke}"
                 font-size="12"
                 font-weight="800"
-              >${escapeHtml(formatConflictRangeBearing(primaryConflictTarget.conflict))}</text>
+              >${escapeHtml(formatConflictRangeBearing(conflict))}</text>
               <text
                 x="${midpoint.x + 12}"
                 y="${midpoint.y + 6}"
                 fill="#d8ecff"
                 font-size="10"
                 font-weight="700"
-              >Dynamic from current mission aircraft position to active conflict object</text>
+              >${escapeHtml(
+                isBearingOnly
+                  ? "Bearing-only fallback: conflict map geometry unavailable"
+                  : "Dynamic from current mission aircraft position to active conflict object",
+              )}</text>
               <text
                 x="${midpoint.x + 12}"
                 y="${midpoint.y + 22}"
