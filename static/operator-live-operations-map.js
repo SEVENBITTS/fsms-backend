@@ -948,6 +948,11 @@ const conflictVectorSourceQualityLabel = (conflict, overlay, isBearingOnly) => {
   return sourceParts.join(" | ");
 };
 
+const conflictVectorSourceDrilldownTarget = (conflict) =>
+  conflict?.overlayKind === "area_conflict"
+    ? "#area-source-provenance-panel"
+    : "#conflict-evidence-panel";
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
@@ -3042,6 +3047,8 @@ const buildMapMarkup = () => {
             conflictOverlay,
             isBearingOnly,
           );
+          const sourceDrilldownTarget =
+            conflictVectorSourceDrilldownTarget(conflict);
           const midpoint = {
             x: (currentMapPoint.x + targetPoint.x) / 2,
             y: (currentMapPoint.y + targetPoint.y) / 2,
@@ -3093,6 +3100,16 @@ const buildMapMarkup = () => {
                 font-size="10"
                 font-weight="700"
               >${escapeHtml(sourceQualityLabel)}</text>
+              <a href="${escapeHtml(sourceDrilldownTarget)}">
+                <text
+                  x="${midpoint.x + 12}"
+                  y="${midpoint.y + 54}"
+                  fill="#93c5fd"
+                  font-size="10"
+                  font-weight="800"
+                  text-decoration="underline"
+                >Open vector source evidence</text>
+              </a>
             </g>
           `;
         })()
@@ -3401,7 +3418,7 @@ const renderStatus = () => {
           Snapshot history is backend audit metadata only. It is not screenshot evidence, not an exported file, and not pilot command guidance.
         </div>
       </section>
-      <section class="summary-block">
+      <section class="summary-block" id="conflict-evidence-panel">
         <h4>Operational Posture</h4>
         <div class="kv">
           <div class="k">Approval</div>
@@ -3566,7 +3583,7 @@ const renderStatus = () => {
           )}</div>
         </div>
       </section>
-      <section class="summary-block">
+      <section class="summary-block" id="area-source-provenance-panel">
         <h4>Area Source Provenance</h4>
         ${
           areaProvenanceRows.length === 0
@@ -3580,7 +3597,7 @@ const renderStatus = () => {
           Synthetic/local demo provenance only. Review against authoritative CAA, NOTAM, and airspace feeds before operational use.
         </div>
       </section>
-      <section class="summary-block">
+      <section class="summary-block" id="area-refresh-chronology-panel">
         <h4>Area Refresh Chronology</h4>
         ${renderAreaRefreshChronologyReview()}
         <div class="alert-window-meta">
