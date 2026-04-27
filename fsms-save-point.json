@@ -169,7 +169,8 @@
       "Live-ops conflict labels now present a single one-way mission-aircraft-to-conflict range and bearing line without showing a reciprocal bearing",
       "Live-ops conflict vectors now fall back to a bearing-only ownship ray when conflict map geometry is unavailable",
       "Live-ops conflict vector annotations now include source-quality, freshness, carry-forward, observed-time, and synthetic/local demo-source context",
-      "Live-ops conflict vector annotations now link directly to the relevant source evidence panel for accountable review"
+      "Live-ops conflict vector annotations now link directly to the relevant source evidence panel for accountable review",
+      "Live-ops conflict vector source evidence panels now provide a return focus link that highlights the vector on the map"
     ],
     "auditTraceabilityImpact": [
       "Mission governance joins OA and insurance state into dispatch evidence",
@@ -234,11 +235,12 @@
       "Validated one-way ownship-to-conflict range/bearing copy without displaying a reciprocal traffic bearing",
       "Validated bearing-only fallback copy for live-ops conflict vectors without map-native conflict geometry",
       "Validated live-ops conflict vector source-quality labels for map-native and bearing-only vector states",
-      "Validated live-ops conflict vector source drill-down link and evidence panel anchors"
+      "Validated live-ops conflict vector source drill-down link and evidence panel anchors",
+      "Validated live-ops conflict vector source focus state from evidence panels back to the map"
     ]
 
   },
-  "nextBuildStep": "Add live operations conflict vector focus state when opened from source evidence panels.",
+  "nextBuildStep": "Add live operations conflict vector focus controls for clearing or changing source focus.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -2153,6 +2153,13 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("synthetic/local demo source");
     expect(response.text).toContain("Open vector source evidence");
     expect(response.text).toContain("#area-source-provenance-panel");
+    expect(response.text).toContain("conflictVectorSourceFocusUrl");
+    expect(response.text).toContain("conflictVectorSource");
+    expect(response.text).toContain("data-conflict-vector-source-focus");
+    expect(response.text).toContain("Focused vector source from evidence panel");
+    expect(response.text).toContain("Focus conflict vector on map");
+    expect(response.text).toContain("Focused conflict vector source evidence is open");
+    expect(response.text).toContain("Focused conflict vector source provenance is open");
     expect(response.text).toContain('id="conflict-evidence-panel"');
     expect(response.text).toContain('id="area-source-provenance-panel"');
     expect(response.text).toContain("fallbackConflictVectorPoint");
