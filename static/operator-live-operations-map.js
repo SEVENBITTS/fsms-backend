@@ -902,7 +902,7 @@ const formatConflictRangeBearing = (conflict) => {
             relativeBearing > 0 ? "right" : "left"
           }`;
 
-  return `Conflict from mission aircraft: ${rangeText} / ${trueBearingText} true / ${relativeBearingText}`;
+  return `One-way from mission aircraft to conflict: ${rangeText} / ${trueBearingText} true / ${relativeBearingText}`;
 };
 
 const fetchJson = async (url, options = {}) => {
@@ -3021,7 +3021,7 @@ const buildMapMarkup = () => {
                 fill="#d8ecff"
                 font-size="10"
                 font-weight="700"
-              >True bearing is from mission aircraft to conflict; relative bearing is left/right of mission heading</text>
+              >One-way ownship-to-conflict range and bearing; not a reciprocal traffic bearing</text>
             </g>
           `;
         })()
