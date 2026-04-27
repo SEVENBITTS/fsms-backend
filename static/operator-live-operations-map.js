@@ -52,6 +52,7 @@ const uiState = {
   focusTargets: {
     mapEvidenceId: "",
     conflictAcknowledgementId: "",
+    conflictVectorSource: "",
   },
   replayPlayback: {
     index: 0,
@@ -134,6 +135,8 @@ const getDrilldownFocusFromLocation = () => {
     mapEvidenceId: current.searchParams.get("mapEvidenceId")?.trim() ?? "",
     conflictAcknowledgementId:
       current.searchParams.get("conflictAcknowledgementId")?.trim() ?? "",
+    conflictVectorSource:
+      current.searchParams.get("conflictVectorSource")?.trim() ?? "",
   };
 };
 
@@ -952,6 +955,21 @@ const conflictVectorSourceDrilldownTarget = (conflict) =>
   conflict?.overlayKind === "area_conflict"
     ? "#area-source-provenance-panel"
     : "#conflict-evidence-panel";
+
+const conflictVectorSourceFocusUrl = (conflict, missionId = uiState.missionId) => {
+  const target = conflictVectorSourceDrilldownTarget(conflict);
+  const route = hasSelectedMissionId(missionId)
+    ? `/operator/missions/${encodeURIComponent(missionId)}/live-operations`
+    : "/operator/live-operations";
+  const params = new URLSearchParams();
+
+  if (hasSelectedMissionId(missionId)) {
+    params.set("missionId", missionId);
+  }
+  params.set("conflictVectorSource", "focused");
+
+  return `${route}?${params.toString()}${target}`;
+};
 
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
@@ -1934,6 +1952,15 @@ const updateUrl = (missionId) => {
     );
   } else {
     next.searchParams.delete("conflictAcknowledgementId");
+  }
+
+  if (uiState.focusTargets.conflictVectorSource) {
+    next.searchParams.set(
+      "conflictVectorSource",
+      uiState.focusTargets.conflictVectorSource,
+    );
+  } else {
+    next.searchParams.delete("conflictVectorSource");
   }
 
   window.history.replaceState({}, "", next);
@@ -3049,13 +3076,17 @@ const buildMapMarkup = () => {
           );
           const sourceDrilldownTarget =
             conflictVectorSourceDrilldownTarget(conflict);
+          const vectorSourceFocused =
+            uiState.focusTargets.conflictVectorSource === "focused";
           const midpoint = {
             x: (currentMapPoint.x + targetPoint.x) / 2,
             y: (currentMapPoint.y + targetPoint.y) / 2,
           };
 
           return `
-            <g class="conflict-range-bearing-vector">
+            <g class="conflict-range-bearing-vector${focusClass(vectorSourceFocused)}" data-conflict-vector-source-focus="${escapeHtml(
+              vectorSourceFocused ? "focused" : "",
+            )}">
               <line
                 x1="${currentMapPoint.x}"
                 y1="${currentMapPoint.y}"
@@ -3067,7 +3098,27 @@ const buildMapMarkup = () => {
                 stroke-linecap="round"
                 opacity="0.92"
               />
+              ${
+                vectorSourceFocused
+                  ? `<line
+                      x1="${currentMapPoint.x}"
+                      y1="${currentMapPoint.y}"
+                      x2="${targetPoint.x}"
+                      y2="${targetPoint.y}"
+                      stroke="#fef3c7"
+                      stroke-width="7"
+                      stroke-dasharray="4 10"
+                      stroke-linecap="round"
+                      opacity="0.42"
+                    />`
+                  : ""
+              }
               <circle cx="${targetPoint.x}" cy="${targetPoint.y}" r="7" fill="${stroke}" fill-opacity="0.86" stroke="#edf3fb" stroke-width="2" />
+              ${
+                vectorSourceFocused
+                  ? `<circle cx="${targetPoint.x}" cy="${targetPoint.y}" r="15" fill="none" stroke="#fef3c7" stroke-width="3" stroke-dasharray="5 5" opacity="0.78" />`
+                  : ""
+              }
               <text
                 x="${midpoint.x + 12}"
                 y="${midpoint.y - 10}"
@@ -3110,6 +3161,17 @@ const buildMapMarkup = () => {
                   text-decoration="underline"
                 >Open vector source evidence</text>
               </a>
+              ${
+                vectorSourceFocused
+                  ? `<text
+                      x="${midpoint.x + 12}"
+                      y="${midpoint.y + 70}"
+                      fill="#fef3c7"
+                      font-size="10"
+                      font-weight="900"
+                    >Focused vector source from evidence panel</text>`
+                  : ""
+              }
             </g>
           `;
         })()
@@ -3280,6 +3342,11 @@ const renderStatus = () => {
     : null;
   const primaryAdvisory = primaryConflictAdvisory();
   const secondaryAdvisories = secondaryConflictAdvisories();
+  const conflictVectorSourceFocusLink = primaryConflict
+    ? conflictVectorSourceFocusUrl(primaryConflict)
+    : null;
+  const conflictVectorSourceFocused =
+    uiState.focusTargets.conflictVectorSource === "focused";
   const approvalPosture = isPostLaunchMission()
     ? "Completed"
     : planningWorkspace.approval.ready
@@ -3418,8 +3485,13 @@ const renderStatus = () => {
           Snapshot history is backend audit metadata only. It is not screenshot evidence, not an exported file, and not pilot command guidance.
         </div>
       </section>
-      <section class="summary-block" id="conflict-evidence-panel">
+      <section class="summary-block${focusClass(conflictVectorSourceFocused)}" id="conflict-evidence-panel">
         <h4>Operational Posture</h4>
+        ${
+          conflictVectorSourceFocused
+            ? renderFocusNote("Focused conflict vector source evidence is open from the live operations map.")
+            : ""
+        }
         <div class="kv">
           <div class="k">Approval</div>
           <div>${renderBadge(approvalPosture)}</div>
@@ -3539,6 +3611,12 @@ const renderStatus = () => {
               ? formatConflictRangeBearing(primaryConflict)
               : "Not recorded",
           )}</div>
+          <div class="k">Vector source focus</div>
+          <div>${
+            conflictVectorSourceFocusLink
+              ? `<a href="${escapeHtml(conflictVectorSourceFocusLink)}">Focus conflict vector on map</a>`
+              : "Not recorded"
+          }</div>
           <div class="k">Time relevance</div>
           <div>${escapeHtml(
             primaryConflict
@@ -3583,13 +3661,25 @@ const renderStatus = () => {
           )}</div>
         </div>
       </section>
-      <section class="summary-block" id="area-source-provenance-panel">
+      <section class="summary-block${focusClass(conflictVectorSourceFocused)}" id="area-source-provenance-panel">
         <h4>Area Source Provenance</h4>
+        ${
+          conflictVectorSourceFocused
+            ? renderFocusNote("Focused conflict vector source provenance is open from the live operations map.")
+            : ""
+        }
         ${
           areaProvenanceRows.length === 0
             ? '<div class="empty-state">No normalized area-source provenance is available for this mission.</div>'
             : renderList(areaProvenanceRows, "area source provenance")
         }
+        <div class="alert-window-meta">
+          ${
+            conflictVectorSourceFocusLink
+              ? `<a href="${escapeHtml(conflictVectorSourceFocusLink)}">Focus conflict vector on map</a>`
+              : "No active vector source focus is available."
+          }
+        </div>
         <div class="alert-window-meta">
           Map filter: ${escapeHtml(areaFilterSummary.label)} | ${escapeHtml(areaFilterSummary.detail)}
         </div>
