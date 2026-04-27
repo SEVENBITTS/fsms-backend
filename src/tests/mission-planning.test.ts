@@ -2144,7 +2144,9 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("One-way from mission aircraft to conflict");
     expect(response.text).toContain("true /");
     expect(response.text).toContain("Dynamic from current mission aircraft position to active conflict object");
+    expect(response.text).toContain("Bearing-only fallback: conflict map geometry unavailable");
     expect(response.text).toContain("One-way ownship-to-conflict range and bearing");
+    expect(response.text).toContain("fallbackConflictVectorPoint");
     expect(response.text).toContain("rangeMeters");
     expect(response.text).toContain("bearingDegrees");
     expect(response.text).toContain("insideArea");
