@@ -798,6 +798,16 @@ export class AuditEvidenceService {
       activeConflictCount: number;
       areaRefreshRunCount: number;
       viewStateUrl: string | null;
+      conflictVectorSourceFocus: string | null;
+      conflictVectorMode: string | null;
+      conflictVectorSourceQuality: string | null;
+      conflictVectorOverlayId: string | null;
+      conflictVectorOverlayLabel: string | null;
+      conflictVectorOverlayKind: string | null;
+      conflictVectorBearingDegrees: number | null;
+      conflictVectorRangeMeters: number | null;
+      conflictVectorObservedAt: string | null;
+      conflictVectorSourcePanel: string | null;
     },
   ): Record<string, unknown> {
     return {
@@ -819,6 +829,18 @@ export class AuditEvidenceService {
         activeConflictCount: input.activeConflictCount,
         areaRefreshRunCount: input.areaRefreshRunCount,
         viewStateUrl: input.viewStateUrl,
+        conflictVector: {
+          sourceFocus: input.conflictVectorSourceFocus ?? "not_focused",
+          mode: input.conflictVectorMode ?? "not_recorded",
+          sourceQuality: input.conflictVectorSourceQuality ?? "not_recorded",
+          overlayId: input.conflictVectorOverlayId,
+          overlayLabel: input.conflictVectorOverlayLabel,
+          overlayKind: input.conflictVectorOverlayKind,
+          bearingDegrees: input.conflictVectorBearingDegrees,
+          rangeMeters: input.conflictVectorRangeMeters,
+          observedAt: input.conflictVectorObservedAt,
+          sourcePanel: input.conflictVectorSourcePanel,
+        },
       },
       assuranceBoundary:
         "Live-ops map view-state capture is audit metadata only and does not issue pilot instructions or certify live regulatory compliance.",

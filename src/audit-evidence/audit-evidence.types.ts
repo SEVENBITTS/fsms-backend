@@ -36,6 +36,16 @@ export interface CreateLiveOpsMapViewStateSnapshotInput {
   activeConflictCount?: number;
   areaRefreshRunCount?: number;
   viewStateUrl?: string | null;
+  conflictVectorSourceFocus?: string | null;
+  conflictVectorMode?: string | null;
+  conflictVectorSourceQuality?: string | null;
+  conflictVectorOverlayId?: string | null;
+  conflictVectorOverlayLabel?: string | null;
+  conflictVectorOverlayKind?: string | null;
+  conflictVectorBearingDegrees?: number | null;
+  conflictVectorRangeMeters?: number | null;
+  conflictVectorObservedAt?: string | null;
+  conflictVectorSourcePanel?: string | null;
   createdBy?: string | null;
 }
 

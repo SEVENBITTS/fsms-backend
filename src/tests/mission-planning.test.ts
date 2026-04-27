@@ -2161,6 +2161,7 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Focused conflict vector source evidence is open");
     expect(response.text).toContain("Focused conflict vector source provenance is open");
     expect(response.text).toContain("setConflictVectorSourceFocus");
+    expect(response.text).toContain("conflictVectorAuditMetadata");
     expect(response.text).toContain("data-conflict-vector-focus-control");
     expect(response.text).toContain("Clear vector source focus");
     expect(response.text).toContain("Clear vector focus");
@@ -2261,6 +2262,11 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("/live-operations/map-view-state/audit-snapshots");
     expect(response.text).toContain("visibleAreaOverlayCount");
     expect(response.text).toContain("degradedAreaOverlayCount");
+    expect(response.text).toContain("conflictVectorSourceFocus");
+    expect(response.text).toContain("conflictVectorMode");
+    expect(response.text).toContain("conflictVectorSourceQuality");
+    expect(response.text).toContain("Conflict vector focus");
+    expect(response.text).toContain("Conflict vector source");
     expect(response.text).toContain("openAlertCount");
     expect(response.text).toContain("activeConflictCount");
     expect(response.text).toContain("areaRefreshRunCount");
