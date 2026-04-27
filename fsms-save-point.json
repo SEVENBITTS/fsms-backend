@@ -1,7 +1,7 @@
 {
   "$schema": "./fsms-save-point.schema.json",
   "module": "VerityATLAS Governance Recovery",
-"date": "2026-04-26",
+"date": "2026-04-27",
 "buildId": "v0.4-governance-recovery-integration",
   "systemLayerMap": [
     "Replay",
@@ -165,7 +165,8 @@
       "SOP change recommendations should target the relevant SOP code or clause while preserving the parent OA condition context",
       "Insurance assessment can advise what mission characteristic may need changing to remain within cover rather than presenting a stark no-go",
       "Live-ops heading is treated as ownship mission telemetry, while range/bearing remains relative position and CPA remains a future closest-approach calculation",
-      "Live-ops conflict range/bearing labels now identify the active conflict reference instead of implying they are ownship heading or CPA"
+      "Live-ops conflict range/bearing labels now identify the active conflict reference instead of implying they are ownship heading or CPA",
+      "Live-ops conflict labels now present a single one-way mission-aircraft-to-conflict range and bearing line without showing a reciprocal bearing"
     ],
     "auditTraceabilityImpact": [
       "Mission governance joins OA and insurance state into dispatch evidence",
@@ -226,11 +227,12 @@
       "Validated role-controlled SOP recommendation visibility and mission workspace decision display copy with TypeScript build, operational-authority tests, and mission-planning UI bundle tests",
       "Validated live-ops mission heading telemetry display and toggle copy with TypeScript build and mission-planning UI bundle tests",
       "Validated dynamic conflict range/bearing vector wording in the live-ops UI bundle tests",
-      "Validated conflict bearing wording as true bearing from mission aircraft plus relative left/right bearing against mission heading"
+      "Validated conflict bearing wording as true bearing from mission aircraft plus relative left/right bearing against mission heading",
+      "Validated one-way ownship-to-conflict range/bearing copy without displaying a reciprocal traffic bearing"
     ]
 
   },
-  "nextBuildStep": "Add reciprocal-bearing guardrails to live operations conflict labels.",
+  "nextBuildStep": "Add live operations conflict vector fallback when map-native conflict geometry is unavailable.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
