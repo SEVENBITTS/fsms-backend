@@ -14,6 +14,7 @@ import { AuditEvidenceRepository } from "./audit-evidence.repository";
 import type {
   AuditEvidenceSnapshot,
   AuditEvidenceReadinessSnapshot,
+  AuditReportField,
   AuditReportSection,
   AuditReportSmsControlMapping,
   ConflictGuidanceAcknowledgement,
@@ -1106,6 +1107,10 @@ export class AuditEvidenceService {
                     label: `Map view-state snapshot ${index + 1} alerts and conflicts`,
                     value: `${snapshot.openAlertCount} open alerts; ${snapshot.activeConflictCount} active conflicts`,
                   },
+                  ...this.buildLiveOpsConflictVectorReportFields(
+                    snapshot,
+                    index,
+                  ),
                   {
                     label: `Map view-state snapshot ${index + 1} refresh runs`,
                     value: snapshot.areaRefreshRunCount,
@@ -1356,6 +1361,93 @@ export class AuditEvidenceService {
               ],
       },
     ];
+  }
+
+  private buildLiveOpsConflictVectorReportFields(
+    snapshot: LiveOpsMapViewStateSnapshot,
+    index: number,
+  ): AuditReportField[] {
+    const prefix = `Map view-state snapshot ${index + 1} conflict vector`;
+    const conflictVector = this.getLiveOpsConflictVectorMetadata(snapshot);
+    const overlay = [
+      this.optionalReportString(conflictVector.overlayLabel),
+      this.optionalReportString(conflictVector.overlayId),
+      this.optionalReportString(conflictVector.overlayKind),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(" | ");
+    const bearing = this.optionalReportNumber(conflictVector.bearingDegrees);
+    const range = this.optionalReportNumber(conflictVector.rangeMeters);
+
+    return [
+      {
+        label: `${prefix} focus`,
+        value:
+          this.optionalReportString(conflictVector.sourceFocus) ??
+          "not_recorded",
+      },
+      {
+        label: `${prefix} mode`,
+        value:
+          this.optionalReportString(conflictVector.mode) ?? "not_recorded",
+      },
+      {
+        label: `${prefix} source quality`,
+        value:
+          this.optionalReportString(conflictVector.sourceQuality) ??
+          "not_recorded",
+      },
+      {
+        label: `${prefix} source panel`,
+        value:
+          this.optionalReportString(conflictVector.sourcePanel) ??
+          "not_recorded",
+      },
+      {
+        label: `${prefix} overlay`,
+        value: overlay || "not_recorded",
+      },
+      {
+        label: `${prefix} bearing/range`,
+        value:
+          bearing === null && range === null
+            ? "not_recorded"
+            : `${bearing ?? "not_recorded"} deg / ${range ?? "not_recorded"} m`,
+      },
+      {
+        label: `${prefix} observed at`,
+        value:
+          this.optionalReportString(conflictVector.observedAt) ??
+          "not_recorded",
+      },
+    ];
+  }
+
+  private getLiveOpsConflictVectorMetadata(
+    snapshot: LiveOpsMapViewStateSnapshot,
+  ): Record<string, unknown> {
+    const viewState =
+      snapshot.snapshotMetadata &&
+      typeof snapshot.snapshotMetadata.viewState === "object" &&
+      snapshot.snapshotMetadata.viewState !== null
+        ? (snapshot.snapshotMetadata.viewState as Record<string, unknown>)
+        : null;
+
+    return viewState &&
+      typeof viewState.conflictVector === "object" &&
+      viewState.conflictVector !== null
+      ? (viewState.conflictVector as Record<string, unknown>)
+      : {};
+  }
+
+  private optionalReportString(value: unknown): string | null {
+    return typeof value === "string" && value.trim().length > 0
+      ? value
+      : null;
+  }
+
+  private optionalReportNumber(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
   }
 
   private renderSectionsAsPlainText(

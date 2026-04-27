@@ -1619,6 +1619,17 @@ describe("audit evidence snapshots", () => {
         areaRefreshRunCount: 5,
         viewStateUrl:
           "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        conflictVectorSourceFocus: "focused",
+        conflictVectorMode: "map_native",
+        conflictVectorSourceQuality:
+          "Full vector | source current | operational feed",
+        conflictVectorOverlayId: "traffic-export-1",
+        conflictVectorOverlayLabel: "Traffic VA-INS-12",
+        conflictVectorOverlayKind: "drone_traffic",
+        conflictVectorBearingDegrees: 128,
+        conflictVectorRangeMeters: 420,
+        conflictVectorObservedAt: "2026-04-18T12:02:45.000Z",
+        conflictVectorSourcePanel: "#conflict-vector-evidence",
         createdBy: "live-ops-ui",
       });
     const snapshotResponse = await request(app)
@@ -1654,6 +1665,20 @@ describe("audit evidence snapshots", () => {
       snapshotMetadata: {
         screenshotStatus: "not_captured",
         fileGenerationStatus: "not_requested",
+        viewState: {
+          conflictVector: {
+            sourceFocus: "focused",
+            mode: "map_native",
+            sourceQuality: "Full vector | source current | operational feed",
+            overlayId: "traffic-export-1",
+            overlayLabel: "Traffic VA-INS-12",
+            overlayKind: "drone_traffic",
+            bearingDegrees: 128,
+            rangeMeters: 420,
+            observedAt: "2026-04-18T12:02:45.000Z",
+            sourcePanel: "#conflict-vector-evidence",
+          },
+        },
       },
     });
     expect(await countRows(missionId)).toEqual(before);
@@ -2310,6 +2335,17 @@ describe("audit evidence snapshots", () => {
         areaRefreshRunCount: 5,
         viewStateUrl:
           "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        conflictVectorSourceFocus: "focused",
+        conflictVectorMode: "map_native",
+        conflictVectorSourceQuality:
+          "Full vector | source current | operational feed",
+        conflictVectorOverlayId: "traffic-report-1",
+        conflictVectorOverlayLabel: "Traffic VA-INS-12",
+        conflictVectorOverlayKind: "drone_traffic",
+        conflictVectorBearingDegrees: 128,
+        conflictVectorRangeMeters: 420,
+        conflictVectorObservedAt: "2026-04-18T12:02:45.000Z",
+        conflictVectorSourcePanel: "#conflict-vector-evidence",
       });
     const snapshotResponse = await request(app)
       .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
@@ -2370,6 +2406,30 @@ describe("audit evidence snapshots", () => {
           value: "3 open alerts; 1 active conflicts",
         },
         {
+          label: "Map view-state snapshot 1 conflict vector focus",
+          value: "focused",
+        },
+        {
+          label: "Map view-state snapshot 1 conflict vector mode",
+          value: "map_native",
+        },
+        {
+          label: "Map view-state snapshot 1 conflict vector source quality",
+          value: "Full vector | source current | operational feed",
+        },
+        {
+          label: "Map view-state snapshot 1 conflict vector source panel",
+          value: "#conflict-vector-evidence",
+        },
+        {
+          label: "Map view-state snapshot 1 conflict vector overlay",
+          value: "Traffic VA-INS-12 | traffic-report-1 | drone_traffic",
+        },
+        {
+          label: "Map view-state snapshot 1 conflict vector bearing/range",
+          value: "128 deg / 420 m",
+        },
+        {
           label: "Map view-state snapshot 1 capture scope",
           value: "metadata_only",
         },
@@ -2398,6 +2458,15 @@ describe("audit evidence snapshots", () => {
     );
     expect(response.body.report.report.plainText).toContain(
       "Map view-state snapshot 1 area overlays: 2/4 visible; 2 degraded",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 conflict vector focus: focused",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 conflict vector source quality: Full vector | source current | operational feed",
+    );
+    expect(response.body.report.report.plainText).toContain(
+      "Map view-state snapshot 1 conflict vector bearing/range: 128 deg / 420 m",
     );
     expect(response.body.report.report.plainText).toContain(
       "Map view-state snapshot 1 pilot instruction status: not_a_pilot_command",
@@ -2909,6 +2978,17 @@ describe("audit evidence snapshots", () => {
         areaRefreshRunCount: 5,
         viewStateUrl:
           "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        conflictVectorSourceFocus: "focused",
+        conflictVectorMode: "bearing_only_fallback",
+        conflictVectorSourceQuality:
+          "Bearing-only vector | source partial | synthetic/local demo source",
+        conflictVectorOverlayId: "traffic-pdf-1",
+        conflictVectorOverlayLabel: "Traffic VA-INS-12",
+        conflictVectorOverlayKind: "drone_traffic",
+        conflictVectorBearingDegrees: 128,
+        conflictVectorRangeMeters: 420,
+        conflictVectorObservedAt: "2026-04-18T12:02:45.000Z",
+        conflictVectorSourcePanel: "#conflict-vector-evidence",
       });
     const snapshotResponse = await request(app)
       .post(`/missions/${missionId}/post-operation/evidence-snapshots`)
@@ -2935,6 +3015,21 @@ describe("audit evidence snapshots", () => {
       "Map view-state snapshot 1 pilot instruction status",
     );
     expect(pdfText).toContain("not_a_pilot_command");
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 conflict vector focus: focused",
+    );
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 conflict vector mode: bearing_only_fallback",
+    );
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 conflict vector source quality: Bearing-only vector | source",
+    );
+    expect(pdfText).toContain(
+      "partial | synthetic/local demo source",
+    );
+    expect(pdfText).toContain(
+      "Map view-state snapshot 1 conflict vector bearing/range: 128 deg / 420 m",
+    );
     expect(pdfText).toContain("Metadata-only evidence; no screenshot/file");
     expect(pdfText).toContain("not pilot command guidance.");
     expect(await countRows(missionId)).toEqual(before);
