@@ -2147,9 +2147,14 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Bearing-only fallback: conflict map geometry unavailable");
     expect(response.text).toContain("One-way ownship-to-conflict range and bearing");
     expect(response.text).toContain("conflictVectorSourceQualityLabel");
+    expect(response.text).toContain("conflictVectorSourceDrilldownTarget");
     expect(response.text).toContain("Map-native vector");
     expect(response.text).toContain("Bearing-only vector");
     expect(response.text).toContain("synthetic/local demo source");
+    expect(response.text).toContain("Open vector source evidence");
+    expect(response.text).toContain("#area-source-provenance-panel");
+    expect(response.text).toContain('id="conflict-evidence-panel"');
+    expect(response.text).toContain('id="area-source-provenance-panel"');
     expect(response.text).toContain("fallbackConflictVectorPoint");
     expect(response.text).toContain("rangeMeters");
     expect(response.text).toContain("bearingDegrees");
