@@ -2160,6 +2160,12 @@ describe("mission planning drafts", () => {
     expect(response.text).toContain("Focus conflict vector on map");
     expect(response.text).toContain("Focused conflict vector source evidence is open");
     expect(response.text).toContain("Focused conflict vector source provenance is open");
+    expect(response.text).toContain("setConflictVectorSourceFocus");
+    expect(response.text).toContain("data-conflict-vector-focus-control");
+    expect(response.text).toContain("Clear vector source focus");
+    expect(response.text).toContain("Clear vector focus");
+    expect(response.text).toContain("Focus vector source");
+    expect(response.text).toContain("Vector focus controls only change the review view");
     expect(response.text).toContain('id="conflict-evidence-panel"');
     expect(response.text).toContain('id="area-source-provenance-panel"');
     expect(response.text).toContain("fallbackConflictVectorPoint");
