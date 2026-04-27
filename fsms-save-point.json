@@ -171,7 +171,8 @@
       "Live-ops conflict vector annotations now include source-quality, freshness, carry-forward, observed-time, and synthetic/local demo-source context",
       "Live-ops conflict vector annotations now link directly to the relevant source evidence panel for accountable review",
       "Live-ops conflict vector source evidence panels now provide a return focus link that highlights the vector on the map",
-      "Live-ops conflict vector source focus can now be set or cleared from the map and source evidence panels without changing assessment state"
+      "Live-ops conflict vector source focus can now be set or cleared from the map and source evidence panels without changing assessment state",
+      "Live-ops map view-state evidence snapshots now capture conflict vector focus, mode, source quality, source panel, and observed vector context"
     ],
     "auditTraceabilityImpact": [
       "Mission governance joins OA and insurance state into dispatch evidence",
@@ -238,11 +239,12 @@
       "Validated live-ops conflict vector source-quality labels for map-native and bearing-only vector states",
       "Validated live-ops conflict vector source drill-down link and evidence panel anchors",
       "Validated live-ops conflict vector source focus state from evidence panels back to the map",
-      "Validated live-ops conflict vector focus controls for setting and clearing source focus"
+      "Validated live-ops conflict vector focus controls for setting and clearing source focus",
+      "Validated live-ops conflict vector focus audit metadata in map view-state evidence snapshots"
     ]
 
   },
-  "nextBuildStep": "Add live operations conflict vector focus audit metadata to map view-state evidence snapshots.",
+  "nextBuildStep": "Add conflict vector focus metadata to post-operation evidence exports and reports.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [

@@ -802,6 +802,17 @@ describe("audit evidence snapshots", () => {
         areaRefreshRunCount: 5,
         viewStateUrl:
           "/operator/missions/live-ops-demo/live-operations?areaFreshnessFilter=degraded",
+        conflictVectorSourceFocus: "focused",
+        conflictVectorMode: "bearing_only_fallback",
+        conflictVectorSourceQuality:
+          "Bearing-only vector | source partial | synthetic/local demo source",
+        conflictVectorOverlayId: "traffic-1",
+        conflictVectorOverlayLabel: "Traffic VA-INS-12",
+        conflictVectorOverlayKind: "drone_traffic",
+        conflictVectorBearingDegrees: 128,
+        conflictVectorRangeMeters: 420,
+        conflictVectorObservedAt: "2026-04-18T12:00:45.000Z",
+        conflictVectorSourcePanel: "#conflict-evidence-panel",
         createdBy: " live-ops-controller ",
       });
 
@@ -837,6 +848,19 @@ describe("audit evidence snapshots", () => {
           openAlertCount: 3,
           activeConflictCount: 1,
           areaRefreshRunCount: 5,
+          conflictVector: {
+            sourceFocus: "focused",
+            mode: "bearing_only_fallback",
+            sourceQuality:
+              "Bearing-only vector | source partial | synthetic/local demo source",
+            overlayId: "traffic-1",
+            overlayLabel: "Traffic VA-INS-12",
+            overlayKind: "drone_traffic",
+            bearingDegrees: 128,
+            rangeMeters: 420,
+            observedAt: "2026-04-18T12:00:45.000Z",
+            sourcePanel: "#conflict-evidence-panel",
+          },
         },
       },
     });

@@ -105,6 +105,18 @@ function requiredNonNegativeInteger(value: unknown, fieldName: string): number {
   return value;
 }
 
+function optionalNumber(value: unknown, fieldName: string): number | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new AuditEvidenceValidationError(`${fieldName} must be a number`);
+  }
+
+  return value;
+}
+
 function requiredDecisionType(value: unknown): MissionDecisionType {
   if (typeof value !== "string" || !DECISION_TYPES.has(value as MissionDecisionType)) {
     throw new AuditEvidenceValidationError("decisionType is not supported");
@@ -281,6 +293,47 @@ export function validateCreateLiveOpsMapViewStateSnapshotInput(
       "areaRefreshRunCount",
     ),
     viewStateUrl: optionalTrimmed(input.viewStateUrl, "viewStateUrl"),
+    conflictVectorSourceFocus: optionalTrimmed(
+      input.conflictVectorSourceFocus,
+      "conflictVectorSourceFocus",
+    ),
+    conflictVectorMode: optionalTrimmed(
+      input.conflictVectorMode,
+      "conflictVectorMode",
+    ),
+    conflictVectorSourceQuality: optionalTrimmed(
+      input.conflictVectorSourceQuality,
+      "conflictVectorSourceQuality",
+    ),
+    conflictVectorOverlayId: optionalTrimmed(
+      input.conflictVectorOverlayId,
+      "conflictVectorOverlayId",
+    ),
+    conflictVectorOverlayLabel: optionalTrimmed(
+      input.conflictVectorOverlayLabel,
+      "conflictVectorOverlayLabel",
+    ),
+    conflictVectorOverlayKind: optionalTrimmed(
+      input.conflictVectorOverlayKind,
+      "conflictVectorOverlayKind",
+    ),
+    conflictVectorBearingDegrees: optionalNumber(
+      input.conflictVectorBearingDegrees,
+      "conflictVectorBearingDegrees",
+    ),
+    conflictVectorRangeMeters: optionalNumber(
+      input.conflictVectorRangeMeters,
+      "conflictVectorRangeMeters",
+    ),
+    conflictVectorObservedAt:
+      input.conflictVectorObservedAt === undefined ||
+      input.conflictVectorObservedAt === null
+        ? null
+        : requiredIsoDate(input.conflictVectorObservedAt, "conflictVectorObservedAt"),
+    conflictVectorSourcePanel: optionalTrimmed(
+      input.conflictVectorSourcePanel,
+      "conflictVectorSourcePanel",
+    ),
     createdBy: optionalTrimmed(input.createdBy, "createdBy"),
   };
 }

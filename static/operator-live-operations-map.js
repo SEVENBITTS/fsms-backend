@@ -978,6 +978,58 @@ const setConflictVectorSourceFocus = (focused) => {
   renderStatus();
 };
 
+const conflictVectorAuditMetadata = () => {
+  const conflict = primaryConflictAssessmentItem();
+  if (!conflict) {
+    return {
+      conflictVectorSourceFocus: uiState.focusTargets.conflictVectorSource || "not_focused",
+      conflictVectorMode: "not_available",
+      conflictVectorSourceQuality: "No active conflict vector",
+      conflictVectorOverlayId: null,
+      conflictVectorOverlayLabel: null,
+      conflictVectorOverlayKind: null,
+      conflictVectorBearingDegrees: null,
+      conflictVectorRangeMeters: null,
+      conflictVectorObservedAt: null,
+      conflictVectorSourcePanel: null,
+    };
+  }
+
+  const overlay = conflictOverlayForItem(conflict);
+  const hasMapGeometry =
+    Number.isFinite(Number(overlay?.geometry?.lat)) &&
+    Number.isFinite(Number(overlay?.geometry?.lng));
+  const hasBearing = Number.isFinite(Number(conflict?.metrics?.bearingDegrees));
+  const vectorMode = hasMapGeometry
+    ? "map_native"
+    : hasBearing
+      ? "bearing_only_fallback"
+      : "not_available";
+
+  return {
+    conflictVectorSourceFocus: uiState.focusTargets.conflictVectorSource || "not_focused",
+    conflictVectorMode: vectorMode,
+    conflictVectorSourceQuality: conflictVectorSourceQualityLabel(
+      conflict,
+      overlay,
+      vectorMode === "bearing_only_fallback",
+    ),
+    conflictVectorOverlayId: conflict.overlayId ?? null,
+    conflictVectorOverlayLabel: conflict.overlayLabel ?? null,
+    conflictVectorOverlayKind: conflict.overlayKind ?? null,
+    conflictVectorBearingDegrees: Number.isFinite(Number(conflict?.metrics?.bearingDegrees))
+      ? Number(conflict.metrics.bearingDegrees)
+      : null,
+    conflictVectorRangeMeters: Number.isFinite(
+      Number(conflict?.metrics?.rangeMeters ?? conflict?.metrics?.lateralDistanceMeters),
+    )
+      ? Number(conflict.metrics.rangeMeters ?? conflict.metrics.lateralDistanceMeters)
+      : null,
+    conflictVectorObservedAt: conflict.overlayObservedAt ?? null,
+    conflictVectorSourcePanel: conflictVectorSourceDrilldownTarget(conflict),
+  };
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
@@ -1995,6 +2047,7 @@ const mapViewStateMetadata = () => {
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
   const conflicts = activeConflictAssessmentItems();
   const refreshRuns = areaRefreshChronology()?.refreshRuns ?? [];
+  const conflictVector = conflictVectorAuditMetadata();
 
   return {
     missionId: uiState.missionId || "Not selected",
@@ -2010,6 +2063,9 @@ const mapViewStateMetadata = () => {
     openAlertCount: openAlerts.length,
     activeConflictCount: conflicts.length,
     areaRefreshRunCount: refreshRuns.length,
+    conflictVectorSourceFocus: conflictVector.conflictVectorSourceFocus,
+    conflictVectorMode: conflictVector.conflictVectorMode,
+    conflictVectorSourceQuality: conflictVector.conflictVectorSourceQuality,
     exportStatus: "View-state metadata only; no evidence export has been generated.",
   };
 };
@@ -2021,6 +2077,7 @@ const mapViewStateEvidencePayload = () => {
   const openAlerts = (uiState.alerts ?? []).filter((alert) => alert.status !== "resolved");
   const conflicts = activeConflictAssessmentItems();
   const refreshRuns = areaRefreshChronology()?.refreshRuns ?? [];
+  const conflictVector = conflictVectorAuditMetadata();
 
   return {
     replayCursor:
@@ -2036,6 +2093,7 @@ const mapViewStateEvidencePayload = () => {
     activeConflictCount: conflicts.length,
     areaRefreshRunCount: refreshRuns.length,
     viewStateUrl: `${window.location.pathname}${window.location.search}`,
+    ...conflictVector,
     createdBy: "live-ops-ui",
   };
 };
@@ -2151,6 +2209,8 @@ const renderMapViewStateEvidenceHistory = () => {
         .map(
           (snapshot, index) => {
             const isFocused = snapshot.id === focusedMapEvidenceId;
+            const conflictVector =
+              snapshot.snapshotMetadata?.viewState?.conflictVector ?? {};
 
             return `
             <article class="list-card${focusClass(isFocused)}" data-map-evidence-id="${escapeHtml(snapshot.id ?? "")}">
@@ -2172,6 +2232,12 @@ const renderMapViewStateEvidenceHistory = () => {
                 <div>${escapeHtml(`${snapshot.visibleAreaOverlayCount ?? 0} / ${snapshot.totalAreaOverlayCount ?? 0} visible, ${snapshot.degradedAreaOverlayCount ?? 0} degraded`)}</div>
                 <div class="k">Alerts / conflicts</div>
                 <div>${escapeHtml(`${snapshot.openAlertCount ?? 0} open alerts, ${snapshot.activeConflictCount ?? 0} active conflicts`)}</div>
+                <div class="k">Conflict vector focus</div>
+                <div>${renderBadge(conflictVector.sourceFocus ?? "not_recorded")}</div>
+                <div class="k">Conflict vector mode</div>
+                <div>${escapeHtml(conflictVector.mode ?? "not_recorded")}</div>
+                <div class="k">Conflict vector source</div>
+                <div>${escapeHtml(conflictVector.sourceQuality ?? "not_recorded")}</div>
                 <div class="k">Capture scope</div>
                 <div>${renderBadge(snapshot.captureScope ?? "metadata_only")}</div>
                 <div class="k">Pilot instruction status</div>
@@ -3472,6 +3538,12 @@ const renderStatus = () => {
           <div>${escapeHtml(String(viewStateMetadata.activeConflictCount))}</div>
           <div class="k">Area refresh runs</div>
           <div>${escapeHtml(String(viewStateMetadata.areaRefreshRunCount))}</div>
+          <div class="k">Conflict vector focus</div>
+          <div>${renderBadge(viewStateMetadata.conflictVectorSourceFocus)}</div>
+          <div class="k">Conflict vector mode</div>
+          <div>${escapeHtml(viewStateMetadata.conflictVectorMode)}</div>
+          <div class="k">Conflict vector source</div>
+          <div>${escapeHtml(viewStateMetadata.conflictVectorSourceQuality)}</div>
           <div class="k">Export status</div>
           <div>${escapeHtml(viewStateMetadata.exportStatus)}</div>
         </div>
