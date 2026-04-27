@@ -971,6 +971,13 @@ const conflictVectorSourceFocusUrl = (conflict, missionId = uiState.missionId) =
   return `${route}?${params.toString()}${target}`;
 };
 
+const setConflictVectorSourceFocus = (focused) => {
+  uiState.focusTargets.conflictVectorSource = focused ? "focused" : "";
+  updateUrl(normalizeMissionId(uiState.missionId));
+  renderMap();
+  renderStatus();
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
@@ -3172,6 +3179,19 @@ const buildMapMarkup = () => {
                     >Focused vector source from evidence panel</text>`
                   : ""
               }
+              <text
+                x="${midpoint.x + 12}"
+                y="${midpoint.y + (vectorSourceFocused ? 86 : 70)}"
+                fill="#bfdbfe"
+                font-size="10"
+                font-weight="800"
+                text-decoration="underline"
+                data-conflict-vector-focus-control="${escapeHtml(
+                  vectorSourceFocused ? "clear" : "focus",
+                )}"
+              >${escapeHtml(
+                vectorSourceFocused ? "Clear vector source focus" : "Focus vector source",
+              )}</text>
             </g>
           `;
         })()
@@ -3660,6 +3680,16 @@ const renderStatus = () => {
               : `${secondaryAdvisories.length} secondary item(s)`,
           )}</div>
         </div>
+        <div class="actions-row">
+          ${
+            conflictVectorSourceFocused
+              ? `<button type="button" class="secondary-button tone-muted" data-conflict-vector-focus-control="clear">Clear vector focus</button>`
+              : `<button type="button" class="secondary-button tone-info" data-conflict-vector-focus-control="focus" ${primaryConflict ? "" : "disabled"}>Focus conflict vector</button>`
+          }
+        </div>
+        <div class="alert-window-meta">
+          Vector focus controls only change the review view. They do not change conflict assessment, compliance state, or pilot guidance.
+        </div>
       </section>
       <section class="summary-block${focusClass(conflictVectorSourceFocused)}" id="area-source-provenance-panel">
         <h4>Area Source Provenance</h4>
@@ -3678,6 +3708,13 @@ const renderStatus = () => {
             conflictVectorSourceFocusLink
               ? `<a href="${escapeHtml(conflictVectorSourceFocusLink)}">Focus conflict vector on map</a>`
               : "No active vector source focus is available."
+          }
+        </div>
+        <div class="actions-row">
+          ${
+            conflictVectorSourceFocused
+              ? `<button type="button" class="secondary-button tone-muted" data-conflict-vector-focus-control="clear">Clear vector focus</button>`
+              : `<button type="button" class="secondary-button tone-info" data-conflict-vector-focus-control="focus" ${primaryConflict ? "" : "disabled"}>Focus conflict vector</button>`
           }
         </div>
         <div class="alert-window-meta">
@@ -4432,6 +4469,17 @@ statusPanel.addEventListener("click", (event) => {
     return;
   }
 
+  const conflictVectorFocusControl = target.closest(
+    "[data-conflict-vector-focus-control]",
+  );
+  if (conflictVectorFocusControl instanceof HTMLElement) {
+    setConflictVectorSourceFocus(
+      conflictVectorFocusControl.getAttribute("data-conflict-vector-focus-control") ===
+        "focus",
+    );
+    return;
+  }
+
   const telemetryToggle = target.closest("[data-telemetry-display-toggle]");
   if (telemetryToggle instanceof HTMLElement) {
     const key = telemetryToggle.getAttribute("data-telemetry-display-toggle");
@@ -4453,6 +4501,17 @@ statusPanel.addEventListener("click", (event) => {
 mapPanel.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const conflictVectorFocusControl = target.closest(
+    "[data-conflict-vector-focus-control]",
+  );
+  if (conflictVectorFocusControl instanceof HTMLElement) {
+    setConflictVectorSourceFocus(
+      conflictVectorFocusControl.getAttribute("data-conflict-vector-focus-control") ===
+        "focus",
+    );
     return;
   }
 
