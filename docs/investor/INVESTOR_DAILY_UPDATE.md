@@ -149,3 +149,34 @@ It should answer:
 #### One-Line Status
 
 - Current investor status: product seriousness improved materially because VerityATLAS now looks more like a multi-company operator-governance platform and less like a standalone mission workflow tool
+
+### 2026-04-27
+
+#### Build Summary
+
+- Material changes: tightened live-operations conflict bearing wording so the map presents a single one-way range/bearing line from the mission aircraft to the conflict, with CPA still treated separately as future closest-approach prediction
+- Modules affected: live operations map UI, mission-planning UI bundle tests, FSMS save-point
+- Evidence reviewed: `static/operator-live-operations-map.js`, `src/tests/mission-planning.test.ts`, `fsms-save-point.json`; PR #249 merged into `main`
+
+#### Investor Interpretation
+
+- What improved: VerityATLAS continues to sharpen operational clarity by reducing ambiguity in live conflict displays, which supports the safety-assurance and accountable-operator story
+- What still needs proof: this is presentation and interpretation quality, not live operator validation; investor claims should not imply deployed conflict-resolution authority or certified detect-and-avoid capability
+- What should be removed or toned down: any wording that suggests the displayed bearing is a command instruction, reciprocal traffic bearing, or autonomous separation service
+
+#### Direction Markers
+
+- <span style="color:green"><strong>GREEN</strong></span>: One-way ownship-to-conflict bearing language strengthens operator trust and reduces claim risk in a safety-critical UI surface
+- <span style="color:green"><strong>GREEN</strong></span>: Keeping CPA separate from current range/bearing improves investor credibility because the platform distinguishes current telemetry from prediction
+- <span style="color:red"><strong>RED</strong></span>: No market-proof change today; the investor story should treat this as product-quality progress, not traction
+
+#### Required Investor-Pack Updates
+
+- Deck: no structural change required; live-ops clarity remains supporting proof under the solution/product capability story
+- Pitch: no wording change required unless presenting a live-ops demo, where one-way bearing and CPA separation should be explained explicitly
+- SWOT: no change required
+- PESTLE: no change required
+
+#### One-Line Status
+
+- Current investor status: incremental GREEN product-hardening progress, improving live-operations clarity while leaving the commercial proof gap unchanged
