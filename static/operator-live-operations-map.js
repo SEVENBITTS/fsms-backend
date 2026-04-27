@@ -926,6 +926,28 @@ const fallbackConflictVectorPoint = (originPoint, conflict) => {
   };
 };
 
+const conflictVectorSourceQualityLabel = (conflict, overlay, isBearingOnly) => {
+  const refreshState = areaOverlaySourceRefreshState(overlay);
+  const sourceParts = [
+    isBearingOnly ? "Bearing-only vector" : "Map-native vector",
+    refreshState?.status ? `source ${refreshState.status}` : "source quality not recorded",
+  ];
+
+  if (refreshState?.carriedForwardFromFailedRefresh === true) {
+    sourceParts.push("carried forward after failed refresh");
+  } else if (refreshState?.carriedForwardFromPartialRefresh === true) {
+    sourceParts.push("carried forward after partial refresh");
+  }
+
+  if (conflict?.overlayObservedAt) {
+    sourceParts.push(`observed ${formatDateTime(conflict.overlayObservedAt)}`);
+  }
+
+  sourceParts.push("synthetic/local demo source");
+
+  return sourceParts.join(" | ");
+};
+
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: {
@@ -3004,6 +3026,8 @@ const buildMapMarkup = () => {
     currentMapPoint && (primaryConflictTarget || fallbackConflictPoint)
       ? (() => {
           const conflict = primaryConflictTarget?.conflict ?? fallbackPrimaryConflict;
+          const conflictOverlay =
+            primaryConflictTarget?.overlay ?? conflictOverlayForItem(conflict);
           const targetPoint =
             primaryConflictTarget != null
               ? toPoint(
@@ -3013,6 +3037,11 @@ const buildMapMarkup = () => {
               : fallbackConflictPoint;
           const stroke = severityStroke(conflict?.severity);
           const isBearingOnly = fallbackConflictPoint?.bearingOnly === true;
+          const sourceQualityLabel = conflictVectorSourceQualityLabel(
+            conflict,
+            conflictOverlay,
+            isBearingOnly,
+          );
           const midpoint = {
             x: (currentMapPoint.x + targetPoint.x) / 2,
             y: (currentMapPoint.y + targetPoint.y) / 2,
@@ -3057,6 +3086,13 @@ const buildMapMarkup = () => {
                 font-size="10"
                 font-weight="700"
               >One-way ownship-to-conflict range and bearing; not a reciprocal traffic bearing</text>
+              <text
+                x="${midpoint.x + 12}"
+                y="${midpoint.y + 38}"
+                fill="#fef3c7"
+                font-size="10"
+                font-weight="700"
+              >${escapeHtml(sourceQualityLabel)}</text>
             </g>
           `;
         })()
