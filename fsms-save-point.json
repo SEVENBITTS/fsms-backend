@@ -148,7 +148,8 @@
       "Accountable managers can record review decisions against SOP recommendations while preserving the recommendation history as advisory evidence",
       "Authorised governance users can see SOP recommendation decision state in the mission workspace before sign-off; unauthorised users see controlled-access advisory wording instead",
       "Operators can now view or hide ownship mission heading in the live-ops telemetry surface, separate from traffic range/bearing and CPA advisory context",
-      "Operators can see a moving range/bearing-to-conflict line on the live-ops map when the active conflict has map-native point geometry"
+      "Operators can see a moving range/bearing-to-conflict line on the live-ops map when the active conflict has map-native point geometry",
+      "Accountable managers can now review conflict vector focus, source quality, source panel, overlay, bearing/range, and observed-time metadata in post-operation reports"
     ]
   },
   "complianceImplications": {
@@ -172,7 +173,8 @@
       "Live-ops conflict vector annotations now link directly to the relevant source evidence panel for accountable review",
       "Live-ops conflict vector source evidence panels now provide a return focus link that highlights the vector on the map",
       "Live-ops conflict vector source focus can now be set or cleared from the map and source evidence panels without changing assessment state",
-      "Live-ops map view-state evidence snapshots now capture conflict vector focus, mode, source quality, source panel, and observed vector context"
+      "Live-ops map view-state evidence snapshots now capture conflict vector focus, mode, source quality, source panel, and observed vector context",
+      "Post-operation evidence reports now surface conflict vector metadata as accountable review context rather than pilot command guidance"
     ],
     "auditTraceabilityImpact": [
       "Mission governance joins OA and insurance state into dispatch evidence",
@@ -183,7 +185,8 @@
       "Linked SOP documents create the first traceable target for future post-operation SOP amendment recommendations",
       "SOP change recommendations now preserve mission evidence source, SOP clause, and parent OA condition context as draft accountable review records",
       "SOP recommendation review decisions now preserve who reviewed the recommendation, why they decided, and any supporting evidence reference without automatically amending SOP content",
-      "SOP recommendation decision visibility is now treated as role-controlled accountable review support, not operational instruction to pilots or operators"
+      "SOP recommendation decision visibility is now treated as role-controlled accountable review support, not operational instruction to pilots or operators",
+      "Conflict vector focus metadata now carries through post-operation export and rendered report/PDF evidence so later reviews can see what map source was focused"
     ]
   },
   "risksLimitations": {
@@ -240,11 +243,12 @@
       "Validated live-ops conflict vector source drill-down link and evidence panel anchors",
       "Validated live-ops conflict vector source focus state from evidence panels back to the map",
       "Validated live-ops conflict vector focus controls for setting and clearing source focus",
-      "Validated live-ops conflict vector focus audit metadata in map view-state evidence snapshots"
+      "Validated live-ops conflict vector focus audit metadata in map view-state evidence snapshots",
+      "Validated conflict vector focus metadata in post-operation exports, rendered reports, and PDF report text"
     ]
 
   },
-  "nextBuildStep": "Add conflict vector focus metadata to post-operation evidence exports and reports.",
+  "nextBuildStep": "Add conflict vector metadata to post-operation evidence readiness prompts.",
   "doNotChangeRules": {
     "criticalInvariants": [],
     "orderingRules": [
